@@ -50,6 +50,7 @@ export const CONFIG = {
     holdRepath: 0.14,       // s: segurar o botão = seguir o cursor
     chaseRepath: 0.3,       // s
     moveHold: 0.12,         // s: mantém a pose "andando" entre pontos do caminho
+    reviveInvuln: 3,        // s de invulnerabilidade após a Poção da Ressurreição
     regenAgPerSec: 1,       // multiplica st.agRegen
     regenMpTown: 0.08, regenMpField: 0.012,
     regenHpTown: 0.1, regenHpField: 0.012, regenHpDelay: 4,

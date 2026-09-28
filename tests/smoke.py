@@ -93,6 +93,20 @@ with sync_playwright() as p:
         target.dblclick()
         time.sleep(0.3)
     check(ev('JSON.stringify(G.ch.equip)') != before, 'clique duplo equipa item')
+    # pet: vender só os itens marcados
+    ev("(G.ch.bag.push(D.R.makeEquip(7, 5, 'excelente', 'dw', 0, 'elite'), D.R.makeEquip(8, 5, 'comum', 'dw', 0, 'normal')), 0)")
+    pg.click('[data-act="petpick"]')
+    n_bag = ev('G.ch.bag.length')
+    pick = ev("G.ch.bag.length - 2")
+    pg.click('#bagGrid button.cell[data-i="%d"]' % pick)
+    check(pg.is_visible('#bagGrid button.cell.mk'), 'item marcado para o pet')
+    gold0 = ev('G.ch.gold')
+    pg.click('[data-act="petsellsel"]')
+    check(ev('G.ch.bag.length') == n_bag - 1 and ev('G.pet.away > G.time'), 'pet leva só o item marcado')
+    check(ev("G.ch.bag.some((x) => x.rarity === 'comum' && x.seed === D.R.makeEquip(8, 5, 'comum', 'dw', 0, 'normal').seed)"), 'item não marcado fica na mochila')
+    ev("(G.pet.away = G.time, 0)")
+    wait_game(0.3)
+    check(ev('G.ch.gold') > gold0, 'pet volta com o Gold')
     pg.keyboard.press('Escape')
     check(pg.is_hidden('#drawer'), 'Esc fecha o painel')
 
@@ -109,11 +123,25 @@ with sync_playwright() as p:
     pg.click('[data-pause="resume"]')
     check(not ev('G.paused'), 'botão Continuar retoma')
 
+    # Poção da Ressurreição: renasce no mesmo lugar do andar
+    ev("(G.ch.bag.push({ kind: 'potion', id: 'rez', qty: 1, uid: 'prez' }), 0)")
+    where = ev('[G.zone, G.floor, Math.round(G.player.x * 100), Math.round(G.player.z * 100)]')
+    exp0 = ev('[G.ch.exp, G.ch.gold]')
+    pg.evaluate("() => { const D = window.__FORJA_DEBUG; for (let i = 0; i < 50 && D.G.player.alive; i++) D.hurtPlayer(1e9, null); }")
+    check(pg.is_visible('#btnRevive'), 'tela de queda oferece a Poção da Ressurreição')
+    pg.click('#btnRevive')
+    check(ev('G.player.alive && G.hp === G.st.maxHp'), 'poção revive com HP cheio')
+    check(ev('[G.zone, G.floor, Math.round(G.player.x * 100), Math.round(G.player.z * 100)]') == where, 'revive no mesmo lugar e andar (%s)' % where)
+    check(ev('[G.ch.exp, G.ch.gold]') == exp0, 'poção devolve EXP e Gold perdidos')
+    check(ev("!G.ch.bag.some((x) => x.id === 'rez')"), 'poção consumida')
+    ev("(G.player.invulnUntil = 0, 0)")
+
     # morte e renascimento
     ev("(G.hp = 1, 0)")
     ev("(D.G.player.alive && (function(){ const m = G.monsters.find((x) => !x.dead); })(), 0)")
-    pg.evaluate("() => { const D = window.__FORJA_DEBUG; D.hurtPlayer(1e9, null); }")
+    pg.evaluate("() => { const D = window.__FORJA_DEBUG; for (let i = 0; i < 50 && D.G.player.alive; i++) D.hurtPlayer(1e9, null); }")
     check(ev('!G.player.alive') and pg.is_visible('#modal'), 'morte mostra a tela de queda')
+    check(not pg.is_visible('#btnRevive'), 'sem poção: só renascer na cidade')
     pg.click('#btnRespawn')
     check(ev('G.player.alive && G.zone === "town" && G.hp > 0'), 'renasce na cidade')
 

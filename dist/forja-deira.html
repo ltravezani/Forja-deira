@@ -259,6 +259,8 @@ input, select { font-family: inherit; }
 .cell.bad .gl { opacity: .5; filter: grayscale(.6); }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
+.cell.mk { outline: 2px solid #ffd24a; box-shadow: inset 0 0 12px #ffd24a55; }
+.cell .mkx { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; color: #ffd24a; text-shadow: 0 0 4px #000, 0 1px 2px #000; pointer-events: none; }
 .cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }
@@ -810,6 +812,8 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
   const POTIONS = {
     hp: { name: 'Poção de Vida', pct: 0.3, flat: 60, price: 60 },
     mp: { name: 'Poção de Mana', pct: 0.3, flat: 40, price: 50 },
+    // Não é bebida: consumida na tela de queda para renascer no mesmo lugar com HP/MP cheios.
+    rez: { name: 'Poção da Ressurreição', pct: 1, flat: 0, price: 50000, revive: true },
   };
 
   function plusBonus(p) {
@@ -1296,6 +1300,7 @@ const CONFIG = {
     holdRepath: 0.14,       // s: segurar o botão = seguir o cursor
     chaseRepath: 0.3,       // s
     moveHold: 0.12,         // s: mantém a pose "andando" entre pontos do caminho
+    reviveInvuln: 3,        // s de invulnerabilidade após a Poção da Ressurreição
     regenAgPerSec: 1,       // multiplica st.agRegen
     regenMpTown: 0.08, regenMpField: 0.012,
     regenHpTown: 0.1, regenHpField: 0.012, regenHpDelay: 4,
@@ -1471,7 +1476,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null, petPick: false, petMarks: null };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -3596,12 +3601,18 @@ function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-function sendPetToSell() {
+/**
+ * Manda o pet vender na cidade. Sem `picked`, leva os itens Comuns/Mágicos;
+ * com `picked` (itens marcados no inventário), leva só esses, de qualquer tipo.
+ */
+function sendPetToSell(picked) {
   const pet = G.pet;
-  if (!pet) return;
-  if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return; }
-  const sell = G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
-  if (!sell.length) { log('Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return; }
+  if (!pet) return false;
+  if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
+  const sell = Array.isArray(picked)
+    ? picked.filter((it) => G.ch.bag.includes(it))
+    : G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
+  if (!sell.length) { log(Array.isArray(picked) ? 'Nenhum item marcado para o pet vender.' : 'Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
   pet.away = G.time + 18;
@@ -3610,6 +3621,7 @@ function sendPetToSell() {
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
   log('Pet partiu para a cidade com ' + sell.length + ' itens. Volta em 18s.', 'sys');
   refreshPaneSoon();
+  return true;
 }
 function updateAllies(dt) {
   const p = G.player;
@@ -4356,8 +4368,8 @@ function iconURI(kind, col) {
 }
 function glyph(it) {
   const kind = iconKind(it);
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'potion' ? (it.id === 'hp' ? '#e8483a' : '#3a78e8') : R.RARITY[it.rarity].color;
-  return { kind, c, bg: it.kind === 'potion' ? (it.id === 'hp' ? '#3a1414' : '#141e3a') : ICON_BG[kind], src: iconURI(kind, c) };
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'potion' ? (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8') : R.RARITY[it.rarity].color;
+  return { kind, c, bg: it.kind === 'potion' ? (it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind], src: iconURI(kind, c) };
 }
 function iconHtml(g) {
   return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
@@ -4488,7 +4500,7 @@ return { BIOMES, DUNGEON_ORDER, floorLevel };
 })();
 
 // ---- ui/npcDialogs.js ----
-const { closeModal, initDialogs, openNpc, showDeath } = (() => {
+const { closeModal, confirmDescend, initDialogs, openNpc, showDeath } = (() => {
 // ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
 
 function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
@@ -4528,6 +4540,8 @@ function openNpc(id) {
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
+    const RZ = R.POTIONS.rez;
+    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Gold · você tem ' + potionCount('rez') + '</span></div>';
     h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button></div>';
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
@@ -4561,7 +4575,7 @@ function npcAction(e) {
       recalc(); buildPlayerModel();
       break;
     }
-    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= D.price * n; addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p }); Sfx.coin(); break; }
+    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break; ch.gold -= D.price * n; Sfx.coin(); break; }
     case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.gold += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
     case 'evolve': {
       const ev = R.canEvolve(ch);
@@ -4590,9 +4604,20 @@ function npcAction(e) {
   openNpc(G.openNpcId);
   hudTick();
 }
-function showDeath(loss, zl) {
-  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Gold. Itens equipados nunca são perdidos para monstros.</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn gold" id="btnRespawn">Renascer em Aldrena</button></div></div>');
+function showDeath(loss, zl, rez) {
+  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Gold. Itens equipados nunca são perdidos para monstros.</p>' +
+    (rez ? '<p class="note" style="text-align:center">A Poção da Ressurreição (' + rez + ') te levanta aqui mesmo, com HP cheio, e devolve a EXP e o Gold perdidos.</p>' : '') +
+    '<div class="row" style="justify-content:center;margin-top:12px">' + (rez ? '<button class="btn gold" id="btnRevive">Usar Poção da Ressurreição</button>' : '') + '<button class="btn' + (rez ? '' : ' gold') + '" id="btnRespawn">Renascer em Aldrena</button></div></div>');
   $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
+  if (rez) $('#btnRevive').addEventListener('click', () => { if (revive()) { closeModal(); hudTick(); } });
+}
+
+/** Pergunta antes de descer quando ainda há itens no chão (Não = continua no andar). */
+function confirmDescend(onYes) {
+  const n = G.loot.length;
+  modal('<h3>Próximo andar</h3><p>Ainda há ' + n + (n === 1 ? ' item' : ' itens') + ' no chão. Deseja ir para o próximo andar?</p><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="btnDescendNo">Não</button><button class="btn gold" id="btnDescendYes">Sim</button></div>');
+  $('#btnDescendNo').addEventListener('click', closeModal);
+  $('#btnDescendYes').addEventListener('click', () => { closeModal(); onYes(); });
 }
 
 /** Botões dos diálogos de NPC e clique fora do modal. */
@@ -4600,7 +4625,7 @@ function initDialogs() {
   $('#dialog').addEventListener('click', npcAction);
   $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal' && G.player && G.player.alive) closeModal(); });
 }
-return { closeModal, initDialogs, openNpc, showDeath };
+return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
 })();
 
 // ---- game/npcs.js ----
@@ -6528,7 +6553,7 @@ return { paneChar, paneLoot, paneOpts, paneSkills, statLabel };
 })();
 
 // ---- ui/inventoryPane.js ----
-const { paneInv, selectedItem } = (() => {
+const { paneInv, petMarks, selectedItem } = (() => {
 // ---------- painel Inventário: equipamento, mochila por categoria, detalhe do item ----------
 
 function cellHtml(it, attrs, sel, ctx) {
@@ -6547,15 +6572,17 @@ function cellHtml(it, attrs, sel, ctx) {
       }
     }
   }
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  const mk = ctx && ctx.marks && ctx.marks.has(it);
+  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (mk ? ' mk' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + (mk ? '<span class="mkx">✓</span>' : '') + '</button>';
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
   const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : '#fff';
   let h = '<div class="detail"><div class="nm" style="color:' + col + '">' + esc(R.itemName(it)) + (it.qty > 1 ? ' ×' + it.qty : '') + '</div>';
   if (it.kind === 'jewel') h += '<div class="ln">' + esc(R.JEWELS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
+  else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
     h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.CLASSES[it.cls].tiers[0] : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
@@ -6587,13 +6614,19 @@ function itemDetail(it, where) {
     if (where === 'eq') h += '<button class="btn sm" data-act="unequip">Desequipar</button>';
     else if (classOk(it)) h += '<button class="btn sm gold" data-act="equip">Equipar</button>';
   }
-  if (it.kind === 'potion') h += '<button class="btn sm" data-act="usepot">Usar</button>';
+  if (it.kind === 'potion' && !R.POTIONS[it.id].revive) h += '<button class="btn sm" data-act="usepot">Usar</button>';
   if (where === 'bag') {
     if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Gold</button>';
     h += '<button class="btn sm" data-act="drop">Descartar</button>';
   }
   h += '</div></div>';
   return h;
+}
+/** Itens marcados para o pet vender (descarta os que já saíram da mochila). */
+function petMarks() {
+  const bag = G.ch.bag, cur = UI.petMarks || new Set();
+  UI.petMarks = new Set([...cur].filter((it) => bag.includes(it)));
+  return UI.petMarks;
 }
 function selectedItem() {
   const s = UI.sel;
@@ -6622,7 +6655,8 @@ function paneInv() {
   h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const ctx = { base };
+  const marks = petMarks();
+  const ctx = { base, marks: UI.petPick ? marks : null };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {
@@ -6634,10 +6668,14 @@ function paneInv() {
   }
   h += '</div>';
   h += itemDetail(selectedItem(), UI.sel && UI.sel.where);
-  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
+  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm' + (UI.petPick ? ' gold' : '') + '" data-act="petpick" title="Clique nos itens da mochila para marcar o que o pet deve vender">' + (UI.petPick ? 'Cancelar seleção' : 'Pet: vender itens selecionados') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
+  if (UI.petPick) {
+    const val = [...marks].reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
+    h += '<p class="note tip">Clique nos itens da mochila para marcar ou desmarcar.</p><div class="row"><button class="btn sm gold" data-act="petsellsel"' + (marks.size ? '' : ' disabled') + '>Enviar pet com ' + marks.size + ' ite' + (marks.size === 1 ? 'm' : 'ns') + ' · ' + fmt(val) + ' Gold</button><button class="btn sm" data-act="petclear"' + (marks.size ? '' : ' disabled') + '>Limpar</button></div>';
+  }
   return h;
 }
-return { paneInv, selectedItem };
+return { paneInv, petMarks, selectedItem };
 })();
 
 // ---- ui/drawer.js ----
@@ -7068,7 +7106,7 @@ function updateTarget(p, dt) {
     } else if (t.type === 'npc') {
       if (Math.hypot(t.n.x - p.x, t.n.z - p.z) < 3.2) { p.path = null; p.target = null; face(p, t.n.x, t.n.z); openNpc(t.n.id); }
     } else if (t.type === 'portal') {
-      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; t.p.onUse(); return true; }
+      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; return t.p.onUse() !== false; }
     }
   }
   if (p.path && p.path.length) {
@@ -7263,6 +7301,7 @@ function usePotion(id) {
   if (G.potCd > G.time) return;
   G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
+  if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });
@@ -7273,7 +7312,7 @@ return { BAG_SIZE, addToBag, autoEquip, autoEquipOn, bagCat, classOk, cpOf, cpWi
 })();
 
 // ---- game/combat.js ----
-const { attackRange, basicAttack, breakBarrel, hitMonster, hurtPlayer, killMonster, monstersIn, onLevelUp, respawn, unlockSkills } = (() => {
+const { attackRange, basicAttack, breakBarrel, hitMonster, hurtPlayer, killMonster, monstersIn, onLevelUp, respawn, revive, unlockSkills } = (() => {
 // ---------- combate ----------
 
 /** Alcance do ataque básico por classe (m), somado ao raio do alvo. */
@@ -7313,7 +7352,7 @@ function monstersIn(x, z, r) {
 /** Dano recebido pelo jogador: esquiva, defesa, absorção, reflexão e roubo de vida do atacante. */
 function hurtPlayer(raw, src) {
   const p = G.player;
-  if (!p.alive || inSafe() || !Number.isFinite(raw)) return;
+  if (!p.alive || inSafe() || !Number.isFinite(raw) || G.time < (p.invulnUntil || 0)) return;
   if (rand() < CONFIG.player.missChance) { floatText(p.x, 2.4, p.z, 'MISS', 'info'); return; }
   let d = raw * (0.85 + rand() * 0.3);
   d = Math.max(raw * 0.1, d - G.st.def * 0.5);
@@ -7342,15 +7381,43 @@ function die() {
   if (p.model.blob) p.model.blob.visible = false;
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
+  const before = ch.exp;
   ch.exp = Math.max(0, ch.exp - loss);
   const zl = Math.floor(ch.gold * 0.03);
   ch.gold -= zl;
+  p.deathLoss = { exp: before - ch.exp, gold: zl };
   persist();
-  showDeath(loss, zl);
+  showDeath(loss, zl, potionCount('rez'));
+}
+/**
+ * Poção da Ressurreição: renasce onde caiu, no mesmo andar, com HP/MP cheios,
+ * devolve a EXP e o Gold perdidos e fica alguns segundos invulnerável.
+ */
+function revive() {
+  const p = G.player, ch = G.ch;
+  const pot = ch.bag.find((b) => b.kind === 'potion' && b.id === 'rez');
+  if (p.alive || !pot) return false;
+  pot.qty--;
+  if (pot.qty <= 0) ch.bag.splice(ch.bag.indexOf(pot), 1);
+  if (p.deathLoss) { ch.exp += p.deathLoss.exp; ch.gold += p.deathLoss.gold; p.deathLoss = null; }
+  p.alive = true;
+  p.target = null; p.path = null; p.dash = null;
+  p.model.root.rotation.x = 0;
+  p.model.root.position.y = 0;
+  recalc();
+  G.hp = G.st.maxHp; G.mp = G.st.maxMp;
+  p.invulnUntil = G.time + CONFIG.player.reviveInvuln;
+  emit(p.x, 0.2, p.z, { n: 90, color: 0xffd76a, speed: 4, up: 5, life: 1.2, size: 1.2, grav: 2, spread: 1.5 });
+  floatText(p.x, 2.8, p.z, 'Ressurreição!', 'heal');
+  Sfx.level();
+  log('Poção da Ressurreição usada: você renasceu no mesmo lugar.', 'sys');
+  persist();
+  return true;
 }
 function respawn() {
   const p = G.player;
   p.alive = true;
+  p.deathLoss = null;
   p.target = null; p.path = null; p.dash = null;
   p.model.root.rotation.x = 0;
   p.model.root.position.y = 0;
@@ -7416,7 +7483,13 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
-  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => enterDungeon(G.biome, G.floor + 1));
+  const descend = () => enterDungeon(G.biome, G.floor + 1);
+  // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
+  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
+    if (!G.loot.length) { descend(); return true; }
+    confirmDescend(descend);
+    return false;
+  });
   const ev = R.canEvolve(ch);
   if (ev.ok) log('Mestre Orvan sente seu poder: evolução para ' + ev.name + ' disponível na cidade.', 'sys');
   persist();
@@ -7486,7 +7559,7 @@ function breakBarrel(b) {
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }
-return { attackRange, basicAttack, breakBarrel, hitMonster, hurtPlayer, killMonster, monstersIn, onLevelUp, respawn, unlockSkills };
+return { attackRange, basicAttack, breakBarrel, hitMonster, hurtPlayer, killMonster, monstersIn, onLevelUp, respawn, revive, unlockSkills };
 })();
 
 // ---- debug.js ----
@@ -8087,6 +8160,7 @@ function paneAction(e) {
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
+      if (UI.petPick) { const m = petMarks(), x = ch.bag[i]; if (x) { if (m.has(x)) m.delete(x); else m.add(x); } UI.sel = x ? { where: 'bag', idx: i } : null; break; }
       if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
@@ -8101,6 +8175,9 @@ function paneAction(e) {
     case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
+    case 'petpick': UI.petPick = !UI.petPick; if (!UI.petPick) UI.petMarks = null; break;
+    case 'petsellsel': if (sendPetToSell([...petMarks()])) { UI.petPick = false; UI.petMarks = null; UI.sel = null; } break;
+    case 'petclear': UI.petMarks = null; break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
     case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;

@@ -259,6 +259,8 @@ input, select { font-family: inherit; }
 .cell.bad .gl { opacity: .5; filter: grayscale(.6); }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
+.cell.mk { outline: 2px solid #ffd24a; box-shadow: inset 0 0 12px #ffd24a55; }
+.cell .mkx { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; color: #ffd24a; text-shadow: 0 0 4px #000, 0 1px 2px #000; pointer-events: none; }
 .cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }

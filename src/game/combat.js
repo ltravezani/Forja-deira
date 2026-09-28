@@ -8,7 +8,7 @@ import { emit, spawnRing } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { shake, world } from '../engine/renderer.js';
 import { hitStop } from './feel.js';
-import { autoEquipOn } from './inventory.js';
+import { autoEquipOn, potionCount } from './inventory.js';
 import { dropLoot } from './loot.js';
 import { aggroPack, QUERY_PAD, queryMonsters } from './monsters.js';
 import { face } from './movement.js';
@@ -19,7 +19,7 @@ import { enterDungeon, enterTown, inSafe } from './zones.js';
 import { hurtFeedback } from '../ui/feedback.js';
 import { buildSlots } from '../ui/hud.js';
 import { log, toast } from '../ui/log.js';
-import { showDeath } from '../ui/npcDialogs.js';
+import { confirmDescend, showDeath } from '../ui/npcDialogs.js';
 import { floorLevel } from '../world/biomes.js';
 import { walkableR } from '../world/grid.js';
 
@@ -60,7 +60,7 @@ export function monstersIn(x, z, r) {
 /** Dano recebido pelo jogador: esquiva, defesa, absorção, reflexão e roubo de vida do atacante. */
 export function hurtPlayer(raw, src) {
   const p = G.player;
-  if (!p.alive || inSafe() || !Number.isFinite(raw)) return;
+  if (!p.alive || inSafe() || !Number.isFinite(raw) || G.time < (p.invulnUntil || 0)) return;
   if (rand() < CONFIG.player.missChance) { floatText(p.x, 2.4, p.z, 'MISS', 'info'); return; }
   let d = raw * (0.85 + rand() * 0.3);
   d = Math.max(raw * 0.1, d - G.st.def * 0.5);
@@ -89,15 +89,43 @@ function die() {
   if (p.model.blob) p.model.blob.visible = false;
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
+  const before = ch.exp;
   ch.exp = Math.max(0, ch.exp - loss);
   const zl = Math.floor(ch.gold * 0.03);
   ch.gold -= zl;
+  p.deathLoss = { exp: before - ch.exp, gold: zl };
   persist();
-  showDeath(loss, zl);
+  showDeath(loss, zl, potionCount('rez'));
+}
+/**
+ * Poção da Ressurreição: renasce onde caiu, no mesmo andar, com HP/MP cheios,
+ * devolve a EXP e o Gold perdidos e fica alguns segundos invulnerável.
+ */
+export function revive() {
+  const p = G.player, ch = G.ch;
+  const pot = ch.bag.find((b) => b.kind === 'potion' && b.id === 'rez');
+  if (p.alive || !pot) return false;
+  pot.qty--;
+  if (pot.qty <= 0) ch.bag.splice(ch.bag.indexOf(pot), 1);
+  if (p.deathLoss) { ch.exp += p.deathLoss.exp; ch.gold += p.deathLoss.gold; p.deathLoss = null; }
+  p.alive = true;
+  p.target = null; p.path = null; p.dash = null;
+  p.model.root.rotation.x = 0;
+  p.model.root.position.y = 0;
+  recalc();
+  G.hp = G.st.maxHp; G.mp = G.st.maxMp;
+  p.invulnUntil = G.time + CONFIG.player.reviveInvuln;
+  emit(p.x, 0.2, p.z, { n: 90, color: 0xffd76a, speed: 4, up: 5, life: 1.2, size: 1.2, grav: 2, spread: 1.5 });
+  floatText(p.x, 2.8, p.z, 'Ressurreição!', 'heal');
+  Sfx.level();
+  log('Poção da Ressurreição usada: você renasceu no mesmo lugar.', 'sys');
+  persist();
+  return true;
 }
 export function respawn() {
   const p = G.player;
   p.alive = true;
+  p.deathLoss = null;
   p.target = null; p.path = null; p.dash = null;
   p.model.root.rotation.x = 0;
   p.model.root.position.y = 0;
@@ -163,7 +191,13 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
-  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => enterDungeon(G.biome, G.floor + 1));
+  const descend = () => enterDungeon(G.biome, G.floor + 1);
+  // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
+  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
+    if (!G.loot.length) { descend(); return true; }
+    confirmDescend(descend);
+    return false;
+  });
   const ev = R.canEvolve(ch);
   if (ev.ok) log('Mestre Orvan sente seu poder: evolução para ' + ev.name + ' disponível na cidade.', 'sys');
   persist();

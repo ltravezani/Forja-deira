@@ -22,15 +22,17 @@ function cellHtml(it, attrs, sel, ctx) {
       }
     }
   }
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  const mk = ctx && ctx.marks && ctx.marks.has(it);
+  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (mk ? ' mk' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + (mk ? '<span class="mkx">✓</span>' : '') + '</button>';
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
   const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : '#fff';
   let h = '<div class="detail"><div class="nm" style="color:' + col + '">' + esc(R.itemName(it)) + (it.qty > 1 ? ' ×' + it.qty : '') + '</div>';
   if (it.kind === 'jewel') h += '<div class="ln">' + esc(R.JEWELS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
+  else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
     h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.CLASSES[it.cls].tiers[0] : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
@@ -62,13 +64,19 @@ function itemDetail(it, where) {
     if (where === 'eq') h += '<button class="btn sm" data-act="unequip">Desequipar</button>';
     else if (classOk(it)) h += '<button class="btn sm gold" data-act="equip">Equipar</button>';
   }
-  if (it.kind === 'potion') h += '<button class="btn sm" data-act="usepot">Usar</button>';
+  if (it.kind === 'potion' && !R.POTIONS[it.id].revive) h += '<button class="btn sm" data-act="usepot">Usar</button>';
   if (where === 'bag') {
     if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Gold</button>';
     h += '<button class="btn sm" data-act="drop">Descartar</button>';
   }
   h += '</div></div>';
   return h;
+}
+/** Itens marcados para o pet vender (descarta os que já saíram da mochila). */
+export function petMarks() {
+  const bag = G.ch.bag, cur = UI.petMarks || new Set();
+  UI.petMarks = new Set([...cur].filter((it) => bag.includes(it)));
+  return UI.petMarks;
 }
 export function selectedItem() {
   const s = UI.sel;
@@ -97,7 +105,8 @@ export function paneInv() {
   h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const ctx = { base };
+  const marks = petMarks();
+  const ctx = { base, marks: UI.petPick ? marks : null };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {
@@ -109,6 +118,10 @@ export function paneInv() {
   }
   h += '</div>';
   h += itemDetail(selectedItem(), UI.sel && UI.sel.where);
-  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
+  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm' + (UI.petPick ? ' gold' : '') + '" data-act="petpick" title="Clique nos itens da mochila para marcar o que o pet deve vender">' + (UI.petPick ? 'Cancelar seleção' : 'Pet: vender itens selecionados') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
+  if (UI.petPick) {
+    const val = [...marks].reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
+    h += '<p class="note tip">Clique nos itens da mochila para marcar ou desmarcar.</p><div class="row"><button class="btn sm gold" data-act="petsellsel"' + (marks.size ? '' : ' disabled') + '>Enviar pet com ' + marks.size + ' ite' + (marks.size === 1 ? 'm' : 'ns') + ' · ' + fmt(val) + ' Gold</button><button class="btn sm" data-act="petclear"' + (marks.size ? '' : ' disabled') + '>Limpar</button></div>';
+  }
   return h;
 }

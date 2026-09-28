@@ -13,7 +13,7 @@ import { returnToTitle } from '../game/session.js';
 import { Drag } from './dragdrop.js';
 import { renderPane } from './drawer.js';
 import { buildSlots, hudTick } from './hud.js';
-import { selectedItem } from './inventoryPane.js';
+import { petMarks, selectedItem } from './inventoryPane.js';
 import { log } from './log.js';
 
 function paneAction(e) {
@@ -34,6 +34,7 @@ function paneAction(e) {
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
+      if (UI.petPick) { const m = petMarks(), x = ch.bag[i]; if (x) { if (m.has(x)) m.delete(x); else m.add(x); } UI.sel = x ? { where: 'bag', idx: i } : null; break; }
       if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
@@ -48,6 +49,9 @@ function paneAction(e) {
     case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
+    case 'petpick': UI.petPick = !UI.petPick; if (!UI.petPick) UI.petMarks = null; break;
+    case 'petsellsel': if (sendPetToSell([...petMarks()])) { UI.petPick = false; UI.petMarks = null; UI.sel = null; } break;
+    case 'petclear': UI.petMarks = null; break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
     case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;

@@ -287,6 +287,8 @@
   const POTIONS = {
     hp: { name: 'Poção de Vida', pct: 0.3, flat: 60, price: 60 },
     mp: { name: 'Poção de Mana', pct: 0.3, flat: 40, price: 50 },
+    // Não é bebida: consumida na tela de queda para renascer no mesmo lugar com HP/MP cheios.
+    rez: { name: 'Poção da Ressurreição', pct: 1, flat: 0, price: 50000, revive: true },
   };
 
   function plusBonus(p) {
