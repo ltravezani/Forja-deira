@@ -84,8 +84,8 @@ export function iconURI(kind, col) {
 }
 export function glyph(it) {
   const kind = iconKind(it);
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'potion' ? (it.id === 'hp' ? '#e8483a' : '#3a78e8') : R.RARITY[it.rarity].color;
-  return { kind, c, bg: it.kind === 'potion' ? (it.id === 'hp' ? '#3a1414' : '#141e3a') : ICON_BG[kind], src: iconURI(kind, c) };
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'potion' ? (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8') : R.RARITY[it.rarity].color;
+  return { kind, c, bg: it.kind === 'potion' ? (it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind], src: iconURI(kind, c) };
 }
 export function iconHtml(g) {
   return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';

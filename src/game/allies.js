@@ -23,12 +23,18 @@ export function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-export function sendPetToSell() {
+/**
+ * Manda o pet vender na cidade. Sem `picked`, leva os itens Comuns/Mágicos;
+ * com `picked` (itens marcados no inventário), leva só esses, de qualquer tipo.
+ */
+export function sendPetToSell(picked) {
   const pet = G.pet;
-  if (!pet) return;
-  if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return; }
-  const sell = G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
-  if (!sell.length) { log('Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return; }
+  if (!pet) return false;
+  if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
+  const sell = Array.isArray(picked)
+    ? picked.filter((it) => G.ch.bag.includes(it))
+    : G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
+  if (!sell.length) { log(Array.isArray(picked) ? 'Nenhum item marcado para o pet vender.' : 'Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
   pet.away = G.time + 18;
@@ -37,6 +43,7 @@ export function sendPetToSell() {
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
   log('Pet partiu para a cidade com ' + sell.length + ' itens. Volta em 18s.', 'sys');
   refreshPaneSoon();
+  return true;
 }
 export function updateAllies(dt) {
   const p = G.player;
