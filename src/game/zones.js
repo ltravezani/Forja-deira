@@ -2,6 +2,7 @@
 import { G, persist } from '../core/state.js';
 import { R, rand, TILE } from '../core/util.js';
 import { clearEffects } from '../engine/effects.js';
+import { Music } from '../engine/music.js';
 import { resetFloatText } from '../engine/overlay.js';
 import { camTarget, resize, world } from '../engine/renderer.js';
 import { clearAllies } from './allies.js';
@@ -47,6 +48,7 @@ function placePlayer(L) {
 export function enterTown() {
   clearWorld();
   G.zone = 'town'; G.floor = 0;
+  Music.play('town');
   G.L = genTown();
   buildLevel(G.L);
   resize();
@@ -60,6 +62,7 @@ export function enterTown() {
 export function enterDungeon(biome, floor) {
   clearWorld();
   G.zone = 'dungeon'; G.biome = biome; G.floor = floor;
+  Music.play(biome);
   const seed = R.hash32(biome, floor, G.ch.name, Date.now());
   G.L = genDungeon(biome, floor, seed);
   buildLevel(G.L);
