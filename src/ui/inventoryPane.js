@@ -55,7 +55,7 @@ function itemDetail(it, where) {
       h += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
     }
     if (it.cls && it.cls !== G.ch.cls) h += '<div class="ln req bad">Exclusivo de ' + R.CLASSES[it.cls].tiers[0] + ' — venda ou negocie no mercado.</div>';
-    h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Zen</div>';
+    h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
   }
   h += '<div class="row" style="margin-top:8px">';
   if (it.slot) {
@@ -64,7 +64,7 @@ function itemDetail(it, where) {
   }
   if (it.kind === 'potion') h += '<button class="btn sm" data-act="usepot">Usar</button>';
   if (where === 'bag') {
-    if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Zen</button>';
+    if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Gold</button>';
     h += '<button class="btn sm" data-act="drop">Descartar</button>';
   }
   h += '</div></div>';
@@ -94,7 +94,7 @@ export function paneInv() {
   ch.bag.forEach((it) => cnt[bagCat(it)]++);
   const f = UI.bagFilter || 'all';
   const ups = ch.bag.filter((it) => classOk(it) && reqOk(it) && cpWith(it) > base).length;
-  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.zen) + ' Zen' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
+  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
   const ctx = { base };

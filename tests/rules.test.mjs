@@ -46,3 +46,10 @@ test('CP de item cresce com o tier', () => {
   if (lo.slot === hi.slot) assert.ok(R.itemCP(hi) > R.itemCP(lo));
   assert.ok(R.itemCP(lo) >= 0);
 });
+
+test('Dark Wizard nível 1 tem dano mágico e HP extras de início', () => {
+  const st = R.deriveStats(R.newCharacter('W', 'dw'), []);
+  assert.equal(st.minDmg, 6);
+  assert.equal(st.maxDmg, 12);
+  assert.equal(st.maxHp, 81);
+});

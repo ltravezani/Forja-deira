@@ -21,8 +21,8 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 | 3 | 9–15 classes | Elenco de 15 definido, **3 jogáveis no MVP** (DK, DW, Elf), como a própria Fase 1 pede | Cada classe exige ~6 habilidades, árvore, modelo e balanceamento. |
 | 4 | Nível 800–1100+ e resets | **Nível máximo 1000**, **reset a partir do 400**, pontos fixos por reset + bônus por nível acima de 400 | Resolve a tensão entre "cap alto" e "reset": quem gosta de grind vai até 1000; quem gosta de reset reinicia no 400. |
 | 8 | Magic Find visível | Tabela de drop **visível no jogo** (painel Drops), MF com **teto suave** (retorno decrescente) e **seed por drop** | Transparência: a mesma seed sempre gera o mesmo item. |
-| 9 | Aprimoramento estilo MU | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Zen | Perder um item de horas de farm por azar frustra mais do que desafia. |
-| 11 | — | **Pet vendedor** (Torchlight): envia itens comuns para a cidade e volta com Zen | Mantém o ritmo contínuo de combate, que é o pilar Torchlight. |
+| 9 | Aprimoramento estilo MU | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Gold | Perder um item de horas de farm por azar frustra mais do que desafia. |
+| 11 | — | **Pet vendedor** (Torchlight): envia itens comuns para a cidade e volta com Gold | Mantém o ritmo contínuo de combate, que é o pilar Torchlight. |
 | 14 | Mobile | Layout responsivo e toque **desde o protótipo** | Portar HUD tarde sai caro; o protótipo já funciona em 390 px. |
 | 15 | Usar assets reais do MU | **Descontinuado (27/09/2026).** O jogo não lê mais a pasta `Data` do cliente MU: modelos, mapas e texturas são só os próprios do projeto | Os arquivos do cliente pertencem à Webzen; manter o carregador criava dependência de um cliente de terceiros e um risco de PI desnecessário. Ver §12. |
 | 16 | Itens NFT, token, mercado e staking | **Descontinuado (27/09/2026).** Jogo 100% offline | Sem dependência de rede, carteira ou regulação de token; o foco fica no combate e no loot. |
@@ -103,7 +103,7 @@ Ritmo resultante (abates por nível):
 
 ### 4.2 Reset
 
-- Requisitos: nível ≥ 400 e `min(500 000 × (resets+1), 20 000 000)` Zen.
+- Requisitos: nível ≥ 400 e `min(500 000 × (resets+1), 20 000 000)` Gold.
 - Efeito: nível 1, atributos voltam à base, `2 200 × resets` pontos livres, +3 pontos por nível acima de 400, +2% MF permanente, +10 pontos de árvore.
 - Itens ficam equipados, mas **inativos** até o personagem cumprir o requisito de novo.
 - Limite: 100 resets (Grand Reset fica para a Fase 3).
@@ -179,14 +179,14 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 |---|---|---|---|
 | Bless | +0 → +6 | 100% | — |
 | Soul | +6 → +9 | 50% (+25% com Sorte) | −1 (mínimo +6) |
-| Chaos | +9 → +15 | 60% − 5% por nível (mínimo 30%) + 20% com Sorte; custa 1.000.000 Zen | volta a +0, **nunca destrói** |
+| Chaos | +9 → +15 | 60% − 5% por nível (mínimo 30%) + 20% com Sorte; custa 1.000.000 Gold | volta a +0, **nunca destrói** |
 | Life | opção adicional +4 | 50% (+10% com Sorte) | nada |
 
 ---
 
 ### 6.5 Combat Points, auto-equipar e inventário
 
-- **CP do personagem** (`R.combatPower`): ofensa (dano médio × bônus de dano, crítico/excelente, habilidades ÷ intervalo de ataque) × 6 + HP efetivo (HP × defesa, dividido pela absorção) × 0,9 + utilitários (roubo de vida, reflexão, MF, Zen). Calculado sem buffs temporários, para ser estável. Aparece no HUD, no painel Personagem e no topo do Inventário.
+- **CP do personagem** (`R.combatPower`): ofensa (dano médio × bônus de dano, crítico/excelente, habilidades ÷ intervalo de ataque) × 6 + HP efetivo (HP × defesa, dividido pela absorção) × 0,9 + utilitários (roubo de vida, reflexão, MF, Gold). Calculado sem buffs temporários, para ser estável. Aparece no HUD, no painel Personagem e no topo do Inventário.
 - **CP do item** (`R.itemCP`): soma ponderada dos atributos da peça (`itemStats`), independe de quem usa. Marcado em cada célula da mochila e do equipamento.
 - **Comparação real**: para peças da sua classe, o jogo simula o personagem com a peça no slot e mostra ▲ (aumenta o CP), ▼ (diminui) ou ! (requisito não atendido). O detalhe mostra a diferença exata em CP.
 - **Auto-equipar** (ligado por padrão, alternável no Inventário e salvo nas opções): ao coletar uma peça da sua classe, subir de nível ou distribuir pontos, testa cada peça da mochila em cada slot e fica com a que mais aumenta o CP total; repete até 3 passagens porque bônus de atributo de uma peça podem liberar o requisito de outra. Botão "Equipar melhores agora" faz o mesmo sob demanda.
@@ -199,7 +199,7 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 
 ## 7. Tela inicial
 
-- O último personagem jogado aparece **no centro**, em 3D, na praça de Aldrena, com nome, classe, nível, Zen e CP. Um botão grande **Entrar no jogo** (ou Enter).
+- O último personagem jogado aparece **no centro**, em 3D, na praça de Aldrena, com nome, classe, nível, Gold e CP. Um botão grande **Entrar no jogo** (ou Enter).
 - Com mais de um personagem, setas ‹ › (ou ← →) trocam o personagem mostrado; pontos indicam a posição.
 - **Criar novo personagem** é opção secundária (link abaixo do botão): abre um painel lateral com as 3 classes jogáveis, prévia 3D da classe escolhida e o campo de nome. Sem personagens salvos, esse painel abre direto.
 - Até 5 personagens por navegador; excluir pede confirmação.

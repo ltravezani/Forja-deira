@@ -9,10 +9,10 @@ function fakeStorage(data) {
 
 test('sanitizeCharacter corrige números inválidos e campos ausentes', async () => {
   const { sanitizeCharacter } = await load('core/state.js');
-  const ch = { name: 'X', cls: 'dw', level: NaN, zen: 'muito', stats: { str: Infinity }, bag: [null, { kind: 'potion', id: 'hp', qty: 2 }], equip: { weapon: null }, skillBar: ['ball', 'twist', 'nada'] };
+  const ch = { name: 'X', cls: 'dw', level: NaN, gold: 'muito', stats: { str: Infinity }, bag: [null, { kind: 'potion', id: 'hp', qty: 2 }], equip: { weapon: null }, skillBar: ['ball', 'twist', 'nada'] };
   sanitizeCharacter(ch);
   assert.equal(ch.level, 1);
-  assert.equal(ch.zen, R.newCharacter('X', 'dw').zen);
+  assert.equal(ch.gold, R.newCharacter('X', 'dw').gold);
   for (const k of ['str', 'agi', 'vit', 'ene']) assert.ok(Number.isFinite(ch.stats[k]));
   assert.equal(ch.bag.length, 1);
   assert.deepEqual(Object.keys(ch.equip), []);
@@ -42,4 +42,17 @@ test('loadSave lê o save do nome antigo (MU TRZ) quando não há save novo', as
   loadSave();
   assert.equal(S.chars[0].name, 'Antigo');
   assert.notEqual(SAVE_KEY, LEGACY_SAVE_KEYS[0]);
+});
+
+test('loadSave converte o Zen de saves antigos em Gold sem perder saldo', async () => {
+  const { loadSave, S, SAVE_KEY } = await load('core/state.js');
+  const armor = { slot: 'armor', exc: ['zen30', 'hp4'] };
+  const old = { chars: [{ name: 'Rico', cls: 'dk', zen: 123456, bag: [armor], equip: { gloves: { slot: 'gloves', exc: ['zen30'] } } }], active: 0 };
+  globalThis.localStorage = fakeStorage({ [SAVE_KEY]: JSON.stringify(old) });
+  loadSave();
+  const ch = S.chars[0];
+  assert.equal(ch.gold, 123456);
+  assert.equal('zen' in ch, false);
+  assert.deepEqual(ch.bag[0].exc, ['gold30', 'hp4']);
+  assert.deepEqual(ch.equip.gloves.exc, ['gold30']);
 });

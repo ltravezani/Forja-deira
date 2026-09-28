@@ -23,7 +23,7 @@ function readSave() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     for (const k of LEGACY_SAVE_KEYS) if (!raw) raw = localStorage.getItem(k);
-    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); return s; }
+    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();
 }
@@ -43,6 +43,19 @@ function migrateOffline(s) {
   ['wallet', 'nfts', 'market', 'stake', 'trzPending', 'nextToken', 'txs', 'treasury', 'chat'].forEach((k) => delete s[k]);
   const clean = (it) => { if (it) { delete it.nft; delete it.minting; } };
   (s.chars || []).forEach((ch) => { (ch.bag || []).forEach(clean); Object.values(ch.equip || {}).forEach(clean); delete ch.trzToday; delete ch.trzDay; });
+}
+/** Saves antigos: a moeda se chamava Zen. Passa o saldo (e a opção excelente de bônus) para Gold. */
+function migrateGold(s) {
+  const opt = (it) => { if (it && Array.isArray(it.exc)) it.exc = it.exc.map((e) => (e === 'zen30' ? 'gold30' : e)); };
+  (s.chars || []).forEach((ch) => {
+    if (!ch || typeof ch !== 'object') return;
+    if ('zen' in ch) {
+      const zen = Number.isFinite(ch.zen) ? ch.zen : 0;
+      ch.gold = (Number.isFinite(ch.gold) ? ch.gold : 0) + zen;
+      delete ch.zen;
+    }
+    (ch.bag || []).forEach(opt); Object.values(ch.equip || {}).forEach(opt);
+  });
 }
 export function persist() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
@@ -64,7 +77,7 @@ export function sanitizeCharacter(ch) {
   for (const k of Object.keys(base)) if (ch[k] == null) ch[k] = base[k];
   ch.stats = ch.stats && typeof ch.stats === 'object' ? ch.stats : {};
   for (const k of Object.keys(base.stats)) ch.stats[k] = Math.max(0, num(ch.stats[k], base.stats[k]));
-  for (const k of ['level', 'exp', 'zen', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
+  for (const k of ['level', 'exp', 'gold', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
   ch.level = Math.max(1, Math.floor(ch.level));
   if (!Array.isArray(ch.bag)) ch.bag = [];
   ch.bag = ch.bag.filter((it) => it && typeof it === 'object' && (it.slot || it.kind));
