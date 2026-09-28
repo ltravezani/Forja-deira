@@ -25,14 +25,17 @@ export const CONFIG = {
     pitch: 0.3, zoom: 0.44, sway: 0.1, swaySpeed: 0.12,
   },
   quality: {
-    alta: { dpr: 2, shadows: true, particles: 1, msaa: 4 },
-    media: { dpr: 1.3, shadows: true, particles: 0.8, msaa: 4 },
-    baixa: { dpr: 1, shadows: false, particles: 0.5, msaa: 0 },
+    alta: { dpr: 2, shadows: true, particles: 1, msaa: 4, bloom: true },
+    media: { dpr: 1.3, shadows: true, particles: 0.8, msaa: 4, bloom: true },
+    baixa: { dpr: 1, shadows: false, particles: 0.5, msaa: 0, bloom: false },
   },
   style: {
     ink: 0.16,              // cor do contorno = cor da cena × ink (tinta escura colorida, não preto puro)
     edge0: 0.012, edge1: 0.05, // faixa do laplaciano relativo de profundidade que vira traço
     lineWidth: 1.1,         // px (× densidade de pixels)
+    bloom: 0.6,             // intensidade do brilho (partes acima do limiar: fogo, lava, cristais, magia)
+    bloomThreshold: 1.5,    // brilho linear (antes do tone mapping) a partir do qual algo "acende"
+    vignette: 0.38,         // escurecimento das bordas da tela (0 = sem vinheta)
   },
   particles: { max: 4000 },
   overlay: {
@@ -48,6 +51,7 @@ export const CONFIG = {
     holdRepath: 0.14,       // s: segurar o botão = seguir o cursor
     chaseRepath: 0.3,       // s
     moveHold: 0.12,         // s: mantém a pose "andando" entre pontos do caminho
+    reviveInvuln: 3,        // s de invulnerabilidade após a Poção da Ressurreição
     regenAgPerSec: 1,       // multiplica st.agRegen
     regenMpTown: 0.08, regenMpField: 0.012,
     regenHpTown: 0.1, regenHpField: 0.012, regenHpDelay: 4,

@@ -5,10 +5,10 @@ import { stylize, toonGradient, toonMaterial } from '../art/stylize.js';
 import { fbm, hash2, makeTexSet, sat, texDecal, vnoise } from '../art/textures.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
-import { hemi, heroLight, renderer, scene, sun, torchLights, world } from '../engine/renderer.js';
+import { hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
-import { kit, kitGlowMat, kitMat, roofMat, setInstance } from './kit.js';
+import { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
 
 let levelMeshes = [];
 /** Malhas do nível atual (diagnóstico/testes). */
@@ -283,6 +283,7 @@ export function buildLevel(L) {
   torches = [];
   fires = [];
   mist = null;
+  shafts = null;
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
   scene.fog = new THREE.Fog(B.fog[0], B.fog[1], B.fog[2]);
@@ -291,6 +292,7 @@ export function buildLevel(L) {
   heroLight.color.setHex(B.light);
   heroLight.intensity = L.biome === 'town' ? 26 : 36;
   renderer.toneMappingExposure = (B.exposure || 1.05) * 0.88;
+  setGrade(B.grade && B.grade[0], B.grade && B.grade[1]);
   const T = biomeTex(L.biome);
   const town = L.biome === 'town';
   // chão: cidade = calçamento nas ruas, grama fora; masmorras = manchas de A/B
@@ -332,6 +334,73 @@ export function buildLevel(L) {
   buildFlames();
   const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08] }[L.biome];
   buildMist(mc[0], mc[1]);
+  buildShafts(L, R.mulberry32(L.seed * 7 + 3));
+}
+
+// ---------- raios de luz (fachos inclinados vindos do alto, na direção do sol) ----------
+const SHAFTS = {
+  town: [0x9ab4ff, 4, 0.06], forest: [0xe0f8a8, 10, 0.13], caves: [0x7ab8ff, 6, 0.11],
+  ruins: [0xffe2b0, 8, 0.12], castle: [0xff9a8a, 5, 0.09], abyss: [0xff7a3a, 4, 0.07],
+};
+let shafts = null;
+function buildShafts(L, rnd) {
+  const S = SHAFTS[L.biome];
+  if (!S) return;
+  const spots = [];
+  for (let tries = 0; spots.length < S[1] && tries < 400; tries++) {
+    const x = 1 + Math.floor(rnd() * (L.W - 2)), z = 1 + Math.floor(rnd() * (L.H - 2));
+    if (L.grid[z * L.W + x] !== 1 || (L.isPath && L.isPath(x, z))) continue;
+    if (spots.some((p) => Math.abs(p.x - x) + Math.abs(p.z - z) < 6)) continue;
+    spots.push({ x, z });
+  }
+  if (!spots.length) return;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uColor: { value: new THREE.Color(S[0]) }, uOp: { value: S[2] }, uTime: { value: 0 } },
+    vertexShader: `varying float vH; varying float vF; varying float vPh; varying float vD;
+      void main() {
+        vH = position.y + 0.5;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vec3 n = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vF = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        vPh = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.61;
+        vec4 mv = viewMatrix * wp; vD = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uOp; uniform float uTime;
+      varying float vH; varying float vF; varying float vPh; varying float vD;
+      void main() {
+        float a = smoothstep(0.0, 0.3, vH) * (1.0 - smoothstep(0.55, 1.0, vH)) * pow(vF, 2.0);
+        a *= 0.7 + 0.3 * sin(uTime * 0.5 + vPh) * sin(uTime * 0.23 + vPh * 1.7);
+        a *= 1.0 - smoothstep(45.0, 75.0, vD);
+        gl_FragColor = vec4(uColor * a * uOp, 1.0);
+      }`,
+  });
+  shafts = new THREE.InstancedMesh(GEO.beam, mat, spots.length);
+  // inclinação: do chão em direção ao sol (ver updateCamera: sol em -14, +34, +10)
+  const tilt = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-14, 34, 10).normalize());
+  const e = new THREE.Euler().setFromQuaternion(tilt);
+  const H = 16;
+  shafts.userData.spots = spots.map((p, i) => {
+    const w = 4 + rnd() * 3, x = p.x * TILE, z = p.z * TILE;
+    // o centro do cilindro fica a meia altura, deslocado ao longo do eixo inclinado
+    const ax = new THREE.Vector3(0, H / 2, 0).applyQuaternion(tilt);
+    setInstance(shafts, i, x + ax.x, ax.y, z + ax.z, e.x, e.y, e.z, w, H, w);
+    return { x, z, r: w * 0.3 };
+  });
+  shafts.frustumCulled = false;
+  shafts.renderOrder = 6;
+  addLevel(shafts);
+}
+function updateShafts(px, pz, t, dt) {
+  if (!shafts) return;
+  shafts.material.uniforms.uTime.value = t;
+  // poeira flutuando dentro dos fachos próximos
+  for (const s of shafts.userData.spots) {
+    if ((s.x - px) ** 2 + (s.z - pz) ** 2 > 28 * 28 || Math.random() > dt * 5) continue;
+    const a = Math.random() * 6.28, r = Math.random() * s.r;
+    emit(s.x + Math.cos(a) * r, 0.4 + Math.random() * 2.5, s.z + Math.sin(a) * r, { n: 1, color: shafts.material.uniforms.uColor.value.getHex(), speed: 0.15, up: 0.2, life: 3.5, size: 0.28, grav: 0.02, drag: 0.5, alpha: 0.55 });
+  }
 }
 
 /** Adereços por bioma a partir da lista de props do gerador. */
@@ -478,6 +547,8 @@ export function updateTorchLights(px, pz, t) {
   const dt = Math.min(0.05, Math.max(0, t - _tlT)); _tlT = t;
   if (flameSprites) { flameSprites.material.uniforms.uTime.value = t; flameSprites.material.uniforms.uScale.value = renderer.domElement.height * 0.9; }
   updateMist(px, pz, dt);
+  updateShafts(px, pz, t, dt);
+  setKitGlowTime(t);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;

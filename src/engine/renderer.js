@@ -51,6 +51,7 @@ export function applyQuality(q) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   renderer.shadowMap.enabled = Q.shadows;
   post.samples = Q.msaa;
+  post.bloom = Q.bloom;
   if (post.rt) { post.rt.dispose(); post.rt = null; }
   sun.castShadow = Q.shadows;
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -95,40 +96,94 @@ export function updateCamera(x, z, dt) {
 }
 
 // =============================================================================
-// Passe final: contorno "nanquim" a partir da profundidade. A cena é desenhada
-// num alvo intermediário (HDR quando possível) e um quad de tela aplica o
-// contorno, o tone mapping e a conversão para sRGB. O contorno é o que une
+// Passe final: contorno "nanquim" a partir da profundidade, brilho (bloom),
+// gradação de cor por bioma e vinheta. A cena é desenhada num alvo
+// intermediário (HDR quando possível); o brilho é extraído em 1/4 e 1/8 da
+// resolução e desfocado em dois passes separáveis; um quad de tela junta tudo,
+// aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, on: true, size: new THREE.Vector2() };
+const post = { rt: null, samples: 4, outline: true, bloom: true, size: new THREE.Vector2(), b: null };
+const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
-    tColor: { value: null }, tDepth: { value: null },
+    tColor: { value: null }, tDepth: { value: null }, tBloomA: { value: null }, tBloomB: { value: null },
     uTexel: { value: new THREE.Vector2(1, 1) }, uWidth: { value: 1 },
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
+    uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
+    uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
   },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  vertexShader: FS_VERT,
   fragmentShader: `
-    uniform sampler2D tColor; uniform sampler2D tDepth;
+    uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tBloomA; uniform sampler2D tBloomB;
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
-    uniform float uInk; uniform vec2 uEdge;
+    uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
+    uniform vec3 uTint; uniform float uSat; uniform float uAspect;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
     void main() {
       vec4 c = texture2D(tColor, vUv);
-      vec2 o = uTexel * uWidth;
-      float z = lin(vUv);
-      float l = lin(vUv - vec2(o.x, 0.0)), r = lin(vUv + vec2(o.x, 0.0));
-      float d = lin(vUv - vec2(0.0, o.y)), u = lin(vUv + vec2(0.0, o.y));
-      // laplaciano relativo: rampas (chão inclinado na tela) somem, degraus e silhuetas ficam
-      float lap = (abs(l + r - 2.0 * z) + abs(u + d - 2.0 * z)) / z;
-      float e = smoothstep(uEdge.x, uEdge.y, lap) * (1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d)))));
-      c.rgb = mix(c.rgb, c.rgb * uInk, e);
+      if (uOutline > 0.5) {
+        vec2 o = uTexel * uWidth;
+        float z = lin(vUv);
+        float l = lin(vUv - vec2(o.x, 0.0)), r = lin(vUv + vec2(o.x, 0.0));
+        float d = lin(vUv - vec2(0.0, o.y)), u = lin(vUv + vec2(0.0, o.y));
+        // laplaciano relativo: rampas (chão inclinado na tela) somem, degraus e silhuetas ficam
+        float lap = (abs(l + r - 2.0 * z) + abs(u + d - 2.0 * z)) / z;
+        float e = smoothstep(uEdge.x, uEdge.y, lap) * (1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d)))));
+        c.rgb = mix(c.rgb, c.rgb * uInk, e);
+      }
+      // brilho: soma das duas escalas (halo curto e halo largo), por cima do traço
+      if (uBloom > 0.0) c.rgb += (texture2D(tBloomA, vUv).rgb * 0.65 + texture2D(tBloomB, vUv).rgb * 0.55) * uBloom;
+      // gradação por bioma: tinta nas sombras/meios-tons e saturação
+      float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(lum), c.rgb, uSat) * mix(uTint, vec3(1.0), smoothstep(0.0, 1.2, lum));
+      // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
+      vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
+      c.rgb *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q) * 1.25);
       gl_FragColor = vec4(c.rgb, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
+  depthTest: false, depthWrite: false,
+});
+// extração do brilho: média de 4 amostras + limiar com joelho suave (só o que passa do branco da cena)
+const brightMat = new THREE.ShaderMaterial({
+  uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) }, uThreshold: { value: CONFIG.style.bloomThreshold } },
+  vertexShader: FS_VERT,
+  fragmentShader: `
+    uniform sampler2D tColor; uniform vec2 uTexel; uniform float uThreshold; varying vec2 vUv;
+    void main() {
+      vec3 c = (texture2D(tColor, vUv + uTexel * vec2(-1.0, -1.0)).rgb + texture2D(tColor, vUv + uTexel * vec2(1.0, -1.0)).rgb +
+                texture2D(tColor, vUv + uTexel * vec2(-1.0, 1.0)).rgb + texture2D(tColor, vUv + uTexel * vec2(1.0, 1.0)).rgb) * 0.25;
+      float br = max(c.r, max(c.g, c.b));
+      float k = clamp(br - uThreshold + 0.25, 0.0, 0.5); k = k * k * 2.0; // joelho de 0.25
+      float w = max(k, br - uThreshold) / max(br, 1e-4);
+      gl_FragColor = vec4(min(c * w, vec3(6.0)), 1.0);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+// desfoque gaussiano separável de 9 amostras (5 leituras com filtro linear)
+const blurMat = new THREE.ShaderMaterial({
+  uniforms: { tColor: { value: null }, uDir: { value: new THREE.Vector2(1, 0) } },
+  vertexShader: FS_VERT,
+  fragmentShader: `
+    uniform sampler2D tColor; uniform vec2 uDir; varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tColor, vUv).rgb * 0.2270270;
+      c += (texture2D(tColor, vUv + uDir * 1.3846154).rgb + texture2D(tColor, vUv - uDir * 1.3846154).rgb) * 0.3162162;
+      c += (texture2D(tColor, vUv + uDir * 3.2307692).rgb + texture2D(tColor, vUv - uDir * 3.2307692).rgb) * 0.0702703;
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+const copyMat = new THREE.ShaderMaterial({
+  uniforms: { tColor: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: FS_VERT,
+  fragmentShader: `uniform sampler2D tColor; uniform vec2 uTexel; varying vec2 vUv;
+    void main() { gl_FragColor = vec4((texture2D(tColor, vUv - uTexel).rgb + texture2D(tColor, vUv + uTexel).rgb +
+      texture2D(tColor, vUv + vec2(uTexel.x, -uTexel.y)).rgb + texture2D(tColor, vUv + vec2(-uTexel.x, uTexel.y)).rgb) * 0.25, 1.0); }`,
   depthTest: false, depthWrite: false,
 });
 const postScene = new THREE.Scene();
@@ -136,10 +191,21 @@ const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat);
 postQuad.frustumCulled = false;
 postScene.add(postQuad);
+/** Desenha o quad de tela com `mat` em `target` (null = tela). */
+function pass(mat, target) {
+  postQuad.material = mat;
+  renderer.setRenderTarget(target);
+  renderer.render(postScene, postCam);
+}
 
 function colorType() {
   const ex = renderer.extensions;
   return ex.has('EXT_color_buffer_float') || ex.has('EXT_color_buffer_half_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
+}
+function bloomTargets(w, h) {
+  const mk = (d) => new THREE.WebGLRenderTarget(Math.max(1, Math.round(w / d)), Math.max(1, Math.round(h / d)), { type: colorType(), depthBuffer: false });
+  if (!post.b) post.b = { a0: mk(4), a1: mk(4), b0: mk(8), b1: mk(8) };
+  else { for (const k of ['a0', 'a1']) post.b[k].setSize(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 4))); for (const k of ['b0', 'b1']) post.b[k].setSize(Math.max(1, Math.round(w / 8)), Math.max(1, Math.round(h / 8))); }
 }
 function resizePost() {
   renderer.getDrawingBufferSize(post.size);
@@ -149,21 +215,44 @@ function resizePost() {
     post.rt.depthTexture = new THREE.DepthTexture(w, h);
     post.rt.depthTexture.type = THREE.UnsignedIntType;
   } else post.rt.setSize(w, h);
+  bloomTargets(w, h);
   postMat.uniforms.uTexel.value.set(1 / w, 1 / h);
+  postMat.uniforms.uAspect.value = w / h;
   postMat.uniforms.uWidth.value = Math.max(1, renderer.getPixelRatio() * CONFIG.style.lineWidth);
 }
-/** Desenha um quadro: cena → alvo intermediário → contorno + tone mapping na tela. */
+/** Brilho: limiar em 1/4, desfoque; cópia para 1/8, desfoque mais largo. */
+function renderBloom() {
+  const B = post.b, a = B.a0.width, ah = B.a0.height, b = B.b0.width, bh = B.b0.height;
+  brightMat.uniforms.tColor.value = post.rt.texture;
+  brightMat.uniforms.uTexel.value.set(1 / post.size.x, 1 / post.size.y);
+  pass(brightMat, B.a0);
+  blurMat.uniforms.tColor.value = B.a0.texture; blurMat.uniforms.uDir.value.set(1 / a, 0); pass(blurMat, B.a1);
+  blurMat.uniforms.tColor.value = B.a1.texture; blurMat.uniforms.uDir.value.set(0, 1 / ah); pass(blurMat, B.a0);
+  copyMat.uniforms.tColor.value = B.a0.texture; copyMat.uniforms.uTexel.value.set(1 / a, 1 / ah); pass(copyMat, B.b0);
+  blurMat.uniforms.tColor.value = B.b0.texture; blurMat.uniforms.uDir.value.set(1.5 / b, 0); pass(blurMat, B.b1);
+  blurMat.uniforms.tColor.value = B.b1.texture; blurMat.uniforms.uDir.value.set(0, 1.5 / bh); pass(blurMat, B.b0);
+}
+/** Desenha um quadro: cena → alvo intermediário → brilho → contorno, cor e tone mapping na tela. */
 export function renderFrame() {
-  if (!post.on) { renderer.render(scene, camera); return; }
+  if (!post.outline && !post.bloom) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
   if (!post.rt) resizePost();
   renderer.setRenderTarget(post.rt);
   renderer.render(scene, camera);
-  renderer.setRenderTarget(null);
-  postMat.uniforms.tColor.value = post.rt.texture;
-  postMat.uniforms.tDepth.value = post.rt.depthTexture;
-  postMat.uniforms.uNear.value = camera.near; postMat.uniforms.uFar.value = camera.far;
-  if (scene.fog) postMat.uniforms.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
-  renderer.render(postScene, postCam);
+  if (post.bloom) renderBloom();
+  const U = postMat.uniforms;
+  U.tColor.value = post.rt.texture;
+  U.tDepth.value = post.rt.depthTexture;
+  U.tBloomA.value = post.b.a0.texture; U.tBloomB.value = post.b.b0.texture;
+  U.uBloom.value = post.bloom ? CONFIG.style.bloom : 0;
+  U.uOutline.value = post.outline ? 1 : 0;
+  U.uNear.value = camera.near; U.uFar.value = camera.far;
+  if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
+  pass(postMat, null);
 }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
-export function setOutline(on) { post.on = !!on; }
+export function setOutline(on) { post.outline = !!on; }
+/** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */
+export function setGrade(tint, sat) {
+  postMat.uniforms.uTint.value.setHex(tint == null ? 0xffffff : tint);
+  postMat.uniforms.uSat.value = sat == null ? 1 : sat;
+}

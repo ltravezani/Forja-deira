@@ -379,9 +379,34 @@ export function kitMat() {
   if (!_kitMat) { const g = texGrime(); _kitMat = toonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap }, { rim: 0.22 }); _kitMat.normalScale.setScalar(0.6); _kitMat.userData.shared = true; }
   return _kitMat;
 }
+/**
+ * Partes que brilham (chamas, lava, cristais, cogumelos): aditivas, pulsando
+ * devagar com fase pela posição no mundo — cada cristal "respira" no seu tempo.
+ * O pulso passa um pouco do branco, então o passe de brilho (bloom) as acende.
+ */
+const glowTime = { value: 0 };
+export function setKitGlowTime(t) { glowTime.value = t; }
 export function kitGlowMat() {
-  if (!_kitGlow) _kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  _kitGlow.userData.shared = true;
+  if (!_kitGlow) {
+    _kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    _kitGlow.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = glowTime;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime; varying float vPulse;')
+        .replace('#include <project_vertex>', `#include <project_vertex>
+          vec4 gw = vec4( transformed, 1.0 );
+          #ifdef USE_INSTANCING
+            gw = instanceMatrix * gw;
+          #endif
+          gw = modelMatrix * gw;
+          vPulse = 1.05 + 0.3 * sin( uTime * 1.7 + gw.x * 0.9 + gw.z * 0.7 ) + 0.08 * sin( uTime * 4.3 + gw.y * 3.0 );`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vPulse;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vPulse;');
+    };
+    _kitGlow.customProgramCacheKey = () => 'kitGlowPulse';
+    _kitGlow.userData.shared = true;
+  }
   return _kitGlow;
 }
 export function roofMat() {

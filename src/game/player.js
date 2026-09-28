@@ -52,7 +52,7 @@ function playerLook(ch) {
   };
   const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34 }[ch.cls];
   const o = {
-    dk: { skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
+    dk: { skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', eye: 0xff5a3a, weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
     dw: { skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
     elf: { skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
   }[ch.cls];
@@ -195,7 +195,7 @@ function updateTarget(p, dt) {
     } else if (t.type === 'npc') {
       if (Math.hypot(t.n.x - p.x, t.n.z - p.z) < 3.2) { p.path = null; p.target = null; face(p, t.n.x, t.n.z); openNpc(t.n.id); }
     } else if (t.type === 'portal') {
-      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; t.p.onUse(); return true; }
+      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; return t.p.onUse() !== false; }
     }
   }
   if (p.path && p.path.length) {

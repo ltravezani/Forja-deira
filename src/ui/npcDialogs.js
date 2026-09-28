@@ -3,7 +3,7 @@ import { G, persist, UI } from '../core/state.js';
 import { $, esc, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
-import { respawn, unlockSkills } from '../game/combat.js';
+import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
 import { addToBag, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
@@ -49,6 +49,8 @@ export function openNpc(id) {
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
+    const RZ = R.POTIONS.rez;
+    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Gold · você tem ' + potionCount('rez') + '</span></div>';
     h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button></div>';
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
@@ -82,7 +84,7 @@ function npcAction(e) {
       recalc(); buildPlayerModel();
       break;
     }
-    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= D.price * n; addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p }); Sfx.coin(); break; }
+    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break; ch.gold -= D.price * n; Sfx.coin(); break; }
     case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.gold += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
     case 'evolve': {
       const ev = R.canEvolve(ch);
@@ -111,9 +113,20 @@ function npcAction(e) {
   openNpc(G.openNpcId);
   hudTick();
 }
-export function showDeath(loss, zl) {
-  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Gold. Itens equipados nunca são perdidos para monstros.</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn gold" id="btnRespawn">Renascer em Aldrena</button></div></div>');
+export function showDeath(loss, zl, rez) {
+  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Gold. Itens equipados nunca são perdidos para monstros.</p>' +
+    (rez ? '<p class="note" style="text-align:center">A Poção da Ressurreição (' + rez + ') te levanta aqui mesmo, com HP cheio, e devolve a EXP e o Gold perdidos.</p>' : '') +
+    '<div class="row" style="justify-content:center;margin-top:12px">' + (rez ? '<button class="btn gold" id="btnRevive">Usar Poção da Ressurreição</button>' : '') + '<button class="btn' + (rez ? '' : ' gold') + '" id="btnRespawn">Renascer em Aldrena</button></div></div>');
   $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
+  if (rez) $('#btnRevive').addEventListener('click', () => { if (revive()) { closeModal(); hudTick(); } });
+}
+
+/** Pergunta antes de descer quando ainda há itens no chão (Não = continua no andar). */
+export function confirmDescend(onYes) {
+  const n = G.loot.length;
+  modal('<h3>Próximo andar</h3><p>Ainda há ' + n + (n === 1 ? ' item' : ' itens') + ' no chão. Deseja ir para o próximo andar?</p><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="btnDescendNo">Não</button><button class="btn gold" id="btnDescendYes">Sim</button></div>');
+  $('#btnDescendNo').addEventListener('click', closeModal);
+  $('#btnDescendYes').addEventListener('click', () => { closeModal(); onYes(); });
 }
 
 /** Botões dos diálogos de NPC e clique fora do modal. */
