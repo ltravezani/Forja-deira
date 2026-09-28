@@ -20,7 +20,7 @@ export const MON = {
   queen: { name: 'Rainha Aracnídea', model: 'spider', o: { body: 0x5a1a5a, belly: 0x8a2a6a, eye: 0x40ff80, scale: 2.4 }, boss: true, speed: 4.4, range: 3.2, atkT: 1.2, mod: { hp: 16, dmg: 1.8, def: 1.4 } },
   colossus: { name: 'Colosso de Cristal', model: 'golem', o: { stone: 0x5a6aa8, core: 0xbfffff, scale: 1.9 }, boss: true, speed: 3.2, range: 3.6, atkT: 1.6, mod: { hp: 18, dmg: 2, def: 1.6 } },
   skeking: { name: 'Rei Esqueleto Aldric', model: 'humanoid', o: { skin: 0xf0e6c8, cloth: 0x3a2a6a, armor: 0x4a3a7a, trim: 0xffd24a, head: 'skull', eye: 0x9a6aff, crown: true, weapon: 'sword', weaponGlow: 0x9a6aff, scale: 2.1 }, boss: true, speed: 4.2, range: 3.4, atkT: 1.3, mod: { hp: 16, dmg: 1.9, def: 1.5 } },
-  lord: { name: 'Lorde Carmesim', model: 'humanoid', o: { skin: 0x2a2a30, cloth: 0xa01a2a, armor: 0x302a34, trim: 0xff3a3a, trimGlow: true, head: 'helm', horns: true, weapon: 'sword', weaponGlow: 0xff2a2a, bulky: true, scale: 2.1 }, boss: true, speed: 4.4, range: 3.6, atkT: 1.2, mod: { hp: 18, dmg: 2, def: 1.6 } },
+  lord: { name: 'Lorde Carmesim', model: 'humanoid', o: { skin: 0x2a2a30, cloth: 0xa01a2a, armor: 0x302a34, trim: 0xff3a3a, trimGlow: true, head: 'helm', eye: 0xff2a2a, horns: true, weapon: 'sword', weaponGlow: 0xff2a2a, bulky: true, scale: 2.1 }, boss: true, speed: 4.4, range: 3.6, atkT: 1.2, mod: { hp: 18, dmg: 2, def: 1.6 } },
   tyrant: { name: 'Tirano do Abismo', model: 'golem', o: { stone: 0x2a1010, core: 0xff3a0a, scale: 2.2 }, boss: true, speed: 3.6, range: 4, atkT: 1.4, mod: { hp: 22, dmg: 2.2, def: 1.7 } },
 };
 export const AFFIX = {

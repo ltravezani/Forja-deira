@@ -86,6 +86,7 @@ function die() {
   G.hp = 0;
   p.diedAt = G.time;
   p.model.root.rotation.x = -Math.PI / 2; p.model.root.position.y = 0.4;
+  if (p.model.blob) p.model.blob.visible = false;
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
   const before = ch.exp;
@@ -128,6 +129,7 @@ export function respawn() {
   p.target = null; p.path = null; p.dash = null;
   p.model.root.rotation.x = 0;
   p.model.root.position.y = 0;
+  if (p.model.blob) p.model.blob.visible = true;
   G.buffs = []; recalc();
   enterTown();
 }

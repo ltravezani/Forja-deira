@@ -123,6 +123,12 @@ export function buildHumanoid(o) {
     part(GEO.cyl, leather, 0.64 * w, 0.08, 0.41, 0, 0.18, 0, torso); // cinto
     part(GEO.box, trim, 0.12, 0.1, 0.05, 0, 0.18, 0.21, torso, false); // fivela
     part(GEO.cyl, armor, 0.3, 0.1, 0.3, 0, 0.74, 0, torso); // gorjal
+    // bolsas no cinto (dos lados, visíveis de cima) com aba e botão
+    for (const sx of [-1, 1]) {
+      part(GEO.box, leather, 0.14, 0.16, 0.12, sx * 0.3 * w, 0.1, 0.12, torso, false).rotation.y = sx * 0.4;
+      part(GEO.box, leather, 0.15, 0.05, 0.13, sx * 0.3 * w, 0.19, 0.125, torso, false).rotation.y = sx * 0.4;
+      part(GEO.sphS, trim, 0.035, 0.035, 0.035, sx * 0.33 * w, 0.17, 0.18, torso, false);
+    }
     // tabardo na frente e atrás
     part(GEO.box, cloth, 0.34 * w, 0.46, 0.03, 0, -0.14, 0.2, torso);
     part(GEO.box, cloth, 0.34 * w, 0.46, 0.03, 0, -0.14, -0.2, torso);
@@ -131,6 +137,33 @@ export function buildHumanoid(o) {
   if (o.robe) {
     part(GEO.robe, cloth, 1.0 * w, 1.05, 1.0, 0, -0.2, 0, torso).material.side = THREE.DoubleSide;
     part(GEO.cyl, trim, 0.5 * w, 0.04, 0.5, 0, 0.3, 0, torso, false);
+    // barra com runas que brilham na cor da magia
+    const hem = part(GEO.torusF, glowMat(o.weaponGlow || o.trim || 0x7aa8ff, 0.4), 0.94 * w, 0.94, 0.35, 0, -0.62, 0, torso, false);
+    hem.rotation.x = Math.PI / 2;
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; part(GEO.box, hem.material, 0.05, 0.1, 0.02, Math.sin(a) * 0.43 * w, -0.5, Math.cos(a) * 0.43, torso, false).rotation.y = a; }
+    // mantelete sobre os ombros e grimório preso ao cinto
+    part(GEO.sphH, cloth, 0.95 * w, 0.42, 0.66, 0, 0.62, 0, torso);
+    part(GEO.cyl, trim, 0.62 * w, 0.03, 0.44, 0, 0.62, 0, torso, false);
+    const book = pivot(torso, 0.34 * w, 0.02, 0.12);
+    book.rotation.set(0.1, 0.5, 0.15);
+    part(GEO.box, leather, 0.2, 0.26, 0.08, 0, 0, 0, book);
+    part(GEO.box, toon(0xe8dcc0), 0.17, 0.23, 0.085, 0.015, 0, 0, book, false);
+    part(GEO.oct, glowMat(o.weaponGlow || 0x7aa8ff, 0.9), 0.06, 0.08, 0.03, 0, 0, 0.045, book, false);
+  }
+  // aljava nas costas (arqueiros): couro, faixa, flechas com penas
+  if (o.weapon === 'bow' && !skel) {
+    const q = pivot(torso, 0.12, 0.5, -0.3);
+    q.rotation.set(-0.25, 0, -0.35);
+    part(GEO.cyl, leather, 0.2, 0.62, 0.2, 0, 0, 0, q);
+    part(GEO.cyl, trim, 0.22, 0.04, 0.22, 0, 0.26, 0, q, false);
+    part(GEO.cyl, trim, 0.22, 0.04, 0.22, 0, -0.22, 0, q, false);
+    const shaft = toon(0x8a6a44), feather = toon(o.trim && o.trimGlow ? o.trim : 0xe8e0d0);
+    for (let i = 0; i < 5; i++) {
+      const ax = Math.cos(i * 1.3) * 0.05, az = Math.sin(i * 1.3) * 0.05;
+      part(GEO.cyl6, shaft, 0.02, 0.3, 0.02, ax, 0.4, az, q, false);
+      part(GEO.cone4, feather, 0.07, 0.12, 0.02, ax, 0.52, az, q, false).rotation.y = i;
+    }
+    part(GEO.box, leather, 0.05, 0.9, 0.03, -0.1, 0.1, 0.24, torso, false).rotation.z = 0.7; // correia no peito
   }
   // braços
   const arms = [];
@@ -151,6 +184,9 @@ export function buildHumanoid(o) {
       if (o.bulky || o.pauldron || o.armor) {
         part(GEO.sphH, armor, 0.42 * w, 0.34, 0.4, sx * 0.04, -0.02, 0, p);
         part(GEO.sphH, trim, 0.34 * w, 0.24, 0.32, sx * 0.08, -0.1, 0, p, false).rotation.z = sx * 0.25;
+        // crista e rebites na ombreira (é o que a câmera alta mais vê)
+        part(GEO.box, trim, 0.05, 0.08, 0.36, sx * 0.05, 0.14, 0, p, false).rotation.z = sx * 0.2;
+        for (let r = -1; r <= 1; r++) part(GEO.sphS, trim, 0.045, 0.045, 0.045, sx * 0.2 * w, 0.02, r * 0.13, p, false);
       }
     }
     arms.push(p);
@@ -190,6 +226,9 @@ export function buildHumanoid(o) {
       part(GEO.cyl, armor, 0.54, 0.58, 0.56, 0, 0.14, 0, head);
       part(GEO.sphH, armor, 0.54, 0.26, 0.56, 0, 0.43, 0, head);
       part(GEO.box, toon(0x050505), 0.4, 0.05, 0.08, 0, 0.18, 0.26, head, false);
+      // olhar aceso atrás da viseira (heróis e chefes)
+      if (o.eye) part(GEO.box, glowMat(o.eye, 1), 0.3, 0.026, 0.02, 0, 0.18, 0.305, head, false);
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; part(GEO.sphS, trim, 0.05, 0.05, 0.05, Math.sin(a) * 0.27, -0.1, Math.cos(a) * 0.28, head, false); }
       part(GEO.box, toon(0x050505), 0.04, 0.2, 0.08, 0, 0.04, 0.27, head, false);
       part(GEO.box, trim, 0.06, 0.5, 0.58, 0, 0.2, 0, head, false);
       if (o.horns) {
@@ -209,6 +248,13 @@ export function buildHumanoid(o) {
       if (hk === 'hair') {
         part(GEO.sphS, hair, 0.54, 0.44, 0.56, 0, 0.24, -0.05, head);
         part(GEO.box, hair, 0.42, 0.62, 0.14, 0, -0.1, -0.22, head);
+        // rabo de cavalo trançado e tiara com pedra
+        const tail = pivot(head, 0, 0.22, -0.26);
+        tail.rotation.x = 0.5;
+        for (let i = 0; i < 4; i++) part(GEO.sphS, hair, 0.16 - i * 0.02, 0.2, 0.16 - i * 0.02, 0, -0.14 * i, -0.04 * i, tail, false);
+        const tiara = part(GEO.torusF, toon(0xd8b050, 0, 0, { metal: 0.9, rough: 0.3 }), 0.5, 0.5, 0.22, 0, 0.2, 0, head, false);
+        tiara.rotation.x = Math.PI / 2 - 0.25;
+        part(GEO.oct, glowMat(o.eye || 0x8affb0, 1), 0.06, 0.09, 0.04, 0, 0.26, 0.25, head, false);
         part(GEO.cone, skin, 0.07, 0.28, 0.07, -0.26, 0.14, -0.02, head).rotation.z = 1.35;
         part(GEO.cone, skin, 0.07, 0.28, 0.07, 0.26, 0.14, -0.02, head).rotation.z = -1.35;
       } else {
@@ -452,15 +498,48 @@ function buildGolem(o) {
   return { root, kind: 'golem', body, torso, legs, arms, mats, height: 2.9 * S };
 }
 
+const BUILD = { spider: buildSpider, beast: buildBeast, floater: buildFloater, bat: buildBat, golem: buildGolem };
+/** Raio (unidades do modelo) e força da sombra de contato por tipo; quem flutua recebe uma mais fraca. */
+const BLOB = { humanoid: [0.62, 0.6], spider: [1.25, 0.6], beast: [0.8, 0.6], floater: [0.62, 0.35], bat: [0.55, 0.3], golem: [1.15, 0.65] };
 export function buildModel(kind, o) {
-  switch (kind) {
-    case 'spider': return buildSpider(o);
-    case 'beast': return buildBeast(o);
-    case 'floater': return buildFloater(o);
-    case 'bat': return buildBat(o);
-    case 'golem': return buildGolem(o);
-    default: return buildHumanoid(o);
+  const m = (BUILD[kind] || buildHumanoid)(o);
+  addContactShadow(m, BLOB[m.kind]);
+  return m;
+}
+
+// ---------- sombra de contato ----------
+// Mancha escura e suave logo abaixo do modelo: assenta personagens no chão
+// mesmo sem sombras em tempo real (qualidade baixa) e quando o sol projeta
+// a sombra de lado.
+let _blobTex = null;
+const _blobMats = new Map();
+function blobMaterial(op) {
+  if (!_blobTex) {
+    const N = 64, c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.45, 'rgba(0,0,0,0.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, N, N);
+    _blobTex = new THREE.CanvasTexture(c);
   }
+  let m = _blobMats.get(op);
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({ map: _blobTex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, fog: false });
+    m.userData.shared = true;
+    _blobMats.set(op, m);
+  }
+  return m;
+}
+function addContactShadow(m, spec) {
+  if (!spec) return;
+  const blob = new THREE.Mesh(GEO.plane, blobMaterial(spec[1]));
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.y = 0.04 / (m.root.scale.x || 1);
+  blob.scale.setScalar(spec[0] * 2);
+  blob.renderOrder = 1;
+  m.root.add(blob);
+  m.blob = blob;
 }
 
 /** Asas (item ou evolução de 3ª classe): membrana com brilho suave. */

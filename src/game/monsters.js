@@ -120,6 +120,7 @@ export function updateMonsters(dt) {
 function updateCorpse(m, dt) {
   m.deadT += dt;
   const r = m.model.root;
+  if (m.model.blob) m.model.blob.visible = false; // a mancha tombaria junto com o corpo
   r.rotation.z = Math.min(Math.PI / 2, m.deadT * 5) * (m.id % 2 ? 1 : -1);
   r.position.y = gy(m.x, m.z) - (m.deadT > 0.6 ? (m.deadT - 0.6) * 1.2 : 0);
   if (m.deadT <= 1.6) return false;
