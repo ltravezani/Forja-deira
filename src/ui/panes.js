@@ -33,7 +33,7 @@ export function paneChar() {
   h += '<h4>Evolução de classe</h4>';
   h += '<p>' + C.tiers.map((t, i) => (i === ch.tier ? '<b style="color:var(--gold)">' + t + '</b>' : t)).join(' → ') + '</p>';
   h += ev.next ? '<p class="note">Próxima: ' + esc(ev.name) + ' — requer nível ' + ev.next.level + ', ' + ev.next.bosses + ' chefes' + (ev.next.resets ? ', ' + ev.next.resets + ' reset' : '') + '. ' + (ev.ok ? '<b style="color:var(--ok)">Pronto: fale com o Mestre Orvan.</b>' : 'Falta: ' + esc(ev.reasons.join(', ')) + '.') + '</p>' : '<p class="note">Evolução máxima alcançada.</p>';
-  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Zen. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
+  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
   return h;
 }
 
@@ -98,7 +98,7 @@ export function paneOpts() {
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
   h += '<h4>Modo de teste</h4><p class="note">Atalhos para avaliar sistemas de fim de jogo sem grind.</p><div class="row">' +
-    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-zen">+5.000.000 Zen</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
+    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-gold">+5.000.000 Gold</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
   h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
   return h;

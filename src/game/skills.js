@@ -20,11 +20,17 @@ export function skillUnlocked(id) {
 }
 export function resetCooldowns() { G.cds = {}; G.skillQueue = null; }
 export function cdLeft(id) { return Math.max(0, (G.cds[id] || 0) - G.time); }
-function autoTargetPoint(range) {
+/** Monstro vivo mais próximo do herói dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
+function autoTargetPoint(range, fx, fz) {
   const p = G.player;
-  let best = null, bd = (range || 14) ** 2;
-  for (const m of G.monsters) { if (m.dead) continue; const d = dist2(m, p); if (d < bd) { bd = d; best = m; } }
+  let best = null, bd = Infinity;
+  for (const m of G.monsters) {
+    if (m.dead) continue;
+    const d = dist2(m, p), r = range + (m.radius || 0);
+    if (d <= r * r && d < bd) { bd = d; best = m; }
+  }
   if (best) return { x: best.x, z: best.z };
+  if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
 }
 const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0 };
@@ -187,7 +193,8 @@ export function castSkill(id, tx, tz) {
   const cost = R.skillCost(st, sk);
   if (G.mp < cost.mp) { floatText(p.x, 2.6, p.z, 'Mana insuficiente', 'info'); return false; }
   if (G.ag < cost.ag) { floatText(p.x, 2.6, p.z, 'AG insuficiente', 'info'); return false; }
-  if (tx == null) { const a = autoTargetPoint(sk.range || 14); tx = a.x; tz = a.z; }
+  // Toda habilidade mira o monstro mais próximo; só o Teleporte obedece ao cursor.
+  if (sk.kind !== 'blink' || tx == null) { const a = autoTargetPoint(sk.range || sk.radius || 14, tx, tz); tx = a.x; tz = a.z; }
   // limita ao alcance
   let dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 0.001;
   if (sk.range && d > sk.range) { tx = p.x + (dx / d) * sk.range; tz = p.z + (dz / d) * sk.range; d = sk.range; }

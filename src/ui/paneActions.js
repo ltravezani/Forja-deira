@@ -45,7 +45,7 @@ function paneAction(e) {
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': usePotion(it.id); break;
-    case 'sell': ch.zen += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
+    case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
@@ -60,7 +60,7 @@ function paneAction(e) {
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
     case 't-lvl': { const before = ch.level; const tgt = Math.min(R.RATES.maxLevel, ch.level + 100); while (ch.level < tgt) R.gainExp(ch, R.expToNext(ch.level) - ch.exp); onLevelUp(before); break; }
-    case 't-zen': ch.zen += 5e6; break;
+    case 't-gold': ch.gold += 5e6; break;
     case 't-leg': { const x = R.makeEquip(R.hash32('teste', Date.now()), Math.max(20, ch.level), 'lendario', ch.cls, 0, 'boss'); addToBag(x); log('Gerado: ' + R.itemName(x), 'loot'); break; }
     case 't-jew': ['bless', 'soul', 'chaos', 'life'].forEach((j) => addToBag({ kind: 'jewel', id: j, qty: 10, uid: 'j' + j })); break;
     case 't-boss': ch.bossKills += 5; break;

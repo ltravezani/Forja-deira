@@ -51,7 +51,7 @@ export function renderTitle() {
   const ch = S.chars[UI.titleIdx];
   const conf = UI.confirmDel === UI.titleIdx;
   $('#tCard').innerHTML = '<div class="t-name">' + esc(ch.name) + '</div>' +
-    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.zen) + ' Zen</div>' +
+    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.gold) + ' Gold</div>' +
     '<div class="t-cp">CP ' + fmt(cpOf(ch)) + '</div>' +
     '<button class="btn gold t-play" data-t="play">Entrar no jogo</button>' +
     (n > 1 ? '<div class="t-dots">' + S.chars.map((_, i) => '<i class="' + (i === UI.titleIdx ? 'on' : '') + '"></i>').join('') + '</div>' : '') +
