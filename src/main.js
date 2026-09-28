@@ -10,6 +10,7 @@ import { installDebugHook } from './debug.js';
 import { Sfx } from './engine/audio.js';
 import { updateParticles, updateRings } from './engine/effects.js';
 import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
+import { updateFx } from './engine/skillfx.js';
 import { applyQuality, camTarget, renderFrame, resize, setOutline } from './engine/renderer.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
@@ -31,6 +32,7 @@ function frame(dt) {
   updateParticles(fxDt);
   Music.tick();
   updateRings(fxDt);
+  updateFx(fxDt);
   renderFrame();
 }
 

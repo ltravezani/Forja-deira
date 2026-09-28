@@ -5,7 +5,7 @@ import { GEO } from '../art/geometry.js';
 import { glowShared, toon } from '../art/materials.js';
 import { G } from '../core/state.js';
 import { TILE } from '../core/util.js';
-import { emit } from '../engine/effects.js';
+import { emit, spawnRing } from '../engine/effects.js';
 import { world } from '../engine/renderer.js';
 import { hitMonster, hurtPlayer } from './combat.js';
 import { QUERY_PAD, queryMonsters } from './monsters.js';
@@ -25,7 +25,7 @@ function releaseMesh(pr) {
   meshPool[pr.arrow ? 'arrow' : 'orb'].push(pr.mesh);
 }
 
-/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?} */
+/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?, spiral?} */
 export function spawnProjectile(o) {
   const mesh = takeMesh(o.arrow ? 'arrow' : 'orb');
   if (o.arrow) {
@@ -40,6 +40,22 @@ export function spawnProjectile(o) {
   mesh.rotation.set(0, Math.atan2(o.dx, o.dz), 0);
   world.add(mesh);
   G.projectiles.push(Object.assign({ traveled: 0, hit: new Set(), mesh, y }, o));
+}
+
+/** Rastro: brilho atrás dos orbes, risco fino atrás das flechas e espiral nos disparos de habilidade. */
+function trail(pr) {
+  if (pr.arrow) {
+    if (pr.from === 'p') emit(pr.x - pr.dx * 0.4, pr.y, pr.z - pr.dz * 0.4, { n: 1, color: pr.color, speed: 0.1, life: 0.16, size: 0.45, grav: 0, spread: 0.05, alpha: 0.7 });
+    return;
+  }
+  if (Math.random() < 0.8) emit(pr.x, pr.y, pr.z, { n: 1, color: pr.color, speed: 0.4, life: 0.35, size: pr.big ? 1.4 : 0.8, grav: 0 });
+  if (pr.spiral) {
+    const a = pr.traveled * 2.2, r = pr.big ? 0.45 : 0.32;
+    for (const s of [1, -1]) {
+      const c = Math.cos(a) * r * s;
+      emit(pr.x - pr.dz * c, pr.y + Math.sin(a) * r * s, pr.z + pr.dx * c, { n: 1, color: pr.spiral, speed: 0.2, life: 0.3, size: 0.5, grav: 0, spread: 0.02, spreadY: 0.02 });
+    }
+  }
 }
 
 function blocked(pr) {
@@ -70,11 +86,13 @@ export function updateProjectiles(dt) {
     pr.x += pr.dx * s; pr.z += pr.dz * s; pr.traveled += s;
     pr.mesh.position.set(pr.x, pr.y + gy(pr.x, pr.z), pr.z);
     let dead = pr.traveled > pr.range || blocked(pr);
-    if (!pr.arrow && Math.random() < 0.8) emit(pr.x, pr.y, pr.z, { n: 1, color: pr.color, speed: 0.4, life: 0.35, size: pr.big ? 1.4 : 0.8, grav: 0 });
-    if (!dead && pr.from === 'p') dead = hitMonsters(pr);
+    trail(pr);
+    let hit = false;
+    if (!dead && pr.from === 'p') dead = hit = hitMonsters(pr);
     else if (!dead && pr.from === 'm' && (p.x - pr.x) ** 2 + (p.z - pr.z) ** 2 < PLAYER_HIT_R2) { hurtPlayer(pr.dmg, pr.src); dead = true; }
     if (dead) {
-      emit(pr.x, pr.y, pr.z, { n: 6, color: pr.color, speed: 3, life: 0.3, size: 0.7 });
+      emit(pr.x, pr.y, pr.z, { n: hit ? 12 : 6, color: pr.color, speed: hit ? 5 : 3, life: 0.3, size: 0.7 });
+      if (hit && !pr.arrow) spawnRing(pr.x, pr.z, 0.2, 1.3, pr.color, 0.25);
       releaseMesh(pr);
       G.projectiles.splice(i, 1);
     }
