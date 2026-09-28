@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build (gera dist/forja-deira.html e checa sintaxe)
+        run: python3 tools/build.py
+      - name: Testes de lógica
+        run: npm test
+      - name: Arquivo jogável commitado está atualizado
+        run: git diff --exit-code -- dist/forja-deira.html || (echo "::error::dist/forja-deira.html desatualizado — rode python3 tools/build.py e faça commit" && exit 1)

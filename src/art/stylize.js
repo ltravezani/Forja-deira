@@ -1,0 +1,65 @@
+// =============================================================================
+// Estilo cartoon unificado: todo material sólido do jogo (heróis, NPCs,
+// monstros, chão, paredes e adereços) passa por aqui, para que o mundo e os
+// personagens tenham a mesma luz em faixas, o mesmo brilho de borda e o mesmo
+// reflexo "pintado" nos metais. O contorno preto vem de um passe de tela
+// (engine/renderer.js), então vale igualmente para tudo que grava profundidade.
+// =============================================================================
+
+let _grad = null;
+/** Rampa de luz em faixas (sombra, meio-tom, luz, realce), filtro "nearest". */
+export function toonGradient() {
+  if (_grad) return _grad;
+  const v = [78, 128, 180, 222, 244];
+  const data = new Uint8Array(v.length * 4);
+  v.forEach((g, i) => data.set([g, g, g, 255], i * 4));
+  _grad = new THREE.DataTexture(data, v.length, 1, THREE.RGBAFormat);
+  _grad.minFilter = _grad.magFilter = THREE.NearestFilter;
+  _grad.generateMipmaps = false;
+  _grad.needsUpdate = true;
+  return _grad;
+}
+
+const RIM_CHUNK = `
+  {
+    vec3 sV = normalize( vViewPosition );
+    float sNV = 1.0 - clamp( dot( normal, sV ), 0.0, 1.0 );
+    // borda iluminada: faixa dura, como em animação desenhada
+    float sRim = smoothstep( 0.62, 0.7, sNV ) * uRim;
+    outgoingLight += diffuseColor.rgb * uRimColor * sRim;
+    #if NUM_DIR_LIGHTS > 0
+      // reflexo pintado (metais): mancha de luz recortada em vez de especular físico
+      vec3 sH = normalize( directionalLights[ 0 ].direction + sV );
+      float sSpec = smoothstep( 0.972, 0.98, dot( normal, sH ) ) * uSpec;
+      outgoingLight += directionalLights[ 0 ].color * sSpec * ( 0.06 + diffuseColor.rgb * 0.5 );
+    #endif
+  }
+  #include <opaque_fragment>`;
+
+/**
+ * Aplica o estilo cartoon a um material (MeshToonMaterial). Preserva um
+ * onBeforeCompile já existente (ex.: mistura de texturas do chão).
+ * o: { rim (0–1), spec (0–1), rimColor }
+ */
+export function stylize(mat, o) {
+  o = o || {};
+  mat.gradientMap = toonGradient();
+  const prev = mat.onBeforeCompile;
+  const U = { uRim: { value: o.rim != null ? o.rim : 0.35 }, uSpec: { value: o.spec || 0 }, uRimColor: { value: new THREE.Color(o.rimColor != null ? o.rimColor : 0xfff2dc) } };
+  mat.userData.stylize = U;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    Object.assign(sh.uniforms, U);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uSpec; uniform vec3 uRimColor;')
+      .replace('#include <opaque_fragment>', RIM_CHUNK);
+  };
+  const key = 'toonStyle|' + (prev ? prev.toString() : '');
+  mat.customProgramCacheKey = () => key;
+  return mat;
+}
+
+/** Atalho: novo MeshToonMaterial já estilizado. */
+export function toonMaterial(params, o) {
+  return stylize(new THREE.MeshToonMaterial(params), o);
+}
