@@ -3,6 +3,7 @@ import { applyFeelSettings, CONFIG } from '../core/config.js';
 import { G, LEGACY_SAVE_KEYS, persist, S, SAVE_KEY, UI } from '../core/state.js';
 import { $, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
+import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
 import { applyQuality, resetCamera, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
 import { onLevelUp } from '../game/combat.js';
@@ -52,6 +53,7 @@ function paneAction(e) {
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;
     case 'node': ch.tree[b.dataset.id] = (ch.tree[b.dataset.id] || 0) + 1; recalc(); break;
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
+    case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
     case 'toggleOutline': S.settings.outline = S.settings.outline === false; setOutline(S.settings.outline); break;
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }

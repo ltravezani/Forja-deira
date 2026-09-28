@@ -9,6 +9,7 @@ import { TILE } from './core/util.js';
 import { installDebugHook } from './debug.js';
 import { Sfx } from './engine/audio.js';
 import { updateParticles, updateRings } from './engine/effects.js';
+import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
 import { applyQuality, camTarget, renderFrame, resize, setOutline } from './engine/renderer.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
@@ -28,6 +29,7 @@ function frame(dt) {
   if (G.mode === 'play') fxDt = updatePlayScene(dt);
   else updateTitleScene(dt);
   updateParticles(fxDt);
+  Music.tick();
   updateRings(fxDt);
   renderFrame();
 }
@@ -38,6 +40,10 @@ function boot() {
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
+  Music.setVolume(MUSIC_LEVELS[musicLevel(S.settings)].v);
+  Music.play('town'); // tela de título: a cidade ao fundo
+  // o navegador só libera o áudio depois de um gesto; a música da tela de título começa no primeiro
+  for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => Sfx.init(), { once: true, capture: true });
   window.addEventListener('resize', resize);
   initCursor();
   initInput();
