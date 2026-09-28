@@ -116,6 +116,14 @@ export function showDeath(loss, zl) {
   $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
 }
 
+/** Pergunta antes de descer quando ainda há itens no chão (Não = continua no andar). */
+export function confirmDescend(onYes) {
+  const n = G.loot.length;
+  modal('<h3>Próximo andar</h3><p>Ainda há ' + n + (n === 1 ? ' item' : ' itens') + ' no chão. Deseja ir para o próximo andar?</p><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="btnDescendNo">Não</button><button class="btn gold" id="btnDescendYes">Sim</button></div>');
+  $('#btnDescendNo').addEventListener('click', closeModal);
+  $('#btnDescendYes').addEventListener('click', () => { closeModal(); onYes(); });
+}
+
 /** Botões dos diálogos de NPC e clique fora do modal. */
 export function initDialogs() {
   $('#dialog').addEventListener('click', npcAction);
