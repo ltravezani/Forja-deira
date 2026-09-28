@@ -19,7 +19,7 @@ import { enterDungeon, enterTown, inSafe } from './zones.js';
 import { hurtFeedback } from '../ui/feedback.js';
 import { buildSlots } from '../ui/hud.js';
 import { log, toast } from '../ui/log.js';
-import { showDeath } from '../ui/npcDialogs.js';
+import { confirmDescend, showDeath } from '../ui/npcDialogs.js';
 import { floorLevel } from '../world/biomes.js';
 import { walkableR } from '../world/grid.js';
 
@@ -189,7 +189,13 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
-  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => enterDungeon(G.biome, G.floor + 1));
+  const descend = () => enterDungeon(G.biome, G.floor + 1);
+  // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
+  G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
+    if (!G.loot.length) { descend(); return true; }
+    confirmDescend(descend);
+    return false;
+  });
   const ev = R.canEvolve(ch);
   if (ev.ok) log('Mestre Orvan sente seu poder: evolução para ' + ev.name + ' disponível na cidade.', 'sys');
   persist();
