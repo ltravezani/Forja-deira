@@ -53,3 +53,10 @@ test('Dark Wizard nível 1 tem dano mágico e HP extras de início', () => {
   assert.equal(st.maxDmg, 12);
   assert.equal(st.maxHp, 81);
 });
+
+test('Poção da Ressurreição custa 50.000 Gold e não é bebível', () => {
+  const D = R.POTIONS.rez;
+  assert.equal(D.price, 50000);
+  assert.equal(D.revive, true);
+  assert.equal(R.itemName({ kind: 'potion', id: 'rez' }), 'Poção da Ressurreição');
+});

@@ -113,6 +113,7 @@ export function usePotion(id) {
   if (G.potCd > G.time) return;
   G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
+  if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });
