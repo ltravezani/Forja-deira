@@ -165,7 +165,7 @@ function updateTarget(p, dt) {
     } else if (t.type === 'npc') {
       if (Math.hypot(t.n.x - p.x, t.n.z - p.z) < 3.2) { p.path = null; p.target = null; face(p, t.n.x, t.n.z); openNpc(t.n.id); }
     } else if (t.type === 'portal') {
-      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; t.p.onUse(); return true; }
+      if (Math.hypot(t.p.x - p.x, t.p.z - p.z) < 2.6) { p.path = null; p.target = null; return t.p.onUse() !== false; }
     }
   }
   if (p.path && p.path.length) {
