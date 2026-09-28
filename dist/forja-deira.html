@@ -416,7 +416,7 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
     <div class="bossbar" id="bossbar" hidden><h3 id="bossName"></h3><div class="bar"><i id="bossFill"></i></div></div>
     <div class="topright">
       <div class="wallet-chip">
-        <span>Zen <b class="num" id="zenTxt">0</b></span>
+        <span>Gold <b class="num" id="goldTxt">0</b></span>
         <span>MF <b class="num" id="mfTxt">0%</b></span>
       </div>
       <nav class="menu" aria-label="Menu do jogo">
@@ -550,9 +550,9 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     resetPoints: 2200,          // pontos livres concedidos por reset acumulado
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
-    chaosFeeZen: 1000000,       // taxa em Zen da fusão Chaos (+10..+15)
+    chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
   };
-  const resetZenCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
+  const resetGoldCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
 
   // ---------------------------------------------------------------------------
   // RNG determinístico (seeds públicas → loot auditável)
@@ -635,7 +635,8 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
       id: 'dw', tiers: ['Dark Wizard', 'Soul Master', 'Grand Master'],
       role: 'Mago de área', weapon: 'staff', mainStat: 'ene',
       base: { str: 18, agi: 18, vit: 15, ene: 30 }, ppl: 5,
-      konst: { maxHp: 30, maxMp: 20 },
+      // dano mágico e HP fixos extras: pesam nos níveis iniciais e somem na escala depois
+      konst: { maxHp: 50, maxMp: 20, minWiz: 3, maxWiz: 5 },
       rel: [
         ['maxHp', 1, 'level'], ['maxHp', 2, 'vit'],
         ['maxMp', 2, 'level'], ['maxMp', 2, 'ene'],
@@ -703,7 +704,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     rage: { cls: 'dk', name: 'Golpe Furioso', lvl: 150, tier: 1, mp: 25, ag: 18, cd: 2.2, kind: 'quake', mult: 3.1, radius: 5.5, desc: 'Esmaga o chão em ondas de choque.' },
     destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 400, tier: 2, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
     // Dark Wizard
-    ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.0, range: 16, desc: 'Projétil rápido de energia.' },
+    ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.15, range: 16, desc: 'Projétil rápido de energia.' },
     flame: { cls: 'dw', name: 'Chama', lvl: 20, tier: 0, mp: 10, ag: 3, cd: 0.8, kind: 'burst', mult: 1.7, radius: 2.8, range: 14, desc: 'Coluna de fogo no ponto alvo.' },
     tele: { cls: 'dw', name: 'Teleporte', lvl: 40, tier: 0, mp: 30, ag: 15, cd: 3, kind: 'blink', range: 12, desc: 'Teleporta até o cursor.' },
     meteor: { cls: 'dw', name: 'Meteoro', lvl: 70, tier: 0, mp: 18, ag: 6, cd: 1.2, kind: 'meteor', mult: 2.5, radius: 3.6, range: 15, desc: 'Um meteoro cai após 0,5s.' },
@@ -792,7 +793,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     dmgRed: { t: 'Redução de dano +4%', s: { dmgRed: 4 } },
     reflect: { t: 'Reflexão de dano +5%', s: { reflect: 5 } },
     defRate: { t: 'Taxa de defesa +10%', s: { defPct: 10 } },
-    zen30: { t: 'Zen obtido +30%', s: { zenPct: 30 } },
+    gold30: { t: 'Gold obtido +30%', s: { goldPct: 30 } },
   };
   const LEGEND = {
     mf: { t: 'Encontrar Magia +40%', s: { mf: 40 } },
@@ -906,7 +907,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     if (boss) { const f = 1 / sum; for (const r in t) if (r !== 'comum') t[r] *= f; }
     return t;
   }
-  const DROP_CHANCE = { item: 0.3, zen: 0.45, bless: 0.012, soul: 0.009, chaos: 0.011, life: 0.004, potion: 0.08 };
+  const DROP_CHANCE = { item: 0.3, gold: 0.45, bless: 0.012, soul: 0.009, chaos: 0.011, life: 0.004, potion: 0.08 };
 
   function tierForLevel(mLevel) {
     let t = 0;
@@ -978,7 +979,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
   function rollDrop(opts) {
     const { seed, mLevel, src, mf, favorCls } = opts;
     const rnd = mulberry32(seed);
-    const out = { items: [], zen: 0, jewels: [], potions: [], log: [] };
+    const out = { items: [], gold: 0, jewels: [], potions: [], log: [] };
     const nItems = src === 'boss' ? 3 + Math.floor(rnd() * 3) : src === 'elite' ? 1 + (rnd() < 0.5 ? 1 : 0) : 0;
     for (let i = 0; i < nItems; i++) out.items.push(makeEquip(hash32(seed, 'b', i), mLevel, null, favorCls, mf, src));
     const ri = rnd();
@@ -986,7 +987,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     out.log.push({ what: 'item', roll: ri, threshold: pItem });
     if (ri < pItem) out.items.push(makeEquip(hash32(seed, 'i'), mLevel, null, favorCls, mf, src));
     const rz = rnd();
-    if (rz < DROP_CHANCE.zen || src === 'boss') out.zen = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
     for (const j of ['bless', 'soul', 'chaos', 'life']) {
       const rj = rnd();
       const p = DROP_CHANCE[j] * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) * (mLevel < 15 ? 0.3 : 1);
@@ -1041,7 +1042,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     return {
       name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0,
       stats: Object.assign({}, C.base), tree: {},
-      zen: 5000, bossKills: 0, created: Date.now(),
+      gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
       unlockedFloors: {},
     };
@@ -1080,7 +1081,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
       str: ch.stats.str + (b.str || 0), agi: ch.stats.agi + (b.agi || 0),
       vit: ch.stats.vit + (b.vit || 0), ene: ch.stats.ene + (b.ene || 0), level: ch.level,
     };
-    const d = { maxHp: C.konst.maxHp, maxMp: C.konst.maxMp, maxAg: 0, def: 0, atkSpeed: 0, minDmg: 0, maxDmg: 0, minWiz: 0, maxWiz: 0, skillMul: 0 };
+    const d = Object.assign({ maxHp: 0, maxMp: 0, maxAg: 0, def: 0, atkSpeed: 0, minDmg: 0, maxDmg: 0, minWiz: 0, maxWiz: 0, skillMul: 0 }, C.konst);
     C.rel.forEach(([t, m, s]) => { d[t] += m * tot[s]; });
     const out = {
       total: tot,
@@ -1097,7 +1098,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
       lifeSteal: b.lifeSteal || 0,
       lifeKill: b.lifeKill || 0,
       manaKill: b.manaKill || 0,
-      zenPct: b.zenPct || 0,
+      goldPct: b.goldPct || 0,
       mf: Math.floor((b.mf || 0) + (b.mfPct || 0) + ch.resets * 2),
       costPct: b.costPct || 0,
       cdPct: Math.max(-40, b.cdPct || 0),
@@ -1135,11 +1136,11 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     const critMul = 1 + Math.min(100, st.critPct) / 100 * 0.25 + Math.min(100, st.excPct) / 100 * 0.45;
     const offense = avg * (1 + st.dmgPct / 100) * critMul * (1 + st.skillDmgPct / 200) * (1 + (st.skillMul - 1) * 0.5) / st.attackInterval;
     const ehp = st.maxHp * (1 + st.def / 250) / (1 - st.dmgRed / 100);
-    const util = st.lifeSteal * 20 + st.lifeKill * 4 + st.reflect * 15 + st.mf * 2 + st.zenPct;
+    const util = st.lifeSteal * 20 + st.lifeKill * 4 + st.reflect * 15 + st.mf * 2 + st.goldPct;
     return Math.max(1, Math.round(offense * 6 + ehp * 0.9 + util));
   }
   /** CP intrínseco de um item (independe de quem usa) — para marcar e comparar peças. */
-  const CP_W = { wMin: 5, wMax: 5, wizMin: 5, wizMax: 5, wizRise: 4, armorDef: 6, maxHp: 1, hpPct: 10, mpPct: 3, dmgPct: 14, dmgRed: 16, critPct: 10, excPct: 12, atkSpeed: 5, defPct: 8, reflect: 10, lifeSteal: 14, lifeKill: 3, manaKill: 2, zenPct: 1, mf: 2, mfPct: 2, costPct: 3, cdPct: 6, healPct: 3, moveSpeedPct: 4, agRegen: 1, skillDmgPct: 6, dmgLvl: 40, str: 3, agi: 3, vit: 3, ene: 3 };
+  const CP_W = { wMin: 5, wMax: 5, wizMin: 5, wizMax: 5, wizRise: 4, armorDef: 6, maxHp: 1, hpPct: 10, mpPct: 3, dmgPct: 14, dmgRed: 16, critPct: 10, excPct: 12, atkSpeed: 5, defPct: 8, reflect: 10, lifeSteal: 14, lifeKill: 3, manaKill: 2, goldPct: 1, mf: 2, mfPct: 2, costPct: 3, cdPct: 6, healPct: 3, moveSpeedPct: 4, agRegen: 1, skillDmgPct: 6, dmgLvl: 40, str: 3, agi: 3, vit: 3, ene: 3 };
   function itemCP(it) {
     if (!it || !it.slot) return 0;
     const s = itemStats(it);
@@ -1185,15 +1186,15 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
   function canReset(ch) {
     const reasons = [];
     if (ch.level < RATES.resetLevel) reasons.push('Nível ' + RATES.resetLevel + ' necessário');
-    if (ch.zen < resetZenCost(ch.resets)) reasons.push(resetZenCost(ch.resets).toLocaleString('pt-BR') + ' Zen necessários');
+    if (ch.gold < resetGoldCost(ch.resets)) reasons.push(resetGoldCost(ch.resets).toLocaleString('pt-BR') + ' Gold necessários');
     if (ch.resets >= RATES.maxResets) reasons.push('Limite de resets atingido');
-    return { ok: reasons.length === 0, reasons, cost: resetZenCost(ch.resets) };
+    return { ok: reasons.length === 0, reasons, cost: resetGoldCost(ch.resets) };
   }
   function applyReset(ch) {
     const c = canReset(ch);
     if (!c.ok) return c;
     const extra = (ch.level - RATES.resetLevel) * RATES.resetBonusPerLevel;
-    ch.zen -= c.cost;
+    ch.gold -= c.cost;
     ch.resets++;
     ch.level = 1; ch.exp = 0;
     ch.stats = Object.assign({}, CLASSES[ch.cls].base);
@@ -1224,7 +1225,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate();
   }
   return {
-    VERSION, RATES, resetZenCost, mulberry32, hash32, hex, clamp,
+    VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
     CLASSES, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
@@ -1298,7 +1299,7 @@ const CONFIG = {
     missChance: 0.05,
   },
   loot: {
-    autoPickupRadius: 1.48, // m (zen, poções e jewels)
+    autoPickupRadius: 1.48, // m (gold, poções e jewels)
     autoPickupDelay: 0.5,   // s após cair
     spacePickupRadius: 3.8, // m: tecla Espaço
     spaceSeekRadius: 16,    // m: se nada estiver perto, anda até o mais próximo
@@ -1428,7 +1429,7 @@ function readSave() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     for (const k of LEGACY_SAVE_KEYS) if (!raw) raw = localStorage.getItem(k);
-    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); return s; }
+    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();
 }
@@ -1448,6 +1449,19 @@ function migrateOffline(s) {
   ['wallet', 'nfts', 'market', 'stake', 'trzPending', 'nextToken', 'txs', 'treasury', 'chat'].forEach((k) => delete s[k]);
   const clean = (it) => { if (it) { delete it.nft; delete it.minting; } };
   (s.chars || []).forEach((ch) => { (ch.bag || []).forEach(clean); Object.values(ch.equip || {}).forEach(clean); delete ch.trzToday; delete ch.trzDay; });
+}
+/** Saves antigos: a moeda se chamava Zen. Passa o saldo (e a opção excelente de bônus) para Gold. */
+function migrateGold(s) {
+  const opt = (it) => { if (it && Array.isArray(it.exc)) it.exc = it.exc.map((e) => (e === 'zen30' ? 'gold30' : e)); };
+  (s.chars || []).forEach((ch) => {
+    if (!ch || typeof ch !== 'object') return;
+    if ('zen' in ch) {
+      const zen = Number.isFinite(ch.zen) ? ch.zen : 0;
+      ch.gold = (Number.isFinite(ch.gold) ? ch.gold : 0) + zen;
+      delete ch.zen;
+    }
+    (ch.bag || []).forEach(opt); Object.values(ch.equip || {}).forEach(opt);
+  });
 }
 function persist() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
@@ -1469,7 +1483,7 @@ function sanitizeCharacter(ch) {
   for (const k of Object.keys(base)) if (ch[k] == null) ch[k] = base[k];
   ch.stats = ch.stats && typeof ch.stats === 'object' ? ch.stats : {};
   for (const k of Object.keys(base.stats)) ch.stats[k] = Math.max(0, num(ch.stats[k], base.stats[k]));
-  for (const k of ['level', 'exp', 'zen', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
+  for (const k of ['level', 'exp', 'gold', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
   ch.level = Math.max(1, Math.floor(ch.level));
   if (!Array.isArray(ch.bag)) ch.bag = [];
   ch.bag = ch.bag.filter((it) => it && typeof it === 'object' && (it.slot || it.kind));
@@ -3434,8 +3448,8 @@ function updateAllies(dt) {
     if (a.kind === 'pet' && a.away) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
-      G.ch.zen += a.gold;
-      log('Pet voltou com ' + fmt(a.gold) + ' Zen.', 'loot');
+      G.ch.gold += a.gold;
+      log('Pet voltou com ' + fmt(a.gold) + ' Gold.', 'loot');
       emit(a.x, 0.5, a.z, { n: 20, color: 0xffd24a, speed: 3, up: 2, life: 0.7, size: 0.9 });
       Sfx.coin();
     }
@@ -3628,11 +3642,17 @@ function skillUnlocked(id) {
 }
 function resetCooldowns() { G.cds = {}; G.skillQueue = null; }
 function cdLeft(id) { return Math.max(0, (G.cds[id] || 0) - G.time); }
-function autoTargetPoint(range) {
+/** Monstro vivo mais próximo do herói dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
+function autoTargetPoint(range, fx, fz) {
   const p = G.player;
-  let best = null, bd = (range || 14) ** 2;
-  for (const m of G.monsters) { if (m.dead) continue; const d = dist2(m, p); if (d < bd) { bd = d; best = m; } }
+  let best = null, bd = Infinity;
+  for (const m of G.monsters) {
+    if (m.dead) continue;
+    const d = dist2(m, p), r = range + (m.radius || 0);
+    if (d <= r * r && d < bd) { bd = d; best = m; }
+  }
   if (best) return { x: best.x, z: best.z };
+  if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
 }
 const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0 };
@@ -3795,7 +3815,8 @@ function castSkill(id, tx, tz) {
   const cost = R.skillCost(st, sk);
   if (G.mp < cost.mp) { floatText(p.x, 2.6, p.z, 'Mana insuficiente', 'info'); return false; }
   if (G.ag < cost.ag) { floatText(p.x, 2.6, p.z, 'AG insuficiente', 'info'); return false; }
-  if (tx == null) { const a = autoTargetPoint(sk.range || 14); tx = a.x; tz = a.z; }
+  // Toda habilidade mira o monstro mais próximo; só o Teleporte obedece ao cursor.
+  if (sk.kind !== 'blink' || tx == null) { const a = autoTargetPoint(sk.range || sk.radius || 14, tx, tz); tx = a.x; tz = a.z; }
   // limita ao alcance
   let dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 0.001;
   if (sk.range && d > sk.range) { tx = p.x + (dx / d) * sk.range; tz = p.z + (dz / d) * sk.range; d = sk.range; }
@@ -4023,7 +4044,7 @@ function hudTick() {
   setStyle('expFill', 'width', pct.toFixed(2) + '%');
   setText('expTxt', 'EXP ' + pct.toFixed(2) + '%' + (ch.points ? ' · ' + ch.points + ' pontos livres' : ''));
   setHtml('lvlTxt', '<b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
-  setText('zenTxt', fmt(ch.zen));
+  setText('goldTxt', fmt(ch.gold));
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();
@@ -4108,7 +4129,7 @@ function openNpc(id) {
       h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4><div class="list">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
-        const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeZen) + ' Zen' : '';
+        const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '';
         h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + esc(R.JEWELS[j].desc) + '</span></div>';
       });
       h += '</div>';
@@ -4118,15 +4139,15 @@ function openNpc(id) {
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
-    h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Zen</button></div>';
+    h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button></div>';
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
     h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP, nova habilidade e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' Zen. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% MF permanente e +10 pontos de árvore.</p>' +
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' Gold. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% MF permanente e +10 pontos de árvore.</p>' +
       (rs.ok ? '<button class="btn gold" data-npc="reset">Fazer reset</button>' : '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>');
     const spent = R.treeSpent(ch);
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4><button class="btn sm" data-npc="treereset"' + (spent && ch.zen >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 Zen</button>';
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4><button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 Gold</button>';
   }
   h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
   modal(h);
@@ -4143,7 +4164,7 @@ function npcAction(e) {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
       if (!it || !stack) break;
-      if (j === 'chaos') { if (ch.zen < R.RATES.chaosFeeZen) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeZen) + ' Zen.', 'warn'); break; } ch.zen -= R.RATES.chaosFeeZen; }
+      if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
       stack.qty--; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
       const r = R.applyUpgrade(it, j, Math.random());
       if (r.ok) { log('Sucesso! ' + R.itemName(it), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
@@ -4151,8 +4172,8 @@ function npcAction(e) {
       recalc(); buildPlayerModel();
       break;
     }
-    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.zen < D.price * n) { log('Zen insuficiente.', 'warn'); break; } ch.zen -= D.price * n; addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p }); Sfx.coin(); break; }
-    case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.zen += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
+    case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= D.price * n; addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p }); Sfx.coin(); break; }
+    case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.gold += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
     case 'evolve': {
       const ev = R.canEvolve(ch);
       if (!ev.ok) break;
@@ -4174,14 +4195,14 @@ function npcAction(e) {
       log('Reset ' + ch.resets + ' concluído. Distribua ' + fmt(ch.points) + ' pontos (C).', 'sys');
       break;
     }
-    case 'treereset': if (ch.zen < 100000) { log('Zen insuficiente.', 'warn'); break; } ch.zen -= 100000; ch.tree = {}; recalc(); break;
+    case 'treereset': if (ch.gold < 100000) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= 100000; ch.tree = {}; recalc(); break;
   }
   persist();
   openNpc(G.openNpcId);
   hudTick();
 }
 function showDeath(loss, zl) {
-  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Zen. Itens equipados nunca são perdidos para monstros.</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn gold" id="btnRespawn">Renascer em Aldrena</button></div></div>');
+  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' Gold. Itens equipados nunca são perdidos para monstros.</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn gold" id="btnRespawn">Renascer em Aldrena</button></div></div>');
   $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
 }
 
@@ -5945,7 +5966,7 @@ function paneChar() {
   h += '<h4>Evolução de classe</h4>';
   h += '<p>' + C.tiers.map((t, i) => (i === ch.tier ? '<b style="color:var(--gold)">' + t + '</b>' : t)).join(' → ') + '</p>';
   h += ev.next ? '<p class="note">Próxima: ' + esc(ev.name) + ' — requer nível ' + ev.next.level + ', ' + ev.next.bosses + ' chefes' + (ev.next.resets ? ', ' + ev.next.resets + ' reset' : '') + '. ' + (ev.ok ? '<b style="color:var(--ok)">Pronto: fale com o Mestre Orvan.</b>' : 'Falta: ' + esc(ev.reasons.join(', ')) + '.') + '</p>' : '<p class="note">Evolução máxima alcançada.</p>';
-  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Zen. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
+  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
   return h;
 }
 
@@ -6010,7 +6031,7 @@ function paneOpts() {
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
   h += '<h4>Modo de teste</h4><p class="note">Atalhos para avaliar sistemas de fim de jogo sem grind.</p><div class="row">' +
-    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-zen">+5.000.000 Zen</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
+    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-gold">+5.000.000 Gold</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
   h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
   return h;
@@ -6071,7 +6092,7 @@ function itemDetail(it, where) {
       h += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
     }
     if (it.cls && it.cls !== G.ch.cls) h += '<div class="ln req bad">Exclusivo de ' + R.CLASSES[it.cls].tiers[0] + ' — venda ou negocie no mercado.</div>';
-    h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Zen</div>';
+    h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
   }
   h += '<div class="row" style="margin-top:8px">';
   if (it.slot) {
@@ -6080,7 +6101,7 @@ function itemDetail(it, where) {
   }
   if (it.kind === 'potion') h += '<button class="btn sm" data-act="usepot">Usar</button>';
   if (where === 'bag') {
-    if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Zen</button>';
+    if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Gold</button>';
     h += '<button class="btn sm" data-act="drop">Descartar</button>';
   }
   h += '</div></div>';
@@ -6110,7 +6131,7 @@ function paneInv() {
   ch.bag.forEach((it) => cnt[bagCat(it)]++);
   const f = UI.bagFilter || 'all';
   const ups = ch.bag.filter((it) => classOk(it) && reqOk(it) && cpWith(it) > base).length;
-  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.zen) + ' Zen' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
+  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
   const ctx = { base };
@@ -6176,7 +6197,7 @@ const { autoPickup, clearLoot, dropLoot, pickup, spacePickup, updateLootVisuals 
 // ---------- loot no chão ----------
 
 function lootLabel(l) {
-  if (l.type === 'zen') return { text: fmt(l.amount) + ' Zen', color: '#f2cf7a' };
+  if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
   if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: l.id === 'hp' ? '#ff8a7a' : '#8ab8ff' };
   return { text: R.itemName(l.item), color: R.RARITY[l.item.rarity].color };
@@ -6190,7 +6211,7 @@ function dropLoot(x, z, l) {
   const col = parseInt(info.color.slice(1), 16);
   const g = new THREE.Group();
   let mesh;
-  if (l.type === 'zen') mesh = new THREE.Mesh(GEO.cyl, toon(0xffd24a, 0xaa7a00, 0.4)), mesh.scale.set(0.45, 0.12, 0.45);
+  if (l.type === 'gold') mesh = new THREE.Mesh(GEO.cyl, toon(0xffd24a, 0xaa7a00, 0.4)), mesh.scale.set(0.45, 0.12, 0.45);
   else if (l.type === 'jewel') mesh = new THREE.Mesh(GEO.oct, toon(col, col, 0.6)), mesh.scale.set(0.45, 0.6, 0.45);
   else if (l.type === 'potion') mesh = new THREE.Mesh(GEO.sphS, toon(col, col, 0.3)), mesh.scale.setScalar(0.4);
   else mesh = new THREE.Mesh(GEO.box, toon(col, col, 0.25)), mesh.scale.set(0.5, 0.18, 0.7);
@@ -6231,7 +6252,7 @@ function spacePickup() {
   for (const l of G.loot) { const d = (l.x - p.x) ** 2 + (l.z - p.z) ** 2; if (d < bd) { bd = d; best = l; } }
   if (best) { p.target = { type: 'loot', l: best }; pathTo(best.x, best.z); }
 }
-/** Zen, poções e jewels são coletados só de passar por cima. */
+/** Gold, poções e jewels são coletados só de passar por cima. */
 function autoPickup(p) {
   const C = CONFIG.loot, r2 = C.autoPickupRadius * C.autoPickupRadius;
   for (let i = G.loot.length - 1; i >= 0; i--) {
@@ -6246,7 +6267,7 @@ function removeLootVisual(l) {
 }
 function pickup(l) {
   const ch = G.ch;
-  if (l.type === 'zen') { ch.zen += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
+  if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; }
   else {
@@ -6833,8 +6854,8 @@ function die() {
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
   ch.exp = Math.max(0, ch.exp - loss);
-  const zl = Math.floor(ch.zen * 0.03);
-  ch.zen -= zl;
+  const zl = Math.floor(ch.gold * 0.03);
+  ch.gold -= zl;
   persist();
   showDeath(loss, zl);
 }
@@ -6882,8 +6903,8 @@ function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
-  const zen = drop.zen ? Math.floor(drop.zen * (1 + G.st.zenPct / 100)) : 0;
-  if (zen) dropLoot(m.x, m.z, { type: 'zen', amount: zen });
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const it of drop.items) {
     dropLoot(m.x, m.z, { type: 'item', item: it });
     const ord = R.RARITY[it.rarity].order;
@@ -6971,7 +6992,7 @@ function breakBarrel(b) {
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
   const lvl = floorLevel(G.biome, G.floor);
-  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'zen', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }
@@ -7071,7 +7092,7 @@ function renderTitle() {
   const ch = S.chars[UI.titleIdx];
   const conf = UI.confirmDel === UI.titleIdx;
   $('#tCard').innerHTML = '<div class="t-name">' + esc(ch.name) + '</div>' +
-    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.zen) + ' Zen</div>' +
+    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.gold) + ' Gold</div>' +
     '<div class="t-cp">CP ' + fmt(cpOf(ch)) + '</div>' +
     '<button class="btn gold t-play" data-t="play">Entrar no jogo</button>' +
     (n > 1 ? '<div class="t-dots">' + S.chars.map((_, i) => '<i class="' + (i === UI.titleIdx ? 'on' : '') + '"></i>').join('') + '</div>' : '') +
@@ -7587,7 +7608,7 @@ function paneAction(e) {
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': usePotion(it.id); break;
-    case 'sell': ch.zen += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
+    case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
@@ -7601,7 +7622,7 @@ function paneAction(e) {
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
     case 't-lvl': { const before = ch.level; const tgt = Math.min(R.RATES.maxLevel, ch.level + 100); while (ch.level < tgt) R.gainExp(ch, R.expToNext(ch.level) - ch.exp); onLevelUp(before); break; }
-    case 't-zen': ch.zen += 5e6; break;
+    case 't-gold': ch.gold += 5e6; break;
     case 't-leg': { const x = R.makeEquip(R.hash32('teste', Date.now()), Math.max(20, ch.level), 'lendario', ch.cls, 0, 'boss'); addToBag(x); log('Gerado: ' + R.itemName(x), 'loot'); break; }
     case 't-jew': ['bless', 'soul', 'chaos', 'life'].forEach((j) => addToBag({ kind: 'jewel', id: j, qty: 10, uid: 'j' + j })); break;
     case 't-boss': ch.bossKills += 5; break;

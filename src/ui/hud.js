@@ -71,7 +71,7 @@ export function hudTick() {
   setStyle('expFill', 'width', pct.toFixed(2) + '%');
   setText('expTxt', 'EXP ' + pct.toFixed(2) + '%' + (ch.points ? ' · ' + ch.points + ' pontos livres' : ''));
   setHtml('lvlTxt', '<b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
-  setText('zenTxt', fmt(ch.zen));
+  setText('goldTxt', fmt(ch.gold));
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();

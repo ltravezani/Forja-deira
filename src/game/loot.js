@@ -14,7 +14,7 @@ import { log } from '../ui/log.js';
 import { gy, walkable } from '../world/grid.js';
 
 function lootLabel(l) {
-  if (l.type === 'zen') return { text: fmt(l.amount) + ' Zen', color: '#f2cf7a' };
+  if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
   if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: l.id === 'hp' ? '#ff8a7a' : '#8ab8ff' };
   return { text: R.itemName(l.item), color: R.RARITY[l.item.rarity].color };
@@ -28,7 +28,7 @@ export function dropLoot(x, z, l) {
   const col = parseInt(info.color.slice(1), 16);
   const g = new THREE.Group();
   let mesh;
-  if (l.type === 'zen') mesh = new THREE.Mesh(GEO.cyl, toon(0xffd24a, 0xaa7a00, 0.4)), mesh.scale.set(0.45, 0.12, 0.45);
+  if (l.type === 'gold') mesh = new THREE.Mesh(GEO.cyl, toon(0xffd24a, 0xaa7a00, 0.4)), mesh.scale.set(0.45, 0.12, 0.45);
   else if (l.type === 'jewel') mesh = new THREE.Mesh(GEO.oct, toon(col, col, 0.6)), mesh.scale.set(0.45, 0.6, 0.45);
   else if (l.type === 'potion') mesh = new THREE.Mesh(GEO.sphS, toon(col, col, 0.3)), mesh.scale.setScalar(0.4);
   else mesh = new THREE.Mesh(GEO.box, toon(col, col, 0.25)), mesh.scale.set(0.5, 0.18, 0.7);
@@ -69,7 +69,7 @@ export function spacePickup() {
   for (const l of G.loot) { const d = (l.x - p.x) ** 2 + (l.z - p.z) ** 2; if (d < bd) { bd = d; best = l; } }
   if (best) { p.target = { type: 'loot', l: best }; pathTo(best.x, best.z); }
 }
-/** Zen, poções e jewels são coletados só de passar por cima. */
+/** Gold, poções e jewels são coletados só de passar por cima. */
 export function autoPickup(p) {
   const C = CONFIG.loot, r2 = C.autoPickupRadius * C.autoPickupRadius;
   for (let i = G.loot.length - 1; i >= 0; i--) {
@@ -84,7 +84,7 @@ function removeLootVisual(l) {
 }
 export function pickup(l) {
   const ch = G.ch;
-  if (l.type === 'zen') { ch.zen += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
+  if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; }
   else {

@@ -89,8 +89,8 @@ function die() {
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
   ch.exp = Math.max(0, ch.exp - loss);
-  const zl = Math.floor(ch.zen * 0.03);
-  ch.zen -= zl;
+  const zl = Math.floor(ch.gold * 0.03);
+  ch.gold -= zl;
   persist();
   showDeath(loss, zl);
 }
@@ -138,8 +138,8 @@ function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
-  const zen = drop.zen ? Math.floor(drop.zen * (1 + G.st.zenPct / 100)) : 0;
-  if (zen) dropLoot(m.x, m.z, { type: 'zen', amount: zen });
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const it of drop.items) {
     dropLoot(m.x, m.z, { type: 'item', item: it });
     const ord = R.RARITY[it.rarity].order;
@@ -227,7 +227,7 @@ export function breakBarrel(b) {
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
   const lvl = floorLevel(G.biome, G.floor);
-  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'zen', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }

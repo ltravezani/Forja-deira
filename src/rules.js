@@ -27,9 +27,9 @@
     resetPoints: 2200,          // pontos livres concedidos por reset acumulado
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
-    chaosFeeZen: 1000000,       // taxa em Zen da fusão Chaos (+10..+15)
+    chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
   };
-  const resetZenCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
+  const resetGoldCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
 
   // ---------------------------------------------------------------------------
   // RNG determinístico (seeds públicas → loot auditável)
@@ -112,7 +112,8 @@
       id: 'dw', tiers: ['Dark Wizard', 'Soul Master', 'Grand Master'],
       role: 'Mago de área', weapon: 'staff', mainStat: 'ene',
       base: { str: 18, agi: 18, vit: 15, ene: 30 }, ppl: 5,
-      konst: { maxHp: 30, maxMp: 20 },
+      // dano mágico e HP fixos extras: pesam nos níveis iniciais e somem na escala depois
+      konst: { maxHp: 50, maxMp: 20, minWiz: 3, maxWiz: 5 },
       rel: [
         ['maxHp', 1, 'level'], ['maxHp', 2, 'vit'],
         ['maxMp', 2, 'level'], ['maxMp', 2, 'ene'],
@@ -180,7 +181,7 @@
     rage: { cls: 'dk', name: 'Golpe Furioso', lvl: 150, tier: 1, mp: 25, ag: 18, cd: 2.2, kind: 'quake', mult: 3.1, radius: 5.5, desc: 'Esmaga o chão em ondas de choque.' },
     destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 400, tier: 2, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
     // Dark Wizard
-    ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.0, range: 16, desc: 'Projétil rápido de energia.' },
+    ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.15, range: 16, desc: 'Projétil rápido de energia.' },
     flame: { cls: 'dw', name: 'Chama', lvl: 20, tier: 0, mp: 10, ag: 3, cd: 0.8, kind: 'burst', mult: 1.7, radius: 2.8, range: 14, desc: 'Coluna de fogo no ponto alvo.' },
     tele: { cls: 'dw', name: 'Teleporte', lvl: 40, tier: 0, mp: 30, ag: 15, cd: 3, kind: 'blink', range: 12, desc: 'Teleporta até o cursor.' },
     meteor: { cls: 'dw', name: 'Meteoro', lvl: 70, tier: 0, mp: 18, ag: 6, cd: 1.2, kind: 'meteor', mult: 2.5, radius: 3.6, range: 15, desc: 'Um meteoro cai após 0,5s.' },
@@ -269,7 +270,7 @@
     dmgRed: { t: 'Redução de dano +4%', s: { dmgRed: 4 } },
     reflect: { t: 'Reflexão de dano +5%', s: { reflect: 5 } },
     defRate: { t: 'Taxa de defesa +10%', s: { defPct: 10 } },
-    zen30: { t: 'Zen obtido +30%', s: { zenPct: 30 } },
+    gold30: { t: 'Gold obtido +30%', s: { goldPct: 30 } },
   };
   const LEGEND = {
     mf: { t: 'Encontrar Magia +40%', s: { mf: 40 } },
@@ -383,7 +384,7 @@
     if (boss) { const f = 1 / sum; for (const r in t) if (r !== 'comum') t[r] *= f; }
     return t;
   }
-  const DROP_CHANCE = { item: 0.3, zen: 0.45, bless: 0.012, soul: 0.009, chaos: 0.011, life: 0.004, potion: 0.08 };
+  const DROP_CHANCE = { item: 0.3, gold: 0.45, bless: 0.012, soul: 0.009, chaos: 0.011, life: 0.004, potion: 0.08 };
 
   function tierForLevel(mLevel) {
     let t = 0;
@@ -455,7 +456,7 @@
   function rollDrop(opts) {
     const { seed, mLevel, src, mf, favorCls } = opts;
     const rnd = mulberry32(seed);
-    const out = { items: [], zen: 0, jewels: [], potions: [], log: [] };
+    const out = { items: [], gold: 0, jewels: [], potions: [], log: [] };
     const nItems = src === 'boss' ? 3 + Math.floor(rnd() * 3) : src === 'elite' ? 1 + (rnd() < 0.5 ? 1 : 0) : 0;
     for (let i = 0; i < nItems; i++) out.items.push(makeEquip(hash32(seed, 'b', i), mLevel, null, favorCls, mf, src));
     const ri = rnd();
@@ -463,7 +464,7 @@
     out.log.push({ what: 'item', roll: ri, threshold: pItem });
     if (ri < pItem) out.items.push(makeEquip(hash32(seed, 'i'), mLevel, null, favorCls, mf, src));
     const rz = rnd();
-    if (rz < DROP_CHANCE.zen || src === 'boss') out.zen = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
     for (const j of ['bless', 'soul', 'chaos', 'life']) {
       const rj = rnd();
       const p = DROP_CHANCE[j] * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) * (mLevel < 15 ? 0.3 : 1);
@@ -518,7 +519,7 @@
     return {
       name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0,
       stats: Object.assign({}, C.base), tree: {},
-      zen: 5000, bossKills: 0, created: Date.now(),
+      gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
       unlockedFloors: {},
     };
@@ -557,7 +558,7 @@
       str: ch.stats.str + (b.str || 0), agi: ch.stats.agi + (b.agi || 0),
       vit: ch.stats.vit + (b.vit || 0), ene: ch.stats.ene + (b.ene || 0), level: ch.level,
     };
-    const d = { maxHp: C.konst.maxHp, maxMp: C.konst.maxMp, maxAg: 0, def: 0, atkSpeed: 0, minDmg: 0, maxDmg: 0, minWiz: 0, maxWiz: 0, skillMul: 0 };
+    const d = Object.assign({ maxHp: 0, maxMp: 0, maxAg: 0, def: 0, atkSpeed: 0, minDmg: 0, maxDmg: 0, minWiz: 0, maxWiz: 0, skillMul: 0 }, C.konst);
     C.rel.forEach(([t, m, s]) => { d[t] += m * tot[s]; });
     const out = {
       total: tot,
@@ -574,7 +575,7 @@
       lifeSteal: b.lifeSteal || 0,
       lifeKill: b.lifeKill || 0,
       manaKill: b.manaKill || 0,
-      zenPct: b.zenPct || 0,
+      goldPct: b.goldPct || 0,
       mf: Math.floor((b.mf || 0) + (b.mfPct || 0) + ch.resets * 2),
       costPct: b.costPct || 0,
       cdPct: Math.max(-40, b.cdPct || 0),
@@ -612,11 +613,11 @@
     const critMul = 1 + Math.min(100, st.critPct) / 100 * 0.25 + Math.min(100, st.excPct) / 100 * 0.45;
     const offense = avg * (1 + st.dmgPct / 100) * critMul * (1 + st.skillDmgPct / 200) * (1 + (st.skillMul - 1) * 0.5) / st.attackInterval;
     const ehp = st.maxHp * (1 + st.def / 250) / (1 - st.dmgRed / 100);
-    const util = st.lifeSteal * 20 + st.lifeKill * 4 + st.reflect * 15 + st.mf * 2 + st.zenPct;
+    const util = st.lifeSteal * 20 + st.lifeKill * 4 + st.reflect * 15 + st.mf * 2 + st.goldPct;
     return Math.max(1, Math.round(offense * 6 + ehp * 0.9 + util));
   }
   /** CP intrínseco de um item (independe de quem usa) — para marcar e comparar peças. */
-  const CP_W = { wMin: 5, wMax: 5, wizMin: 5, wizMax: 5, wizRise: 4, armorDef: 6, maxHp: 1, hpPct: 10, mpPct: 3, dmgPct: 14, dmgRed: 16, critPct: 10, excPct: 12, atkSpeed: 5, defPct: 8, reflect: 10, lifeSteal: 14, lifeKill: 3, manaKill: 2, zenPct: 1, mf: 2, mfPct: 2, costPct: 3, cdPct: 6, healPct: 3, moveSpeedPct: 4, agRegen: 1, skillDmgPct: 6, dmgLvl: 40, str: 3, agi: 3, vit: 3, ene: 3 };
+  const CP_W = { wMin: 5, wMax: 5, wizMin: 5, wizMax: 5, wizRise: 4, armorDef: 6, maxHp: 1, hpPct: 10, mpPct: 3, dmgPct: 14, dmgRed: 16, critPct: 10, excPct: 12, atkSpeed: 5, defPct: 8, reflect: 10, lifeSteal: 14, lifeKill: 3, manaKill: 2, goldPct: 1, mf: 2, mfPct: 2, costPct: 3, cdPct: 6, healPct: 3, moveSpeedPct: 4, agRegen: 1, skillDmgPct: 6, dmgLvl: 40, str: 3, agi: 3, vit: 3, ene: 3 };
   function itemCP(it) {
     if (!it || !it.slot) return 0;
     const s = itemStats(it);
@@ -662,15 +663,15 @@
   function canReset(ch) {
     const reasons = [];
     if (ch.level < RATES.resetLevel) reasons.push('Nível ' + RATES.resetLevel + ' necessário');
-    if (ch.zen < resetZenCost(ch.resets)) reasons.push(resetZenCost(ch.resets).toLocaleString('pt-BR') + ' Zen necessários');
+    if (ch.gold < resetGoldCost(ch.resets)) reasons.push(resetGoldCost(ch.resets).toLocaleString('pt-BR') + ' Gold necessários');
     if (ch.resets >= RATES.maxResets) reasons.push('Limite de resets atingido');
-    return { ok: reasons.length === 0, reasons, cost: resetZenCost(ch.resets) };
+    return { ok: reasons.length === 0, reasons, cost: resetGoldCost(ch.resets) };
   }
   function applyReset(ch) {
     const c = canReset(ch);
     if (!c.ok) return c;
     const extra = (ch.level - RATES.resetLevel) * RATES.resetBonusPerLevel;
-    ch.zen -= c.cost;
+    ch.gold -= c.cost;
     ch.resets++;
     ch.level = 1; ch.exp = 0;
     ch.stats = Object.assign({}, CLASSES[ch.cls].base);
@@ -701,7 +702,7 @@
     return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate();
   }
   return {
-    VERSION, RATES, resetZenCost, mulberry32, hash32, hex, clamp,
+    VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
     CLASSES, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,

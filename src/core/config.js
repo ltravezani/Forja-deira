@@ -53,7 +53,7 @@ export const CONFIG = {
     missChance: 0.05,
   },
   loot: {
-    autoPickupRadius: 1.48, // m (zen, poções e jewels)
+    autoPickupRadius: 1.48, // m (gold, poções e jewels)
     autoPickupDelay: 0.5,   // s após cair
     spacePickupRadius: 3.8, // m: tecla Espaço
     spaceSeekRadius: 16,    // m: se nada estiver perto, anda até o mais próximo
