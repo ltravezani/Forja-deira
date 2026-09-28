@@ -13,7 +13,7 @@ jewels, itens Excelentes) com masmorras procedurais ao estilo Torchlight.
 
 ## Jogar
 
-**Online:** https://ltravezani.github.io/forja-deira/ (publicado pelo GitHub Pages a cada push na `main`).
+**Online:** https://ltravezani.github.io/Forja-deira/ (publicado pelo GitHub Pages a cada push na `main`).
 
 **Offline:** baixe e abra `dist/forja-deira.html` no navegador. É um arquivo único: não precisa de internet,
 servidor nem instalação. O progresso fica salvo no próprio navegador (`localStorage`).
