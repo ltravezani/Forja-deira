@@ -4,6 +4,7 @@ import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
 import { $, dist2, R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
+import { afterimage } from '../engine/skillfx.js';
 import { CAM, heroLight, shake, world } from '../engine/renderer.js';
 import { attackRange, basicAttack, breakBarrel, hitMonster } from './combat.js';
 import { cpOf } from './inventory.js';
@@ -15,7 +16,7 @@ import { enterTown, hasTownServices, inSafe } from './zones.js';
 import { KEYS, mouse } from '../input/inputState.js';
 import { clickWorld } from '../input/picking.js';
 import { openNpc } from '../ui/npcDialogs.js';
-import { gy, lineClear } from '../world/grid.js';
+import { gy, lineClear, walkableR } from '../world/grid.js';
 
 const finite = (v, fallback) => (Number.isFinite(v) ? v : fallback);
 
@@ -86,7 +87,7 @@ export function buildPlayerModel() {
   world.add(m.root);
 }
 export function newPlayer() {
-  G.player = { x: 0, z: 0, rot: 0, model: null, path: null, target: null, atkCd: 0, attackAnim: 0, castAnim: 0, lockUntil: 0, dash: null, alive: true, repath: 0, hurtFlash: 0, moveHold: 0 };
+  G.player = { x: 0, z: 0, rot: 0, model: null, path: null, target: null, atkCd: 0, attackAnim: 0, castAnim: 0, lockUntil: 0, dash: null, shove: null, hop: null, spin: null, pop: null, lean: 0, castFace: null, castMove: 0, alive: true, repath: 0, hurtFlash: 0, moveHold: 0 };
 }
 
 // ---------- atualização por quadro ----------
@@ -101,13 +102,17 @@ export function updatePlayer(dt) {
     mouse.lastRepath = G.time;
     clickWorld(mouse.x, mouse.y, true);
   }
+  if (p.shove) updateShove(p, dt);
+  const locked = G.time < p.lockUntil;
   if (p.dash) updateDash(p, dt);
-  else if (G.time >= p.lockUntil) {
+  else if (!locked) {
+    p.castFace = null;
     flushSkillBuffer();
-    if (KEYS.any()) moveWithKeys(p, dt);
+    if (KEYS.any()) moveWithKeys(p, dt, 1);
     else if (updateTarget(p, dt)) return;
-  }
-  turn(p, dt, CONFIG.player.turnRate);
+  } else castMotion(p, dt);
+  // durante a habilidade o herói vira rápido (sem estalo) para o alvo
+  turn(p, dt, locked || p.dash ? 30 : CONFIG.player.turnRate);
   regenerate(p, dt);
   autoPickup(p);
   expireBuffs();
@@ -116,25 +121,50 @@ export function updatePlayer(dt) {
   heroLight.position.set(p.x + 1.6, 6.5 + gy(p.x, p.z), p.z + 1.6); // alto e para o lado da câmera: ilumina sem estourar o herói
 }
 
+/**
+ * Enquanto a habilidade trava o herói: as leves (projéteis, magias no alvo)
+ * deixam andar devagar pelo caminho ou pelo teclado, sempre de frente para o
+ * alvo; as pesadas (investida, salto) seguram o herói no lugar.
+ */
+function castMotion(p, dt) {
+  if (p.castMove > 0) {
+    if (KEYS.any()) moveWithKeys(p, dt, p.castMove);
+    else if (p.path && p.path.length) followPath(p, playerSpeed() * p.castMove, dt, CONFIG.player.radius);
+  }
+  if (p.castFace != null) p.rotTarget = p.castFace;
+}
+/** Avanço/recuo curto de uma habilidade (desacelera no fim e para na parede). */
+function updateShove(p, dt) {
+  const s = p.shove;
+  const k0 = Math.min(1, s.t / s.dur);
+  s.t += dt;
+  const k1 = Math.min(1, s.t / s.dur);
+  const step = s.dist * ((1 - Math.pow(1 - k1, 3)) - (1 - Math.pow(1 - k0, 3)));
+  const nx = p.x + s.dx * step, nz = p.z + s.dz * step;
+  if (walkableR(G.L, nx, nz, CONFIG.player.radius)) { p.x = nx; p.z = nz; } else s.t = s.dur;
+  if (s.t >= s.dur) p.shove = null;
+}
+
 const dashNear = [];
-/** Investida (habilidade): interpolação linear e acerto único por monstro no caminho. */
+/** Investida (habilidade): arranca rápido e freia no fim, deixando pós-imagens; acerto único por monstro no caminho. */
 function updateDash(p, dt) {
   const d = p.dash;
   d.t += dt;
-  const k = Math.min(1, d.t / d.dur);
-  p.x = d.fx + (d.tx - d.fx) * k; p.z = d.fz + (d.tz - d.fz) * k;
-  emit(p.x, 1, p.z, { n: 3, color: 0xffb070, speed: 1, life: 0.3, size: 1 });
+  const k = Math.min(1, d.t / d.dur), e = 1 - Math.pow(1 - k, 3);
+  p.x = d.fx + (d.tx - d.fx) * e; p.z = d.fz + (d.tz - d.fz) * e;
+  if (d.t - (d.ghost || 0) > 0.035 && k < 0.9) { d.ghost = d.t; afterimage(p.x, p.z, p.rot, d.color || 0xffb070, 0.3); }
+  emit(p.x, 1, p.z, { n: 3, color: d.color || 0xffb070, speed: 1, life: 0.3, size: 1 });
   queryMonsters(p.x, p.z, 1.6 + QUERY_PAD, dashNear);
   for (const m of dashNear) {
     if (m.dead || d.hit.has(m.id) || dist2(m, p) >= (1.6 + m.radius) ** 2) continue;
     d.hit.add(m.id);
     hitMonster(m, d.mult, d.id, { kb: 0.8 });
   }
-  if (k >= 1) { p.dash = null; shake(0.3); }
+  if (k >= 1) { const end = d.onEnd; p.dash = null; shake(0.3); if (end) end(); }
 }
 
 /** WASD / setas: movimento relativo à câmera. */
-function moveWithKeys(p, dt) {
+function moveWithKeys(p, dt, speedMul) {
   const fx = -Math.sin(CAM.yaw), fz = -Math.cos(CAM.yaw);
   let mx = 0, mz = 0;
   if (KEYS.w) { mx += fx; mz += fz; }
@@ -144,7 +174,7 @@ function moveWithKeys(p, dt) {
   const l = Math.hypot(mx, mz);
   if (!l) return;
   p.path = null; p.target = null;
-  stepToward(p, p.x + (mx / l) * 2, p.z + (mz / l) * 2, playerSpeed(), dt, CONFIG.player.radius);
+  stepToward(p, p.x + (mx / l) * 2, p.z + (mz / l) * 2, playerSpeed() * speedMul, dt, CONFIG.player.radius);
   cancelChannel();
 }
 
@@ -210,12 +240,49 @@ function updateVisual(p, dt) {
   if (p.attackAnim > 0) { p.attackAnim += dt * 4.2; if (p.attackAnim >= 1) p.attackAnim = 0; }
   if (p.castAnim > 0) { p.castAnim += dt * 3.5; if (p.castAnim >= 1) p.castAnim = 0; }
   if (p.hurtFlash > 0) { p.hurtFlash -= dt; if (p.hurtFlash <= 0) flashModel(p.model, 0, 0); }
-  p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
-  p.model.root.rotation.y = p.rot;
+  const root = p.model.root;
+  root.position.set(p.x, gy(p.x, p.z) + skillPose(p, dt), p.z);
+  root.rotation.order = 'YXZ'; // inclinação para a frente no eixo do próprio herói
+  root.rotation.x = p.lean;
   // segura o "andando" por um instante: evita piscar para a pose parada entre pontos do caminho
   p.moveHold = p.moving ? CONFIG.player.moveHold : Math.max(0, p.moveHold - dt);
   animateModel(p.model, { t: G.time, dt, moving: p.moving || p.moveHold > 0, run: !inSafe(), v: p.groundSpeed, attack: p.attackAnim, cast: p.castAnim, speed: 11 });
   if (p.model.orb) p.model.orb.scale.setScalar(0.3 + Math.sin(G.time * 6) * 0.04);
+}
+
+/**
+ * Pose das habilidades por cima da animação: salto (hop), giro completo (spin),
+ * encolher e reaparecer (pop, teleporte) e inclinação na investida. Define a
+ * rotação e a escala da raiz e devolve o deslocamento vertical.
+ */
+function skillPose(p, dt) {
+  const root = p.model.root;
+  let y = 0, spin = 0, sc = 1;
+  const leanTo = p.dash ? 0.45 : p.hop ? -0.12 : 0;
+  p.lean += (leanTo - p.lean) * Math.min(1, dt * 18);
+  if (p.hop) {
+    const h = p.hop; h.t += dt;
+    const k = Math.min(1, h.t / h.dur);
+    y = Math.sin(k * Math.PI) * h.h;
+    if (k >= 1) p.hop = null;
+  }
+  if (p.spin) {
+    const s = p.spin; s.t += dt;
+    const k = Math.min(1, s.t / s.dur);
+    spin = (1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.dir || 1);
+    if (k >= 1) p.spin = null;
+  }
+  if (p.pop) {
+    const s = p.pop; s.t += dt;
+    const k = Math.min(1, s.t / s.dur);
+    sc = k < 1 ? 0.25 + 0.75 * (1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2)) : 1; // volta com leve exagero
+    if (k >= 1) p.pop = null;
+  }
+  root.rotation.y = p.rot + spin;
+  const m = p.model;
+  if (m.baseScale == null) m.baseScale = root.scale.x; // escala cartoon do modelo
+  root.scale.set(m.baseScale * sc, m.baseScale * sc * (2 - sc), m.baseScale * sc);
+  return y;
 }
 
 // ---------- canalização do portal para a cidade (T) ----------

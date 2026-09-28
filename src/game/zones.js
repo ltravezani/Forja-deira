@@ -3,6 +3,7 @@ import { G, persist } from '../core/state.js';
 import { R, rand, TILE } from '../core/util.js';
 import { clearEffects } from '../engine/effects.js';
 import { Music } from '../engine/music.js';
+import { clearFx } from '../engine/skillfx.js';
 import { resetFloatText } from '../engine/overlay.js';
 import { camTarget, resize, world } from '../engine/renderer.js';
 import { clearAllies } from './allies.js';
@@ -33,12 +34,13 @@ export function clearWorld() {
   clearNpcs();
   clearAllies(true);
   clearEffects();
+  clearFx();
   resetFloatText();
 }
 function placePlayer(L) {
   const p = G.player;
   p.x = L.start.x * TILE; p.z = L.start.z * TILE;
-  p.path = null; p.target = null; p.dash = null;
+  p.path = null; p.target = null; p.dash = null; p.shove = null;
   if (p.model) p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
   camTarget.set(p.x, 0, p.z);
   if (G.pet) { G.pet.x = p.x - 1.5; G.pet.z = p.z + 1; }

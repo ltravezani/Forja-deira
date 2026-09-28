@@ -44,6 +44,7 @@ export const CONFIG = {
   player: {
     radius: 0.4,
     turnRate: 16,
+    castMove: 0.45,         // fração da velocidade ao andar durante uma habilidade leve
     holdRepath: 0.14,       // s: segurar o botão = seguir o cursor
     chaseRepath: 0.3,       // s
     moveHold: 0.12,         // s: mantém a pose "andando" entre pontos do caminho

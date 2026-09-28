@@ -1290,6 +1290,7 @@ const CONFIG = {
   player: {
     radius: 0.4,
     turnRate: 16,
+    castMove: 0.45,         // fração da velocidade ao andar durante uma habilidade leve
     holdRepath: 0.14,       // s: segurar o botão = seguir o cursor
     chaseRepath: 0.3,       // s
     moveHold: 0.12,         // s: mantém a pose "andando" entre pontos do caminho
@@ -3309,6 +3310,211 @@ function simDelta(dt) {
 return { hitStop, simDelta };
 })();
 
+// ---- engine/skillfx.js ----
+const { afterimage, bubble, clearFx, cracks, fall, flash, pillar, scorch, shards, slash, updateFx } = (() => {
+// ---------- efeitos de habilidade: malhas animadas (cortes, colunas, estilhaços, clarões) ----------
+// Cada efeito é uma malha aditiva com material próprio (a opacidade anima) e uma
+// função que a atualiza de 0 a 1 ao longo da duração; ao terminar o material é
+// liberado. As geometrias são compartilhadas e nunca liberadas.
+
+const FXG = {
+  // arco de corte horizontal (pouco menos de meia volta), centrado em +z depois do rotateX
+  arc: new THREE.RingGeometry(0.62, 1, 40, 1, -Math.PI / 2 - Math.PI * 0.45, Math.PI * 0.9),
+  // arco fino para o golpe giratório (três quartos de volta)
+  arcWide: new THREE.RingGeometry(0.78, 1, 64, 1, 0, Math.PI * 1.5),
+  // coluna de luz aberta com a base em y = 0
+  pillar: new THREE.CylinderGeometry(1, 1, 1, 28, 1, true),
+  shard: new THREE.ConeGeometry(0.5, 1, 4),
+};
+FXG.arc.rotateX(-Math.PI / 2);
+FXG.arcWide.rotateX(-Math.PI / 2);
+FXG.pillar.translate(0, 0.5, 0);
+// a coluna esmaece para cima: cor por vértice (preto some no brilho aditivo)
+{
+  const pos = FXG.pillar.attributes.position, col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) { const v = Math.pow(1 - pos.getY(i), 1.5); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v; }
+  FXG.pillar.setAttribute('color', new THREE.BufferAttribute(col, 3));
+}
+FXG.shard.translate(0, 0.5, 0);
+
+const fx = [];
+const ease = (k) => 1 - Math.pow(1 - k, 3);
+
+/** Registra uma malha animada; `upd(k, e, t)` recebe o progresso (0–1), o progresso suavizado e o tempo. */
+function add(mesh, dur, upd, opts) {
+  mesh.renderOrder = 3;
+  world.add(mesh);
+  const f = { mesh, dur, t: -(opts && opts.delay || 0), upd };
+  mesh.visible = f.t >= 0;
+  fx.push(f);
+  return f;
+}
+function glowMesh(geo, color, op) {
+  return new THREE.Mesh(geo, glowMat(color, op));
+}
+
+/** Corte em arco no plano do chão, varrendo `sweep` radianos a partir de `rot`. */
+function slash(x, z, rot, radius, color, o) {
+  o = o || {};
+  const y = (o.y != null ? o.y : 1.1) + gy(x, z);
+  const m = glowMesh(o.wide ? FXG.arcWide : FXG.arc, color, o.op || 0.9);
+  m.position.set(x, y, z);
+  m.scale.setScalar(radius);
+  if (o.tilt) m.rotation.x = o.tilt;
+  const sweep = o.sweep != null ? o.sweep : 1.4, dur = o.dur || 0.22, r0 = rot - sweep / 2;
+  m.rotation.y = r0;
+  return add(m, dur, (k, e) => {
+    m.rotation.y = r0 + sweep * e;
+    m.scale.setScalar(radius * (0.85 + 0.2 * e));
+    m.material.opacity = (o.op || 0.9) * (1 - k * k);
+  }, o);
+}
+
+/** Coluna de luz vertical que sobe rápido e se abre enquanto some. */
+function pillar(x, z, radius, height, color, dur, o) {
+  o = o || {};
+  const m = glowMesh(FXG.pillar, color, o.op || 0.55);
+  m.material.vertexColors = true;
+  m.position.set(x, gy(x, z), z);
+  return add(m, dur, (k, e, t) => {
+    const up = Math.min(1, k * 4);
+    m.scale.set(radius * (1 + e * (o.grow != null ? o.grow : 0.4)), height * ease(up), radius * (1 + e * (o.grow != null ? o.grow : 0.4)));
+    m.rotation.y = t * 3;
+    m.material.opacity = (o.op || 0.55) * (1 - k);
+  }, o);
+}
+
+/** Esfera translúcida em volta do herói (escudos, auras). Segue `follow` se dado. */
+function bubble(x, z, radius, color, dur, follow) {
+  const m = glowMesh(GEO.sphS, color, 0.35);
+  return add(m, dur, (k, e, t) => {
+    const px = follow ? follow.x : x, pz = follow ? follow.z : z;
+    m.position.set(px, 1 + gy(px, pz), pz);
+    const s = radius * 2 * (0.6 + 0.4 * ease(Math.min(1, k * 3))) * (1 + Math.sin(t * 14) * 0.03);
+    m.scale.set(s, s * 1.1, s);
+    m.material.opacity = 0.35 * (k < 0.7 ? 1 : (1 - k) / 0.3);
+  });
+}
+
+/** Estilhaços que brotam do chão em círculo (gelo, rocha) e afundam de volta. */
+function shards(x, z, r0, r1, count, color, dur, o) {
+  o = o || {};
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+    const d = r0 + (r1 - r0) * Math.random();
+    const sx = x + Math.cos(a) * d, sz = z + Math.sin(a) * d;
+    const h = (o.h || 1.4) * (0.6 + Math.random() * 0.6);
+    const m = glowMesh(FXG.shard, color, 0.8);
+    m.position.set(sx, gy(sx, sz) - 0.05, sz);
+    m.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+    const w = 0.35 + Math.random() * 0.25;
+    add(m, dur, (k) => {
+      const up = k < 0.2 ? ease(k / 0.2) : k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
+      m.scale.set(w, h * up, w);
+      m.material.opacity = 0.8 * (k > 0.6 ? (1 - k) / 0.4 : 1);
+    }, { delay: (d / r1) * (o.stagger || 0.18) });
+  }
+}
+
+/** Rachaduras brilhantes irradiando do centro (impacto no chão). */
+function cracks(x, z, len, count, color, dur) {
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+    const l = len * (0.6 + Math.random() * 0.5);
+    const m = glowMesh(GEO.box, color, 0.9);
+    const cx = x + Math.sin(a) * l * 0.5, cz = z + Math.cos(a) * l * 0.5;
+    m.position.set(cx, gy(cx, cz) + 0.06, cz);
+    m.rotation.y = a;
+    add(m, dur, (k, e) => {
+      m.scale.set(0.12 * (1 - k * 0.5), 0.03, l * ease(Math.min(1, k * 5)));
+      m.material.opacity = 0.9 * (1 - k);
+    });
+  }
+}
+
+/** Marca escura no chão que desbota devagar (queimadura, cratera). */
+function scorch(x, z, radius, dur) {
+  const m = new THREE.Mesh(GEO.disc, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }));
+  m.position.set(x, gy(x, z) + 0.05, z);
+  m.scale.setScalar(radius);
+  m.renderOrder = 1;
+  world.add(m);
+  fx.push({ mesh: m, dur, t: 0, upd: (k) => { m.material.opacity = 0.45 * (1 - k * k); } });
+}
+
+/** Silhueta luminosa deixada para trás numa investida (pós-imagem). */
+function afterimage(x, z, rot, color, dur) {
+  const m = glowMesh(GEO.cap, color, 0.4);
+  m.position.set(x, 1 + gy(x, z), z);
+  m.rotation.y = rot;
+  add(m, dur, (k) => {
+    m.scale.set(0.7 * (1 - k * 0.3), 0.8, 0.45);
+    m.material.opacity = 0.4 * (1 - k);
+  });
+}
+
+/** Objeto que cai do céu até (x, z) em `dur` segundos deixando rastro; `onLand` roda no impacto. */
+function fall(x, z, o) {
+  const from = o.from || [4, 12, -3];
+  const m = glowMesh(o.geo || GEO.sphS, o.color, 0.95);
+  const s = o.size || 1;
+  const y0 = gy(x, z);
+  const dir = new THREE.Vector3(-from[0], -from[1], -from[2]).normalize();
+  if (o.stretch) m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+  return add(m, o.dur, (k) => {
+    const e = k * k;
+    m.position.set(x + from[0] * (1 - e), y0 + 0.4 + from[1] * (1 - e), z + from[2] * (1 - e));
+    if (o.stretch) m.scale.set(s * 0.16, s * 0.16, s * 2.2);
+    else m.scale.setScalar(s * (0.7 + 0.3 * k));
+    if (o.trail && Math.random() < 0.9) emit(m.position.x, m.position.y - y0, m.position.z, o.trail);
+    if (k >= 1 && o.onLand) o.onLand();
+  }, o);
+}
+
+// ---------- clarões de luz (pool fixo: nunca muda o número de luzes da cena) ----------
+const LIGHTS = [];
+for (let i = 0; i < 2; i++) {
+  const l = new THREE.PointLight(0xffffff, 0, 14, 1.6);
+  scene.add(l);
+  LIGHTS.push({ l, t: 1, dur: 1, i0: 0 });
+}
+/** Ilumina o entorno por um instante (explosões, impactos pesados). */
+function flash(x, y, z, color, intensity, dur) {
+  let s = LIGHTS[0];
+  for (const c of LIGHTS) if (c.t / c.dur > s.t / s.dur) s = c; // reaproveita o mais apagado
+  s.l.color.setHex(color);
+  s.l.position.set(x, y + gy(x, z), z);
+  s.t = 0; s.dur = dur || 0.35; s.i0 = intensity || 60;
+  s.l.intensity = s.i0;
+}
+
+function updateFx(dt) {
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i];
+    f.t += dt;
+    if (f.t < 0) continue;
+    f.mesh.visible = true;
+    const k = Math.min(1, f.t / f.dur);
+    f.upd(k, ease(k), f.t);
+    if (k >= 1) { world.remove(f.mesh); f.mesh.material.dispose(); fx.splice(i, 1); }
+  }
+  for (const s of LIGHTS) {
+    if (s.t >= s.dur) continue;
+    s.t += dt;
+    const k = Math.min(1, s.t / s.dur);
+    s.l.intensity = s.i0 * (1 - k) * (1 - k);
+  }
+}
+
+/** Remove todos os efeitos ativos (troca de zona). */
+function clearFx() {
+  for (const f of fx) { world.remove(f.mesh); f.mesh.material.dispose(); }
+  fx.length = 0;
+  for (const s of LIGHTS) { s.t = s.dur; s.l.intensity = 0; }
+}
+return { afterimage, bubble, clearFx, cracks, fall, flash, pillar, scorch, shards, slash, updateFx };
+})();
+
 // ---- game/movement.js ----
 const { face, followPath, pathTo, playerSpeed, stepToward, turn } = (() => {
 // ---------- movimento: caminhos, passos com colisão e giro suave ----------
@@ -3786,7 +3992,7 @@ function releaseMesh(pr) {
   meshPool[pr.arrow ? 'arrow' : 'orb'].push(pr.mesh);
 }
 
-/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?} */
+/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?, spiral?} */
 function spawnProjectile(o) {
   const mesh = takeMesh(o.arrow ? 'arrow' : 'orb');
   if (o.arrow) {
@@ -3801,6 +4007,22 @@ function spawnProjectile(o) {
   mesh.rotation.set(0, Math.atan2(o.dx, o.dz), 0);
   world.add(mesh);
   G.projectiles.push(Object.assign({ traveled: 0, hit: new Set(), mesh, y }, o));
+}
+
+/** Rastro: brilho atrás dos orbes, risco fino atrás das flechas e espiral nos disparos de habilidade. */
+function trail(pr) {
+  if (pr.arrow) {
+    if (pr.from === 'p') emit(pr.x - pr.dx * 0.4, pr.y, pr.z - pr.dz * 0.4, { n: 1, color: pr.color, speed: 0.1, life: 0.16, size: 0.45, grav: 0, spread: 0.05, alpha: 0.7 });
+    return;
+  }
+  if (Math.random() < 0.8) emit(pr.x, pr.y, pr.z, { n: 1, color: pr.color, speed: 0.4, life: 0.35, size: pr.big ? 1.4 : 0.8, grav: 0 });
+  if (pr.spiral) {
+    const a = pr.traveled * 2.2, r = pr.big ? 0.45 : 0.32;
+    for (const s of [1, -1]) {
+      const c = Math.cos(a) * r * s;
+      emit(pr.x - pr.dz * c, pr.y + Math.sin(a) * r * s, pr.z + pr.dx * c, { n: 1, color: pr.spiral, speed: 0.2, life: 0.3, size: 0.5, grav: 0, spread: 0.02, spreadY: 0.02 });
+    }
+  }
 }
 
 function blocked(pr) {
@@ -3831,11 +4053,13 @@ function updateProjectiles(dt) {
     pr.x += pr.dx * s; pr.z += pr.dz * s; pr.traveled += s;
     pr.mesh.position.set(pr.x, pr.y + gy(pr.x, pr.z), pr.z);
     let dead = pr.traveled > pr.range || blocked(pr);
-    if (!pr.arrow && Math.random() < 0.8) emit(pr.x, pr.y, pr.z, { n: 1, color: pr.color, speed: 0.4, life: 0.35, size: pr.big ? 1.4 : 0.8, grav: 0 });
-    if (!dead && pr.from === 'p') dead = hitMonsters(pr);
+    trail(pr);
+    let hit = false;
+    if (!dead && pr.from === 'p') dead = hit = hitMonsters(pr);
     else if (!dead && pr.from === 'm' && (p.x - pr.x) ** 2 + (p.z - pr.z) ** 2 < PLAYER_HIT_R2) { hurtPlayer(pr.dmg, pr.src); dead = true; }
     if (dead) {
-      emit(pr.x, pr.y, pr.z, { n: 6, color: pr.color, speed: 3, life: 0.3, size: 0.7 });
+      emit(pr.x, pr.y, pr.z, { n: hit ? 12 : 6, color: pr.color, speed: hit ? 5 : 3, life: 0.3, size: 0.7 });
+      if (hit && !pr.arrow) spawnRing(pr.x, pr.z, 0.2, 1.3, pr.color, 0.25);
       releaseMesh(pr);
       G.projectiles.splice(i, 1);
     }
@@ -3874,6 +4098,16 @@ function autoTargetPoint(range, fx, fz) {
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
 }
 const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0 };
+/** Habilidades que seguram o herói no lugar; as demais deixam andar devagar enquanto saem. */
+const HEAVY = { dash: 1, quake: 1, nuke: 1, blink: 1 };
+/** Faíscas na mão/arma do herói no instante do lançamento. */
+function castGlow(p, dx, dz, color, n) {
+  emit(p.x + dx * 0.7, 1.3, p.z + dz * 0.7, { n: n || 10, color, speed: 2.5, life: 0.25, size: 0.9, grav: 0 });
+}
+/** Recuo ou avanço curto do herói (ver updateShove em player.js). */
+function shove(p, dx, dz, dist, dur) {
+  if (dist > 0.01) p.shove = { dx, dz, dist, t: 0, dur };
+}
 /**
  * Efeito de cada tipo de habilidade (campo `kind` em rules.js → SKILLS).
  * Recebe o contexto já validado (custo pago, alvo limitado ao alcance) e devolve
@@ -3883,8 +4117,11 @@ const EFFECTS = {
   spin(ctx) {
     const { p, sk, id, mult } = ctx;
     p.attackAnim = 0.001;
+    p.spin = { t: 0, dur: 0.3 };
+    slash(p.x, p.z, p.rot, sk.radius * 0.95, 0xffe8c8, { wide: true, sweep: Math.PI * 2, dur: 0.3, y: 1 });
+    slash(p.x, p.z, p.rot + 1.2, sk.radius * 0.72, 0xff8a4a, { wide: true, sweep: Math.PI * 2, dur: 0.34, y: 0.65, op: 0.6 });
     spawnRing(p.x, p.z, 0.5, sk.radius, 0xffe0c0, 0.3);
-    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: 0xffc080, speed: 2, life: 0.3, size: 1 }); }
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: 0xffc080, speed: 3, dir: [-Math.sin(a), 0.2, Math.cos(a)], life: 0.3, size: 1, grav: 0 }); }
     monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.4 }));
     Sfx.swing(); shake(0.2);
     return true;
@@ -3894,7 +4131,12 @@ const EFFECTS = {
     const steps = Math.floor(sk.range / 0.3);
     let ex = p.x, ez = p.z;
     for (let i = 1; i <= steps; i++) { const nx = p.x + dx * i * 0.3, nz = p.z + dz * i * 0.3; if (!walkableR(G.L, nx, nz, 0.4)) break; ex = nx; ez = nz; if ((nx - tx) ** 2 + (nz - tz) ** 2 < 0.2) break; }
-    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.16, hit: new Set(), mult, id };
+    emit(p.x, 0.2, p.z, { n: 14, color: 0xc8a070, speed: 3, up: 0.4, life: 0.45, size: 1.1, spread: 0.6 });
+    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.2, hit: new Set(), mult, id, color: 0xffb070, onEnd: () => {
+      slash(p.x, p.z, p.rot, 2.8, 0xffe0b0, { sweep: 0.5, dur: 0.2 });
+      emit(p.x + dx * 1.2, 1.1, p.z + dz * 1.2, { n: 16, color: 0xffd0a0, speed: 6, dir: [dx, 0.1, dz], life: 0.3, size: 0.9, grav: 0 });
+      flash(p.x + dx, 1.2, p.z + dz, 0xffa050, 30, 0.22);
+    } };
     p.attackAnim = 0.001;
     Sfx.swing();
     return true;
@@ -3907,6 +4149,9 @@ const EFFECTS = {
     if (sk.buff.hpPct) G.hp = Math.min(G.st.maxHp, G.hp * (1 + sk.buff.hpPct / 100));
     emit(p.x, 0.2, p.z, { n: 40, color: col, speed: 2, up: 4, life: 1, size: 1, grav: 3, spread: 1.4 });
     spawnRing(p.x, p.z, 0.4, 2.6, col, 0.6);
+    pillar(p.x, p.z, 1.1, 5, col, 0.8);
+    if (sk.buff.dmgRed) bubble(p.x, p.z, 1.3, 0x9ac8ff, 1.3, p);
+    flash(p.x, 1.5, p.z, col, 35, 0.5);
     p.castAnim = 0.001;
     Sfx.tone(440, 0.4, 'triangle', 0.05, 1.5);
     return true;
@@ -3914,36 +4159,61 @@ const EFFECTS = {
   quake(ctx) {
     const { p, sk, id, mult } = ctx;
     p.attackAnim = 0.001;
-    for (let k = 0; k < 3; k++) G.delayed.push({ t: k * 0.12, fn: () => { spawnRing(p.x, p.z, 0.6, sk.radius * (0.6 + k * 0.2), 0xffb070, 0.45); emit(p.x, 0.3, p.z, { n: 30, color: 0xc8a070, speed: 8, up: 0.6, life: 0.6, size: 1.2, spread: 2 }); } });
-    monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 1.4 }));
-    shake(0.8); Sfx.boom();
+    p.hop = { t: 0, dur: 0.24, h: 1.1 };
+    // o impacto sai na aterrissagem do salto
+    G.delayed.push({ t: 0.22, fn: () => {
+      if (!p.alive) return;
+      const x = p.x, z = p.z;
+      for (let k = 0; k < 3; k++) G.delayed.push({ t: k * 0.12, fn: () => { spawnRing(x, z, 0.6, sk.radius * (0.6 + k * 0.2), 0xffb070, 0.45); emit(x, 0.3, z, { n: 30, color: 0xc8a070, speed: 8, up: 0.6, life: 0.6, size: 1.2, spread: 2 }); } });
+      cracks(x, z, sk.radius * 0.9, 10, 0xff9a4a, 0.9);
+      shards(x, z, 1.2, sk.radius * 0.8, 10, 0xc89a60, 0.7, { h: 1, stagger: 0.15 });
+      scorch(x, z, sk.radius * 0.5, 3);
+      flash(x, 1, z, 0xffa050, 50, 0.35);
+      monstersIn(x, z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 1.4 }));
+      shake(0.8); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
+    } });
+    Sfx.swing();
     return true;
   },
   nuke(ctx) {
-    const { p, sk, id, tx, tz, mult } = ctx;
+    const { p, sk, id, tx, tz, dx, dz, d, mult } = ctx;
     p.attackAnim = 0.001;
+    shove(p, dx, dz, Math.min(1.4, d - 2), 0.2);
+    slash(p.x + dx * 0.6, p.z + dz * 0.6, p.rot, 2.6, 0xff6a3a, { sweep: 1.8, dur: 0.24 });
     spawnRing(tx, tz, 0.4, sk.radius, 0xff4a2a, 0.3, { hold: true, op: 0.6 });
     G.delayed.push({ t: 0.28, fn: () => {
       emit(tx, 0.5, tz, { n: 90, color: 0xff7a3a, speed: 12, up: 1, life: 0.8, size: 1.6, spread: 1, jitter: true });
       emit(tx, 0.5, tz, { n: 40, color: 0xffe0a0, speed: 5, up: 3, life: 0.6, size: 1.2 });
       spawnRing(tx, tz, 0.5, sk.radius * 1.1, 0xffa050, 0.5);
+      pillar(tx, tz, sk.radius * 0.35, 7, 0xff5a2a, 0.7, { grow: 1 });
+      pillar(tx, tz, sk.radius * 0.16, 9, 0xffe0a0, 0.5, { grow: 0.5 });
+      cracks(tx, tz, sk.radius, 12, 0xff6a2a, 1);
+      scorch(tx, tz, sk.radius * 0.7, 4);
+      flash(tx, 1.5, tz, 0xff6a2a, 90, 0.5);
       monstersIn(tx, tz, sk.radius).forEach((m) => hitMonster(m, mult, id, { slow: true, kb: 0.8, fromX: tx, fromZ: tz }));
-      shake(1); Sfx.boom();
+      shake(1); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
     } });
+    Sfx.swing();
     return true;
   },
   bolt(ctx) {
     const { p, sk, id, dx, dz, mult } = ctx;
     p.castAnim = 0.001;
-    spawnProjectile({ from: 'p', x: p.x + dx * 0.8, z: p.z + dz * 0.8, dx, dz, speed: 24, range: sk.range + 2, mult, skill: id, color: 0x7ab4ff, size: 0.5 });
+    castGlow(p, dx, dz, 0x9ac8ff);
+    spawnProjectile({ from: 'p', x: p.x + dx * 0.8, z: p.z + dz * 0.8, dx, dz, speed: 24, range: sk.range + 2, mult, skill: id, color: 0x7ab4ff, size: 0.55, spiral: 0xd0e4ff });
     Sfx.zap();
     return true;
   },
   burst(ctx) {
-    const { p, sk, id, tx, tz, mult } = ctx;
+    const { p, sk, id, dx, dz, tx, tz, mult } = ctx;
     p.castAnim = 0.001;
+    castGlow(p, dx, dz, 0xff9a3a);
     for (let k = 0; k < 6; k++) G.delayed.push({ t: k * 0.05, fn: () => emit(tx, 0.2, tz, { n: 14, color: k % 2 ? 0xff7a2a : 0xffc04a, speed: 1.5, up: 7, life: 0.7, size: 1.3, grav: 2, spread: sk.radius }) });
     spawnRing(tx, tz, 0.3, sk.radius, 0xff7a2a, 0.4);
+    pillar(tx, tz, sk.radius * 0.45, 5, 0xff6a1a, 0.7, { grow: 0.6 });
+    pillar(tx, tz, sk.radius * 0.22, 6.5, 0xffd07a, 0.55, { grow: 0.3 });
+    scorch(tx, tz, sk.radius * 0.55, 2.5);
+    flash(tx, 1.5, tz, 0xff7a2a, 45, 0.4);
     monstersIn(tx, tz, sk.radius).forEach((m) => hitMonster(m, mult, id));
     Sfx.noise(0.3, 0.08, 900);
     return true;
@@ -3951,25 +4221,50 @@ const EFFECTS = {
   blink(ctx) {
     const { p, tx, tz } = ctx;
     if (!walkableR(G.L, tx, tz, 0.3)) { floatText(p.x, 2.6, p.z, 'Destino inválido', 'info'); return false; }
-    emit(p.x, 1, p.z, { n: 30, color: 0x9ab8ff, speed: 4, up: 1, life: 0.5, size: 1 });
+    const fx = p.x, fz = p.z;
+    // implosão na origem, rastro até o destino e reaparição com leve exagero
+    for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; emit(fx + Math.cos(a) * 1.6, 1, fz + Math.sin(a) * 1.6, { n: 1, color: 0x9ab8ff, speed: 5, dir: [-Math.cos(a), 0.15, -Math.sin(a)], life: 0.3, size: 1, grav: 0, drag: 0 }); }
+    afterimage(fx, fz, p.rot, 0x9ab8ff, 0.35);
+    const len = Math.hypot(tx - fx, tz - fz), n = Math.ceil(len / 0.6);
+    for (let i = 1; i < n; i++) { const k = i / n; emit(fx + (tx - fx) * k, 1, fz + (tz - fz) * k, { n: 2, color: 0xc8d8ff, speed: 0.6, life: 0.35, size: 0.8, grav: 0 }); }
     p.x = tx; p.z = tz;
+    p.pop = { t: 0, dur: 0.28 };
     emit(p.x, 1, p.z, { n: 30, color: 0x9ab8ff, speed: 4, up: 1, life: 0.5, size: 1 });
     spawnRing(p.x, p.z, 0.2, 2, 0x9ab8ff, 0.4);
+    pillar(p.x, p.z, 0.8, 4, 0x9ab8ff, 0.45);
+    flash(p.x, 1.5, p.z, 0x9ab8ff, 35, 0.3);
     Sfx.tone(700, 0.2, 'sine', 0.05, 2);
     return true;
   },
   meteor(ctx) {
-    const { p, sk, id, tx, tz, mult } = ctx;
+    const { p, sk, id, dx, dz, tx, tz, mult } = ctx;
     p.castAnim = 0.001;
     const isRain = id === 'rain';
+    const col = isRain ? 0x8affb0 : 0xff6a2a;
+    castGlow(p, dx, dz, isRain ? 0xd8ffe0 : 0xff9a3a);
     spawnRing(tx, tz, sk.radius, sk.radius, isRain ? 0x8affb0 : 0xff5a2a, 0.5, { hold: true, op: 0.5 });
     if (isRain) {
-      for (let k = 0; k < 10; k++) G.delayed.push({ t: k * 0.05, fn: () => emit(tx, 9, tz, { n: 6, color: 0xd8ffe0, speed: 16, dir: [0, -1, 0], life: 0.5, size: 0.6, grav: -20, spread: sk.radius * 1.6 }) });
+      // flechas de luz caindo em toda a área, a última chega junto com o impacto
+      for (let k = 0; k < 14; k++) {
+        const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * sk.radius;
+        const ax = tx + Math.cos(a) * r, az = tz + Math.sin(a) * r;
+        fall(ax, az, { geo: GEO.box, color: 0xd8ffe0, stretch: true, size: 1, dur: 0.24, delay: k * 0.018, from: [1.2, 9, -0.8], trail: { n: 1, color: 0xd8ffe0, speed: 0.2, life: 0.2, size: 0.6, grav: 0, spread: 0.05 },
+          onLand: () => emit(ax, 0.2, az, { n: 4, color: 0xd8ffe0, speed: 3, up: 0.8, life: 0.3, size: 0.7 }) });
+      }
     } else {
-      for (let k = 0; k < 8; k++) G.delayed.push({ t: k * 0.055, fn: () => { const f = 1 - k / 8; emit(tx + 4 * f, 1 + 9 * f, tz - 3 * f, { n: 8, color: 0xff8a3a, speed: 1, life: 0.4, size: 2.2 * (1 - f * 0.5), grav: 0 }); } });
+      const trail = { n: 3, color: 0xff8a3a, speed: 1, life: 0.45, size: 1.8, grav: 0, spread: 0.5 };
+      fall(tx, tz, { color: 0xff7a3a, size: 1.4, dur: 0.5, from: [4, 11, -3], trail });
+      fall(tx, tz, { color: 0xffe0a0, size: 0.8, dur: 0.5, from: [4, 11, -3] });
     }
     G.delayed.push({ t: 0.5, fn: () => {
-      emit(tx, 0.4, tz, { n: isRain ? 30 : 70, color: isRain ? 0x8affb0 : 0xff6a2a, speed: isRain ? 5 : 10, up: 1, life: 0.7, size: 1.3, spread: sk.radius * (isRain ? 1.4 : 0.5), jitter: true });
+      emit(tx, 0.4, tz, { n: isRain ? 30 : 70, color: col, speed: isRain ? 5 : 10, up: 1, life: 0.7, size: 1.3, spread: sk.radius * (isRain ? 1.4 : 0.5), jitter: true });
+      spawnRing(tx, tz, 0.5, sk.radius * 1.1, col, 0.45);
+      if (!isRain) {
+        pillar(tx, tz, sk.radius * 0.35, 5, 0xff7a2a, 0.55, { grow: 1.2 });
+        shards(tx, tz, 0.8, sk.radius * 0.8, 9, 0xff8a4a, 0.8, { h: 1.1, stagger: 0.1 });
+        scorch(tx, tz, sk.radius * 0.6, 3.5);
+      }
+      flash(tx, 1.5, tz, col, isRain ? 30 : 70, 0.4);
       monstersIn(tx, tz, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: isRain ? 0 : 0.6, fromX: tx, fromZ: tz }));
       shake(isRain ? 0.2 : 0.6); Sfx.boom();
     } });
@@ -3982,13 +4277,20 @@ const EFFECTS = {
     const c = fire ? 0xff6a2a : 0x9ae0ff;
     spawnRing(p.x, p.z, 0.5, sk.radius, c, 0.5, { op: 0.9 });
     for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; emit(p.x + Math.cos(a), 0.6, p.z + Math.sin(a), { n: 1, color: c, speed: sk.radius * 2, dir: [Math.cos(a), 0.05, Math.sin(a)], life: 0.5, size: 1.4, grav: 0, drag: 0.5 }); }
+    shards(p.x, p.z, 1.5, sk.radius * 0.95, fire ? 24 : 18, fire ? 0xff7a3a : 0xbfeeff, 0.9, { h: fire ? 2.2 : 1.6, stagger: 0.25 });
+    pillar(p.x, p.z, 1.2, fire ? 8 : 4, c, 0.7, { grow: fire ? 1.5 : 0.8 });
+    if (fire) scorch(p.x, p.z, sk.radius * 0.5, 3.5);
+    flash(p.x, 1.5, p.z, c, fire ? 80 : 45, 0.45);
     monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { slow: !fire, kb: 0.6 }));
     shake(0.5); Sfx.noise(0.5, 0.1, fire ? 700 : 2600);
+    if (fire) hitStop(CONFIG.feel.hitStop);
     return true;
   },
   multishot(ctx) {
     const { p, sk, id, dx, dz, mult } = ctx;
     p.attackAnim = 0.001;
+    castGlow(p, dx, dz, 0xd8ffe0, 8);
+    shove(p, -dx, -dz, 0.25, 0.12);
     const n = sk.arrows + (G.ch.tier >= 1 ? 2 : 0);
     const base = Math.atan2(dx, dz);
     for (let k = 0; k < n; k++) {
@@ -4001,7 +4303,11 @@ const EFFECTS = {
   pierce(ctx) {
     const { p, sk, id, dx, dz, mult } = ctx;
     p.attackAnim = 0.001;
-    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: 0x8affb0, size: 0.45, pierce: true, big: true });
+    castGlow(p, dx, dz, 0x8affb0, 16);
+    shove(p, -dx, -dz, 0.55, 0.16);
+    spawnRing(p.x + dx, p.z + dz, 0.3, 1.6, 0x8affb0, 0.25);
+    flash(p.x + dx, 1.3, p.z + dz, 0x8affb0, 25, 0.2);
+    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: 0x8affb0, size: 0.45, pierce: true, big: true, spiral: 0xd8ffe0 });
     Sfx.tone(900, 0.12, 'sawtooth', 0.03, 0.5);
     return true;
   },
@@ -4011,15 +4317,22 @@ const EFFECTS = {
     G.hp = Math.min(G.st.maxHp, G.hp + a);
     floatText(p.x, 2.6, p.z, '+' + fmt(a), 'heal');
     emit(p.x, 0.3, p.z, { n: 40, color: 0x8aff9a, speed: 1.5, up: 4, life: 1, size: 1, grav: 2, spread: 1.4 });
+    pillar(p.x, p.z, 0.9, 4, 0x8aff9a, 0.8);
+    spawnRing(p.x, p.z, 0.3, 2.2, 0x8aff9a, 0.5);
+    flash(p.x, 1.5, p.z, 0x8aff9a, 30, 0.4);
     p.castAnim = 0.001;
     Sfx.tone(660, 0.4, 'sine', 0.05, 1.5);
     return true;
   },
   summon(ctx) {
     const { p, sk, dx, dz } = ctx;
-    spawnAlly('spirit', p.x + dx * 1.5, p.z + dz * 1.5, sk.dur);
+    const sx = p.x + dx * 1.5, sz = p.z + dz * 1.5;
+    spawnAlly('spirit', sx, sz, sk.dur);
     p.castAnim = 0.001;
-    emit(p.x + dx * 1.5, 0.5, p.z + dz * 1.5, { n: 50, color: 0x8affb0, speed: 3, up: 2, life: 0.8, size: 1.2 });
+    emit(sx, 0.5, sz, { n: 50, color: 0x8affb0, speed: 3, up: 2, life: 0.8, size: 1.2 });
+    pillar(sx, sz, 1, 6, 0x8affb0, 0.9, { grow: 0.6 });
+    spawnRing(sx, sz, 0.3, 2.4, 0x8affb0, 0.6);
+    flash(sx, 1.5, sz, 0x8affb0, 40, 0.5);
     return true;
   },
 };
@@ -4042,9 +4355,16 @@ function castSkill(id, tx, tz) {
   G.mp -= cost.mp; G.ag -= cost.ag;
   G.cds[id] = G.time + sk.cd * (1 + st.cdPct / 100);
   p.lockUntil = G.time + Math.min(0.35, sk.cd * 0.7);
-  face(p, tx, tz); p.rot = p.rotTarget;
-  p.path = null;
-  const ctx = { p, sk, id, tx, tz, dx, dz, mult: sk.mult, col: CLASS_COLOR[ch.cls], cost };
+  // vira para o alvo: boa parte do giro na hora e o resto suave (turn em updatePlayer)
+  face(p, tx, tz);
+  let dr = p.rotTarget - p.rot;
+  while (dr > Math.PI) dr -= Math.PI * 2;
+  while (dr < -Math.PI) dr += Math.PI * 2;
+  p.rot += dr * 0.6;
+  p.castFace = p.rotTarget;
+  p.castMove = HEAVY[sk.kind] ? 0 : CONFIG.player.castMove;
+  if (HEAVY[sk.kind]) p.path = null;
+  const ctx = { p, sk, id, tx, tz, dx, dz, d, mult: sk.mult, col: CLASS_COLOR[ch.cls], cost };
   const fx = EFFECTS[sk.kind];
   if (!fx || fx(ctx) === false) { G.mp += cost.mp; G.ag += cost.ag; G.cds[id] = 0; p.lockUntil = G.time; return false; }
   return true;
@@ -6080,12 +6400,13 @@ function clearWorld() {
   clearNpcs();
   clearAllies(true);
   clearEffects();
+  clearFx();
   resetFloatText();
 }
 function placePlayer(L) {
   const p = G.player;
   p.x = L.start.x * TILE; p.z = L.start.z * TILE;
-  p.path = null; p.target = null; p.dash = null;
+  p.path = null; p.target = null; p.dash = null; p.shove = null;
   if (p.model) p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
   camTarget.set(p.x, 0, p.z);
   if (G.pet) { G.pet.x = p.x - 1.5; G.pet.z = p.z + 1; }
@@ -6721,7 +7042,7 @@ function buildPlayerModel() {
   world.add(m.root);
 }
 function newPlayer() {
-  G.player = { x: 0, z: 0, rot: 0, model: null, path: null, target: null, atkCd: 0, attackAnim: 0, castAnim: 0, lockUntil: 0, dash: null, alive: true, repath: 0, hurtFlash: 0, moveHold: 0 };
+  G.player = { x: 0, z: 0, rot: 0, model: null, path: null, target: null, atkCd: 0, attackAnim: 0, castAnim: 0, lockUntil: 0, dash: null, shove: null, hop: null, spin: null, pop: null, lean: 0, castFace: null, castMove: 0, alive: true, repath: 0, hurtFlash: 0, moveHold: 0 };
 }
 
 // ---------- atualização por quadro ----------
@@ -6736,13 +7057,17 @@ function updatePlayer(dt) {
     mouse.lastRepath = G.time;
     clickWorld(mouse.x, mouse.y, true);
   }
+  if (p.shove) updateShove(p, dt);
+  const locked = G.time < p.lockUntil;
   if (p.dash) updateDash(p, dt);
-  else if (G.time >= p.lockUntil) {
+  else if (!locked) {
+    p.castFace = null;
     flushSkillBuffer();
-    if (KEYS.any()) moveWithKeys(p, dt);
+    if (KEYS.any()) moveWithKeys(p, dt, 1);
     else if (updateTarget(p, dt)) return;
-  }
-  turn(p, dt, CONFIG.player.turnRate);
+  } else castMotion(p, dt);
+  // durante a habilidade o herói vira rápido (sem estalo) para o alvo
+  turn(p, dt, locked || p.dash ? 30 : CONFIG.player.turnRate);
   regenerate(p, dt);
   autoPickup(p);
   expireBuffs();
@@ -6751,25 +7076,50 @@ function updatePlayer(dt) {
   heroLight.position.set(p.x + 1.6, 6.5 + gy(p.x, p.z), p.z + 1.6); // alto e para o lado da câmera: ilumina sem estourar o herói
 }
 
+/**
+ * Enquanto a habilidade trava o herói: as leves (projéteis, magias no alvo)
+ * deixam andar devagar pelo caminho ou pelo teclado, sempre de frente para o
+ * alvo; as pesadas (investida, salto) seguram o herói no lugar.
+ */
+function castMotion(p, dt) {
+  if (p.castMove > 0) {
+    if (KEYS.any()) moveWithKeys(p, dt, p.castMove);
+    else if (p.path && p.path.length) followPath(p, playerSpeed() * p.castMove, dt, CONFIG.player.radius);
+  }
+  if (p.castFace != null) p.rotTarget = p.castFace;
+}
+/** Avanço/recuo curto de uma habilidade (desacelera no fim e para na parede). */
+function updateShove(p, dt) {
+  const s = p.shove;
+  const k0 = Math.min(1, s.t / s.dur);
+  s.t += dt;
+  const k1 = Math.min(1, s.t / s.dur);
+  const step = s.dist * ((1 - Math.pow(1 - k1, 3)) - (1 - Math.pow(1 - k0, 3)));
+  const nx = p.x + s.dx * step, nz = p.z + s.dz * step;
+  if (walkableR(G.L, nx, nz, CONFIG.player.radius)) { p.x = nx; p.z = nz; } else s.t = s.dur;
+  if (s.t >= s.dur) p.shove = null;
+}
+
 const dashNear = [];
-/** Investida (habilidade): interpolação linear e acerto único por monstro no caminho. */
+/** Investida (habilidade): arranca rápido e freia no fim, deixando pós-imagens; acerto único por monstro no caminho. */
 function updateDash(p, dt) {
   const d = p.dash;
   d.t += dt;
-  const k = Math.min(1, d.t / d.dur);
-  p.x = d.fx + (d.tx - d.fx) * k; p.z = d.fz + (d.tz - d.fz) * k;
-  emit(p.x, 1, p.z, { n: 3, color: 0xffb070, speed: 1, life: 0.3, size: 1 });
+  const k = Math.min(1, d.t / d.dur), e = 1 - Math.pow(1 - k, 3);
+  p.x = d.fx + (d.tx - d.fx) * e; p.z = d.fz + (d.tz - d.fz) * e;
+  if (d.t - (d.ghost || 0) > 0.035 && k < 0.9) { d.ghost = d.t; afterimage(p.x, p.z, p.rot, d.color || 0xffb070, 0.3); }
+  emit(p.x, 1, p.z, { n: 3, color: d.color || 0xffb070, speed: 1, life: 0.3, size: 1 });
   queryMonsters(p.x, p.z, 1.6 + QUERY_PAD, dashNear);
   for (const m of dashNear) {
     if (m.dead || d.hit.has(m.id) || dist2(m, p) >= (1.6 + m.radius) ** 2) continue;
     d.hit.add(m.id);
     hitMonster(m, d.mult, d.id, { kb: 0.8 });
   }
-  if (k >= 1) { p.dash = null; shake(0.3); }
+  if (k >= 1) { const end = d.onEnd; p.dash = null; shake(0.3); if (end) end(); }
 }
 
 /** WASD / setas: movimento relativo à câmera. */
-function moveWithKeys(p, dt) {
+function moveWithKeys(p, dt, speedMul) {
   const fx = -Math.sin(CAM.yaw), fz = -Math.cos(CAM.yaw);
   let mx = 0, mz = 0;
   if (KEYS.w) { mx += fx; mz += fz; }
@@ -6779,7 +7129,7 @@ function moveWithKeys(p, dt) {
   const l = Math.hypot(mx, mz);
   if (!l) return;
   p.path = null; p.target = null;
-  stepToward(p, p.x + (mx / l) * 2, p.z + (mz / l) * 2, playerSpeed(), dt, CONFIG.player.radius);
+  stepToward(p, p.x + (mx / l) * 2, p.z + (mz / l) * 2, playerSpeed() * speedMul, dt, CONFIG.player.radius);
   cancelChannel();
 }
 
@@ -6845,12 +7195,49 @@ function updateVisual(p, dt) {
   if (p.attackAnim > 0) { p.attackAnim += dt * 4.2; if (p.attackAnim >= 1) p.attackAnim = 0; }
   if (p.castAnim > 0) { p.castAnim += dt * 3.5; if (p.castAnim >= 1) p.castAnim = 0; }
   if (p.hurtFlash > 0) { p.hurtFlash -= dt; if (p.hurtFlash <= 0) flashModel(p.model, 0, 0); }
-  p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
-  p.model.root.rotation.y = p.rot;
+  const root = p.model.root;
+  root.position.set(p.x, gy(p.x, p.z) + skillPose(p, dt), p.z);
+  root.rotation.order = 'YXZ'; // inclinação para a frente no eixo do próprio herói
+  root.rotation.x = p.lean;
   // segura o "andando" por um instante: evita piscar para a pose parada entre pontos do caminho
   p.moveHold = p.moving ? CONFIG.player.moveHold : Math.max(0, p.moveHold - dt);
   animateModel(p.model, { t: G.time, dt, moving: p.moving || p.moveHold > 0, run: !inSafe(), v: p.groundSpeed, attack: p.attackAnim, cast: p.castAnim, speed: 11 });
   if (p.model.orb) p.model.orb.scale.setScalar(0.3 + Math.sin(G.time * 6) * 0.04);
+}
+
+/**
+ * Pose das habilidades por cima da animação: salto (hop), giro completo (spin),
+ * encolher e reaparecer (pop, teleporte) e inclinação na investida. Define a
+ * rotação e a escala da raiz e devolve o deslocamento vertical.
+ */
+function skillPose(p, dt) {
+  const root = p.model.root;
+  let y = 0, spin = 0, sc = 1;
+  const leanTo = p.dash ? 0.45 : p.hop ? -0.12 : 0;
+  p.lean += (leanTo - p.lean) * Math.min(1, dt * 18);
+  if (p.hop) {
+    const h = p.hop; h.t += dt;
+    const k = Math.min(1, h.t / h.dur);
+    y = Math.sin(k * Math.PI) * h.h;
+    if (k >= 1) p.hop = null;
+  }
+  if (p.spin) {
+    const s = p.spin; s.t += dt;
+    const k = Math.min(1, s.t / s.dur);
+    spin = (1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.dir || 1);
+    if (k >= 1) p.spin = null;
+  }
+  if (p.pop) {
+    const s = p.pop; s.t += dt;
+    const k = Math.min(1, s.t / s.dur);
+    sc = k < 1 ? 0.25 + 0.75 * (1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2)) : 1; // volta com leve exagero
+    if (k >= 1) p.pop = null;
+  }
+  root.rotation.y = p.rot + spin;
+  const m = p.model;
+  if (m.baseScale == null) m.baseScale = root.scale.x; // escala cartoon do modelo
+  root.scale.set(m.baseScale * sc, m.baseScale * sc * (2 - sc), m.baseScale * sc);
+  return y;
 }
 
 // ---------- canalização do portal para a cidade (T) ----------
@@ -7890,6 +8277,7 @@ function frame(dt) {
   updateParticles(fxDt);
   Music.tick();
   updateRings(fxDt);
+  updateFx(fxDt);
   renderFrame();
 }
 
