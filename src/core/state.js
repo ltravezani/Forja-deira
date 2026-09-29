@@ -7,7 +7,7 @@ export const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
   hp: 1, mp: 1, ag: 1, buffs: [], player: null, pet: null,
   monsters: [], projectiles: [], delayed: [], loot: [], allies: [], breakables: [], npcs: [],
-  exitPortal: null, townPortal: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
+  exitPortal: null, townPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
   explored: null, boss: null, selectedSlot: 0, dropLog: [], nextMonId: 1, showAllLabels: false,
   cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0,
 };
@@ -87,5 +87,6 @@ export function sanitizeCharacter(ch) {
   ch.skillBar = ch.skillBar.filter((id) => R.SKILLS[id] && R.SKILLS[id].cls === ch.cls).slice(0, 6);
   if (!ch.tree || typeof ch.tree !== 'object') ch.tree = {};
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
+  ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   return ch;
 }

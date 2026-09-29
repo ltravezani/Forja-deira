@@ -10,7 +10,7 @@ import { followPath, pathTo } from './game/movement.js';
 import { recalc } from './game/player.js';
 import { castSkill, castSlot } from './game/skills.js';
 import { updateWorld } from './game/world.js';
-import { enterDungeon, enterTown, inSafe } from './game/zones.js';
+import { enterDungeon, enterTower, enterTown, inSafe } from './game/zones.js';
 import { skillIconURI } from './ui/icons.js';
 import { findPath } from './world/grid.js';
 import { getLevelMeshes } from './world/level.js';
@@ -18,7 +18,7 @@ import { getLevelMeshes } from './world/level.js';
 export function installDebugHook(loopStats) {
   window.__FORJA_DEBUG = {
     G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
-    renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTown,
+    renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, loopStats,
     worldChildren: () => world.children.length,
   };

@@ -43,6 +43,7 @@ export function spawnMonster(kind, x, z, level, opt) {
   opt = opt || {};
   const T = MON[kind];
   const mod = Object.assign({}, T.mod);
+  if (G.zone === 'tower') { const tm = R.towerMod(G.floor); mod.hp = (mod.hp || 1) * tm.hp; mod.dmg = (mod.dmg || 1) * tm.dmg; }
   let affix = null;
   if (opt.elite) {
     const ks = Object.keys(AFFIX);
@@ -182,7 +183,7 @@ function updateBoss(m, d, dt, enrage, p) {
       if ((G.player.x - tx) ** 2 + (G.player.z - tz) ** 2 < 3.4 * 3.4) hurtPlayer(m.dmg * 1.8, m);
     } });
   }
-  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone === 'dungeon') {
+  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
     m.summoned = true;
     const B = BIOMES[G.biome];
     for (let k = 0; k < 4; k++) {

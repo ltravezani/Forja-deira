@@ -73,6 +73,38 @@ export const MUSIC_THEMES = {
     wind: { vol: 0.035, cutoff: 260 },
     echo: { time: 0.8, fb: 0.45, mix: 0.4 },
   },
+  // ---------- Torre Infinita: temas que "sobem" (escalas brilhantes e ecos longos) ----------
+  tw_granite: {
+    bpm: 70, root: 47, scale: [0, 2, 3, 5, 7, 9, 10], chords: [0, 5, 3, 4], barsPerChord: 2,
+    pad: { type: 'triangle', vol: 0.045, cutoff: 1000 },
+    bass: { type: 'triangle', vol: 0.08 },
+    lead: { type: 'triangle', vol: 0.04, oct: 2, density: 0.2, dur: 1.1 },
+    wind: { vol: 0.015, cutoff: 600 },
+    echo: { time: 0.64, fb: 0.4, mix: 0.36 },
+  },
+  tw_arcane: {
+    bpm: 62, root: 50, scale: [0, 2, 4, 6, 7, 9, 11], chords: [0, 4, 5, 1], barsPerChord: 2,
+    pad: { type: 'sine', vol: 0.055, cutoff: 1300 },
+    bass: { type: 'sine', vol: 0.07 },
+    lead: { type: 'sine', vol: 0.045, oct: 2, density: 0.26, dur: 1.8, bell: true },
+    echo: { time: 0.72, fb: 0.5, mix: 0.45 },
+  },
+  tw_storm: {
+    bpm: 84, root: 45, scale: [0, 2, 3, 5, 7, 8, 10], chords: [0, 5, 6, 4], barsPerChord: 1,
+    pad: { type: 'sawtooth', vol: 0.025, cutoff: 800 },
+    bass: { type: 'sawtooth', vol: 0.05, cutoff: 320, pulse: true },
+    lead: { type: 'triangle', vol: 0.035, oct: 2, density: 0.24, dur: 0.6, vibrato: 6 },
+    wind: { vol: 0.03, cutoff: 900 },
+    echo: { time: 0.36, fb: 0.35, mix: 0.3 },
+  },
+  tw_void: {
+    bpm: 48, root: 41, scale: [0, 1, 3, 6, 7, 10], chords: [0, 4, 1, 0], barsPerChord: 2,
+    pad: { type: 'sawtooth', vol: 0.022, cutoff: 480 },
+    bass: { type: 'sine', vol: 0.1 },
+    lead: { type: 'sine', vol: 0.035, oct: 2, density: 0.14, dur: 2.4, bend: 0.96, bell: true },
+    wind: { vol: 0.03, cutoff: 300 },
+    echo: { time: 0.9, fb: 0.5, mix: 0.45 },
+  },
 };
 
 const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);

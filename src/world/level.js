@@ -194,7 +194,10 @@ function buildWalls(L, T, opt) {
 function placeDecals(list, kind, size, opt) {
   if (!list.length) return;
   const t = texDecal(kind);
-  const mat = new THREE.MeshToonMaterial({ map: t.map, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, side: opt && opt.vertical ? THREE.DoubleSide : THREE.FrontSide });
+  // glow: decalque que brilha (runas da torre), aditivo e sem tone mapping
+  const mat = opt && opt.glow
+    ? new THREE.MeshBasicMaterial({ map: t.map, color: opt.glow, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1 })
+    : new THREE.MeshToonMaterial({ map: t.map, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, side: opt && opt.vertical ? THREE.DoubleSide : THREE.FrontSide });
   const geo = GEO.plane;
   const m = new THREE.InstancedMesh(geo, mat, list.length);
   list.forEach((p, i) => {
@@ -314,6 +317,10 @@ export function buildLevel(L) {
     ruins: { h: 3.4, var: 0.8, lip: 0.18 },
     castle: { h: 4.0, var: 0.2, lip: 0.2 },
     abyss: { h: 3.6, var: 1.0, rough: 1.1, lip: 0.14 },
+    tw_granite: { h: 4.2, var: 0.15, lip: 0.2 },
+    tw_arcane: { h: 4.2, var: 0.1, lip: 0.2 },
+    tw_storm: { h: 3.8, var: 0.35, lip: 0.18 },
+    tw_void: { h: 4.0, var: 0.6, rough: 0.6, lip: 0.16 },
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
@@ -334,12 +341,12 @@ export function buildLevel(L) {
   placeKit('sconce', sconces, (p) => ({ x: p.x, y: p.y, z: p.z, ry: p.ry }), { noShadow: true });
   // ameias no castelo, estacas na paliçada da cidade
   const tall = walls.filter((w) => !w.low);
-  if (L.biome === 'castle') placeKit('crenel', tall.filter((w) => (w.x + w.z) % 2 === 0), (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE }));
+  if (L.biome === 'castle' || L.tower) placeKit('crenel', tall.filter((w) => (w.x + w.z) % 2 === 0), (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE }));
   if (town) placeKit('stake', tall, (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE, s: 1.4, ry: rnd() * 3 }));
   buildProps(L, B, rnd);
   scatterClutter(L, walls);
   buildFlames();
-  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08] }[L.biome];
+  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
 }
@@ -348,6 +355,7 @@ export function buildLevel(L) {
 const SHAFTS = {
   town: [0x9ab4ff, 4, 0.06], forest: [0xe0f8a8, 10, 0.13], caves: [0x7ab8ff, 6, 0.11],
   ruins: [0xffe2b0, 8, 0.12], castle: [0xff9a8a, 5, 0.09], abyss: [0xff7a3a, 4, 0.07],
+  tw_granite: [0xd8e4ff, 7, 0.11], tw_arcane: [0xd0a8ff, 6, 0.12], tw_storm: [0xbff4ff, 9, 0.13], tw_void: [0xff8ad8, 5, 0.09],
 };
 let shafts = null;
 function buildShafts(L, rnd) {
@@ -443,6 +451,8 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
+    // luz fria na porta da Torre Infinita (a porta olha para a praça)
+    if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }
     return;
   }
   const deco = B.decor;
@@ -461,6 +471,11 @@ function buildProps(L, B, rnd) {
   else if (deco === 'ruins') { placeDecals(splat.slice(0, half), 'moss', 2.4); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'castle') { placeDecals(splat.slice(0, half), 'blood', 1.8); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'lava') { placeDecals(splat.slice(0, half), 'ash', 2.8); placeDecals(splat.slice(half), 'blood', 1.8); }
+  else if (deco === 'tower') { placeDecals(splat, L.biome === 'tw_void' ? 'ash' : 'crack', 2.4); }
+  if (L.runes) {
+    placeDecals(L.runes.map((r) => ({ x: r.x * T, z: r.z * T, r: r.s, s: r.s })), 'rune', 1, { glow: TOWER_RUNE[L.biome] });
+    for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
+  }
   if (deco === 'forest') {
     placeKit('pine', by(tall, (p) => p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
     placeKit('deadTree', by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
@@ -494,6 +509,8 @@ function buildProps(L, B, rnd) {
     placeKit('candles', cd, (p) => ({ ...pos(p, 0.6), s: 0.9 }));
     cd.forEach((p) => { const q = pos(p, 0.6); addFire(q.x, 0.55, q.z, 0.5, 0xffc060); });
     placeKit(castle ? 'skulls' : 'bones', by(low, (p) => p.v >= 0.8).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
+  } else if (deco === 'tower') {
+    buildTowerProps(L, tall, low, decal, pos, by, addFire);
   } else if (deco === 'lava') {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
@@ -505,6 +522,47 @@ function buildProps(L, B, rnd) {
     placeKit('skulls', by(low, (p) => p.v >= 0.55 && p.v < 0.8), (p) => ({ ...pos(p, 0.8), ry: p.v * 9 }), { noShadow: true });
     placeKit('rock', by(low, (p) => p.v >= 0.8).concat(by(decal, (p) => p.v >= 0.5)), (p) => ({ ...pos(p, 0.8), s: 0.5 + p.v * 0.5, ry: p.v * 9 }));
   }
+}
+
+/** Cor das runas do chão em cada bioma da torre. */
+const TOWER_RUNE = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
+/**
+ * Adereços da Torre Infinita: obeliscos rúnicos e colunas em todos os andares;
+ * cada bioma troca o resto (estátuas e armaduras no granito, estantes e cristais
+ * na biblioteca, pilares partidos e braseiros no terraço, espinhos e cristais no vazio).
+ */
+function buildTowerProps(L, tall, low, decal, pos, by, addFire) {
+  const T = TILE, b = L.biome;
+  const fireCol = { tw_granite: 0xffa040, tw_arcane: 0xb070ff, tw_storm: 0x6ae0ff, tw_void: 0xff40c0 }[b];
+  placeKit('obelisk', by(tall, (p) => p.v < 0.3), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+  by(tall, (p) => p.v < 0.3).forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  const mid = by(tall, (p) => p.v >= 0.3 && p.v < 0.75), top = by(tall, (p) => p.v >= 0.75);
+  if (b === 'tw_granite') {
+    placeKit('pillar', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+    placeKit('statue', by(top, (p) => p.v < 0.88), (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+    placeKit('armor', by(top, (p) => p.v >= 0.88), (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+  } else if (b === 'tw_arcane') {
+    placeKit('bookshelf', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+    placeKit('crystalBig', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9, s: 0.8 }));
+    top.forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  } else if (b === 'tw_storm') {
+    placeKit('pillarBroken', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+    placeKit('pillar', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+  } else {
+    placeKit('spikes', mid, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
+    placeKit('crystalBig', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9, s: 0.9 }));
+    top.forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  }
+  placeKit('rubble', by(low, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }), { noShadow: true });
+  const br = by(low, (p) => p.v >= 0.3 && p.v < 0.45);
+  placeKit('brazier', br, (p) => ({ ...pos(p, 0.3) }));
+  br.forEach((p) => { const q = pos(p, 0.3); torches.push({ x: q.x, y: 1.6, z: q.z }); addFire(q.x, 1.55, q.z, 2.2, fireCol); });
+  placeKit(b === 'tw_arcane' ? 'crate' : 'barrel', by(low, (p) => p.v >= 0.45 && p.v < 0.55), (p) => ({ ...pos(p, 0.6), ry: p.v * 9 }));
+  placeKit(b === 'tw_storm' ? 'rock' : 'crystal', by(low, (p) => p.v >= 0.55 && p.v < 0.7), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.7 + p.v * 0.5 }));
+  const cd = by(low, (p) => p.v >= 0.7 && p.v < 0.82);
+  placeKit('candles', cd, (p) => ({ ...pos(p, 0.6), s: 0.9 }));
+  cd.forEach((p) => { const q = pos(p, 0.6); addFire(q.x, 0.55, q.z, 0.5, fireCol); });
+  placeKit('skulls', by(low, (p) => p.v >= 0.82).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
 }
 
 /**
@@ -519,6 +577,10 @@ const CLUTTER = {
   ruins: { floor: [['tuft', 0.16], ['pebbles', 0.1], ['flowers', 0.02]], edge: [['baseRocks', 0.3], ['grassEdge', 0.25]] },
   castle: { floor: [['pebbles', 0.07]], edge: [['baseRocks', 0.25]] },
   abyss: { floor: [['ember', 0.09], ['pebbles', 0.08]], edge: [['baseRocks', 0.4]] },
+  tw_granite: { floor: [['pebbles', 0.08]], edge: [['baseRocks', 0.25]] },
+  tw_arcane: { floor: [['shard', 0.05], ['pebbles', 0.05]], edge: [['baseRocks', 0.2]] },
+  tw_storm: { floor: [['tuft', 0.12], ['pebbles', 0.1]], edge: [['baseRocks', 0.3], ['grassEdge', 0.2]] },
+  tw_void: { floor: [['ember', 0.06], ['shard', 0.04], ['pebbles', 0.06]], edge: [['baseRocks', 0.35]] },
 };
 function scatterClutter(L, walls) {
   const C = CLUTTER[L.biome];

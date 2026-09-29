@@ -989,7 +989,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     out.log.push({ what: 'item', roll: ri, threshold: pItem });
     if (ri < pItem) out.items.push(makeEquip(hash32(seed, 'i'), mLevel, null, favorCls, mf, src));
     const rz = rnd();
-    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = goldAmount(mLevel, src, rnd());
     for (const j of ['bless', 'soul', 'chaos', 'life']) {
       const rj = rnd();
       const p = DROP_CHANCE[j] * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) * (mLevel < 15 ? 0.3 : 1);
@@ -998,6 +998,54 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     }
     const rp = rnd();
     if (rp < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    return out;
+  }
+
+  /** Gold de um abate (mesma fórmula nas masmorras e na torre). */
+  function goldAmount(mLevel, src, r) {
+    return Math.floor(mLevel * (18 + r * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Torre Infinita: andares sem fim, cada um mais difícil. Só cai Gold e Jewels.
+  // ---------------------------------------------------------------------------
+  const TOWER = {
+    baseLevel: 20,      // nível dos monstros no andar 1
+    levelPerFloor: 10,  // +níveis por andar
+    hpPerFloor: 0.06,   // +6% de HP por andar (além do nível)
+    dmgPerFloor: 0.035, // +3,5% de dano por andar
+    jewelChance: 0.1,   // monstros: 10% de chance de uma Jewel aleatória
+    bossChance: 0.2,    // chefe do andar: 20% de chance de soltar o tesouro
+    biomeEvery: 5,      // troca de bioma a cada 5 andares
+  };
+  const JEWEL_IDS = ['bless', 'soul', 'chaos', 'life'];
+  function towerLevel(floor) { return TOWER.baseLevel + (Math.max(1, floor) - 1) * TOWER.levelPerFloor; }
+  /** Multiplicadores extras dos monstros do andar (somados aos do tipo de monstro). */
+  function towerMod(floor) {
+    const f = Math.max(1, floor) - 1;
+    return { hp: 1 + f * TOWER.hpPerFloor, dmg: 1 + f * TOWER.dmgPerFloor };
+  }
+  /**
+   * Drop na torre (determinístico pela seed). Monstros: Gold igual ao de um andar
+   * normal de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
+   * soltar Gold de chefe e 1–3 Jewels aleatórias; nos outros 80%, nada.
+   */
+  function rollTowerDrop(opts) {
+    const { seed, mLevel, src } = opts;
+    const rnd = mulberry32(seed);
+    const out = { gold: 0, jewels: [], bossRoll: null };
+    const pick = () => JEWEL_IDS[Math.floor(rnd() * JEWEL_IDS.length)];
+    if (src === 'boss') {
+      out.bossRoll = rnd();
+      if (out.bossRoll < TOWER.bossChance) {
+        out.gold = goldAmount(mLevel, 'boss', rnd());
+        const n = 1 + Math.floor(rnd() * 3);
+        for (let i = 0; i < n; i++) out.jewels.push(pick());
+      }
+      return out;
+    }
+    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd());
+    if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
     return out;
   }
 
@@ -1046,7 +1094,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
-      unlockedFloors: {},
+      unlockedFloors: {}, towerBest: 1,
     };
   }
   function className(ch) {
@@ -1233,6 +1281,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
+    goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     upgradeChance, applyUpgrade, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
@@ -1420,7 +1469,7 @@ const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
   hp: 1, mp: 1, ag: 1, buffs: [], player: null, pet: null,
   monsters: [], projectiles: [], delayed: [], loot: [], allies: [], breakables: [], npcs: [],
-  exitPortal: null, townPortal: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
+  exitPortal: null, townPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
   explored: null, boss: null, selectedSlot: 0, dropLog: [], nextMonId: 1, showAllLabels: false,
   cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0,
 };
@@ -1500,6 +1549,7 @@ function sanitizeCharacter(ch) {
   ch.skillBar = ch.skillBar.filter((id) => R.SKILLS[id] && R.SKILLS[id].cls === ch.cls).slice(0, 6);
   if (!ch.tree || typeof ch.tree !== 'object') ch.tree = {};
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
+  ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   return ch;
 }
 return { G, LEGACY_SAVE_KEYS, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter };
@@ -1890,6 +1940,13 @@ function texDecal(kind) {
     if (kind === 'moss') { const a = sat((0.7 + n * 0.5 - d) * 3) * sat(n * 2 - 0.4); return { h: n, c: [40 + n * 40, 62 + n * 50, 22], a: a * 230 }; }
     if (kind === 'crack') { const r = Math.abs(fbm(u, v, 4, 3, sd + 1) - 0.5); const a = sat((0.03 - r) * 40) * sat(1 - d); return { h: 0, c: [10, 8, 8], a: a * 230 }; }
     if (kind === 'web') { const ring = Math.abs(Math.sin(d * 24)) < 0.08; const spoke = Math.abs(Math.sin(a0 * 5)) < 0.03; const a = (ring || spoke) && d < 0.95 ? (1 - d) * 0.9 + 0.2 : 0; return { h: 0.5, c: [210, 210, 215], a: a * 200 }; }
+    if (kind === 'rune') { // círculo rúnico: dois anéis, glifos entre eles e uma estrela no meio
+      const ring = sat(1 - Math.abs(d - 0.92) * 40) + sat(1 - Math.abs(d - 0.7) * 50);
+      const seg = Math.floor(((a0 + Math.PI) / (Math.PI * 2)) * 16), f = ((a0 + Math.PI) / (Math.PI * 2)) * 16 - seg;
+      const glyph = d > 0.74 && d < 0.88 && f > 0.25 && f < 0.75 && hash2(seg, Math.floor(d * 20), sd) > 0.35 ? 0.9 : 0;
+      const star = d < 0.68 && Math.abs(Math.sin(a0 * 2.5 + 0.3)) * d < 0.03 ? 0.8 : 0;
+      return { h: 0.5, c: [255, 255, 255], a: Math.min(1, ring + glyph + star) * sat((1 - d) * 20) * 230 };
+    }
     if (kind === 'ash') { const a = sat((0.8 - d) * 2) * n; return { h: 0, c: [25, 22, 20], a: a * 200 }; }
     return { h: 0, c: [0, 0, 0], a: 0 };
   }, { bump: 1, alpha: true });
@@ -3965,6 +4022,38 @@ const MUSIC_THEMES = {
     wind: { vol: 0.035, cutoff: 260 },
     echo: { time: 0.8, fb: 0.45, mix: 0.4 },
   },
+  // ---------- Torre Infinita: temas que "sobem" (escalas brilhantes e ecos longos) ----------
+  tw_granite: {
+    bpm: 70, root: 47, scale: [0, 2, 3, 5, 7, 9, 10], chords: [0, 5, 3, 4], barsPerChord: 2,
+    pad: { type: 'triangle', vol: 0.045, cutoff: 1000 },
+    bass: { type: 'triangle', vol: 0.08 },
+    lead: { type: 'triangle', vol: 0.04, oct: 2, density: 0.2, dur: 1.1 },
+    wind: { vol: 0.015, cutoff: 600 },
+    echo: { time: 0.64, fb: 0.4, mix: 0.36 },
+  },
+  tw_arcane: {
+    bpm: 62, root: 50, scale: [0, 2, 4, 6, 7, 9, 11], chords: [0, 4, 5, 1], barsPerChord: 2,
+    pad: { type: 'sine', vol: 0.055, cutoff: 1300 },
+    bass: { type: 'sine', vol: 0.07 },
+    lead: { type: 'sine', vol: 0.045, oct: 2, density: 0.26, dur: 1.8, bell: true },
+    echo: { time: 0.72, fb: 0.5, mix: 0.45 },
+  },
+  tw_storm: {
+    bpm: 84, root: 45, scale: [0, 2, 3, 5, 7, 8, 10], chords: [0, 5, 6, 4], barsPerChord: 1,
+    pad: { type: 'sawtooth', vol: 0.025, cutoff: 800 },
+    bass: { type: 'sawtooth', vol: 0.05, cutoff: 320, pulse: true },
+    lead: { type: 'triangle', vol: 0.035, oct: 2, density: 0.24, dur: 0.6, vibrato: 6 },
+    wind: { vol: 0.03, cutoff: 900 },
+    echo: { time: 0.36, fb: 0.35, mix: 0.3 },
+  },
+  tw_void: {
+    bpm: 48, root: 41, scale: [0, 1, 3, 6, 7, 10], chords: [0, 4, 1, 0], barsPerChord: 2,
+    pad: { type: 'sawtooth', vol: 0.022, cutoff: 480 },
+    bass: { type: 'sine', vol: 0.1 },
+    lead: { type: 'sine', vol: 0.035, oct: 2, density: 0.14, dur: 2.4, bend: 0.96, bell: true },
+    wind: { vol: 0.03, cutoff: 300 },
+    echo: { time: 0.9, fb: 0.5, mix: 0.45 },
+  },
 };
 
 const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -4145,6 +4234,7 @@ const NPCS = {
   merchant: { name: 'Lira', role: 'Mercadora · poções e compra de itens', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas! E se o seu pet estiver ocupado, eu compro o que você carrega.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
+  tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra ouro e Jewels. Derrote o guardião de cada andar e suba o quanto aguentar.' },
   duel: { name: 'Kora', role: 'Arena de Duelo · em construção', look: { skin: 0xe0a880, cloth: 0x3a3a3a, armor: 0x8a2a2a, head: 'helm', weapon: 'sword', shield: true }, say: 'A arena ainda está sendo erguida. Em breve, desafios contra os campeões de Aldrena. Até lá, afie a lâmina nas masmorras.' },
 };
 return { AFFIX, MON, NPCS };
@@ -4794,7 +4884,7 @@ return { buildSlots, hudTick, resetHudCache };
 })();
 
 // ---- world/biomes.js ----
-const { BIOMES, DUNGEON_ORDER, floorLevel } = (() => {
+const { BIOMES, DUNGEON_ORDER, TOWER_ORDER, floorLevel, towerBiome } = (() => {
 // ---------- biomas: dados (nome, paleta, luz, monstros, chefe, modelos de sala) ----------
 /**
  * Biomas: paleta sombria, texturas procedurais do chão (A e B, misturadas por
@@ -4808,10 +4898,18 @@ const BIOMES = {
   ruins: { name: 'Ruínas de Kael', base: 70, fog: [0x16131c, 26, 70], hemi: [0x9a90b0, 0x2a2016, 1.6], sun: [0xe0d4ff, 1.7], light: 0xffc890, exposure: 1.05, grade: [0xf0e2d0, 1.0], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['skeleton', 'archer', 'specter'], boss: 'skeking', decor: 'ruins', ambient: 0xd8c8a8 },
   castle: { name: 'Castelo Carmesim', base: 120, fog: [0x160a0e, 26, 66], hemi: [0xb08090, 0x241018, 1.7], sun: [0xffc8b8, 1.4], light: 0xffb888, exposure: 1.05, grade: [0xffd4dc, 1.02], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['knight', 'gargoyle', 'warlock'], boss: 'lord', decor: 'castle', ambient: 0xff8a6a },
   abyss: { name: 'Abismo de Obsidiana', base: 180, fog: [0x1c0806, 26, 66], hemi: [0x9a6a64, 0x2a0e0a, 1.5], sun: [0xffa070, 1.4], light: 0xffb080, exposure: 1.1, grade: [0xffd0c0, 0.98], templates: ['cave', 'hall', 'cave', 'room'], monsters: ['lavademon', 'hound', 'herald'], boss: 'tyrant', decor: 'lava', ambient: 0xff7a2a },
+  // ---------- Torre Infinita: biomas próprios (monstros reaproveitados), trocados a cada 5 andares ----------
+  tw_granite: { name: 'Salões de Granito', tower: true, fog: [0x10141c, 26, 70], hemi: [0x8a98b8, 0x1e1a22, 1.7], sun: [0xc8d4ff, 1.5], light: 0xffc890, exposure: 1.08, grade: [0xd8e0ff, 1.02], monsters: ['skeleton', 'knight', 'golem'], boss: 'skeking', decor: 'tower', ambient: 0xbfd0ff },
+  tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, grade: [0xe4d4ff, 1.03], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
+  tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, grade: [0xd0f4ff, 1.02], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
+  tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, grade: [0xffd0ec, 1.0], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
 };
 const DUNGEON_ORDER = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
 const floorLevel = (biome, floor) => BIOMES[biome].base + (floor - 1) * 8;
-return { BIOMES, DUNGEON_ORDER, floorLevel };
+const TOWER_ORDER = ['tw_granite', 'tw_arcane', 'tw_storm', 'tw_void'];
+/** Bioma do andar da torre: troca a cada `every` andares e volta ao início depois do último. */
+const towerBiome = (floor, every = 5) => TOWER_ORDER[Math.floor((Math.max(1, floor) - 1) / every) % TOWER_ORDER.length];
+return { BIOMES, DUNGEON_ORDER, TOWER_ORDER, floorLevel, towerBiome };
 })();
 
 // ---- ui/npcDialogs.js ----
@@ -4835,6 +4933,15 @@ function openNpc(id) {
         '<button class="btn sm" data-npc="go" data-b="' + k + '" data-f="1">Andar 1</button>' + (maxF > 1 ? '<button class="btn sm gold" data-npc="go" data-b="' + k + '" data-f="' + maxF + '">Andar ' + maxF + '</button>' : '') + '</div></div>';
     });
     h += '</div><p class="note" style="margin-top:10px">Nível recomendado ≈ nível dos monstros. Cada andar soma +8 níveis.</p>';
+  } else if (id === 'tower') {
+    const best = ch.towerBest || 1, T = R.TOWER;
+    const row = (f, gold) => {
+      const B = BIOMES[towerBiome(f, T.biomeEvery)], m = R.towerMod(f);
+      return '<div class="dg"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + m.hp.toFixed(2) + ' · dano ×' + m.dmg.toFixed(2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
+    };
+    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
+    h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
+      '<p class="note">Drops: só Gold (igual a um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Jewel aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Gold e Jewels.</p>';
   } else if (id === 'smith') {
     const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
     const sel = items.find((x) => x === UI.smithSel) || items[0];
@@ -4877,6 +4984,7 @@ function npcAction(e) {
   switch (a) {
     case 'close': closeModal(); return;
     case 'go': closeModal(); enterDungeon(b.dataset.b, +b.dataset.f); return;
+    case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot)); UI.smithSel = items[+b.dataset.i]; break; }
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
@@ -4941,159 +5049,6 @@ function initDialogs() {
   $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal' && G.player && G.player.alive) closeModal(); });
 }
 return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
-})();
-
-// ---- game/npcs.js ----
-const { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals } = (() => {
-// ---------- NPCs e cidade ----------
-
-function spawnNpcs(L) {
-  L.npcs.forEach((n) => {
-    const D = NPCS[n.id];
-    const model = buildHumanoid(Object.assign({ scale: 1.05 }, D.look));
-    const x = n.x * TILE, z = n.z * TILE;
-    model.root.position.set(x, gy(x, z), z);
-    const cx = L.town ? L.town.cx * TILE : 23 * TILE, cz = L.town ? L.town.cz * TILE : 23 * TILE;
-    model.root.rotation.y = Math.atan2(cx - x, cz - z);
-    world.add(model.root);
-    const label = document.createElement('div');
-    label.className = 'label npc';
-    label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + '</small>';
-    label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
-    overlay.appendChild(label);
-    const npc = { id: n.id, D, x, z, model, label, phase: rand() * 6 };
-    G.npcs.push(npc);
-  });
-  // portal da cidade
-  const pp = L.portal;
-  if (pp) G.townPortal = makePortal(pp.x * TILE, pp.z * TILE, 0x9a7aff, 'Portal das Masmorras', () => openNpc('portal'));
-}
-// geometrias do portal: criadas uma vez e compartilhadas por todos os portais
-let portalGeo = null;
-function getPortalGeo() {
-  if (!portalGeo) {
-    portalGeo = { ring: new THREE.TorusGeometry(1.5, 0.18, 8, 32), disc: new THREE.CircleGeometry(1.4, 32) };
-    portalGeo.ring.userData.shared = portalGeo.disc.userData.shared = true;
-  }
-  return portalGeo;
-}
-function makePortal(x, z, color, text, onUse) {
-  const PG = getPortalGeo();
-  const g = new THREE.Group();
-  const ring = new THREE.Mesh(PG.ring, glowMat(color, 0.9));
-  ring.position.y = 1.8;
-  g.add(ring);
-  const disc = new THREE.Mesh(PG.disc, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
-  disc.position.y = 1.8;
-  g.add(disc);
-  const floorRing = new THREE.Mesh(GEO.ring, glowMat(color, 0.6));
-  floorRing.scale.setScalar(1.8); floorRing.position.y = 0.06;
-  g.add(floorRing);
-  g.position.set(x, gy(x, z), z);
-  g.rotation.y = Math.PI / 4;
-  world.add(g);
-  const label = document.createElement('div');
-  label.className = 'label portal';
-  label.textContent = text;
-  const portal = { x, z, g, ring, disc, label, color, onUse };
-  label.addEventListener('pointerdown', (e) => { e.stopPropagation(); G.player.target = { type: 'portal', p: portal }; pathTo(x, z); });
-  overlay.appendChild(label);
-  return portal;
-}
-function removePortal(pt) {
-  if (!pt) return;
-  world.remove(pt.g);
-  disposeObject(pt.g, true);
-  pt.label.remove();
-}
-function targetNpc(npc) {
-  G.player.target = { type: 'npc', n: npc };
-  pathTo(npc.x, npc.z);
-}
-
-/** NPCs ociosos: só animam quando estão na tela. */
-function updateNpcs(dt) {
-  for (const n of G.npcs) {
-    const vis = inView(n.x, n.model.root.position.y + 1.5, n.z, 3);
-    n.model.root.visible = vis;
-    if (vis) animateModel(n.model, { t: G.time + n.phase, dt, moving: false, attack: 0 });
-  }
-}
-function updatePortals(dt) {
-  for (const pt of [G.exitPortal, G.townPortal]) {
-    if (!pt) continue;
-    pt.ring.rotation.z += dt * 1.5;
-    pt.disc.material.opacity = 0.3 + Math.sin(G.time * 4) * 0.1;
-    if (Math.random() < 0.5) emit(pt.x + (rand() - 0.5) * 2, 0.3, pt.z + (rand() - 0.5) * 2, { n: 1, color: pt.color, speed: 0.5, up: 3, life: 1, size: 0.8, grav: 1.5 });
-  }
-}
-/** Remove NPCs e portais (troca de zona), liberando modelos, materiais e rótulos. */
-function clearNpcs() {
-  for (const n of G.npcs) { world.remove(n.model.root); disposeModel(n.model); n.label.remove(); }
-  G.npcs.length = 0;
-  removePortal(G.exitPortal);
-  removePortal(G.townPortal);
-  G.exitPortal = G.townPortal = null;
-}
-return { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals };
-})();
-
-// ---- ui/minimap.js ----
-const { drawMinimap, paintMinimapTile, resetMinimap } = (() => {
-// ---------- minimapa ----------
-
-const MM = 10;
-let mmBase = document.createElement('canvas');
-function resetMinimap(L) {
-  mmBase.width = L.W * MM; mmBase.height = L.H * MM;
-  const c = mmBase.getContext('2d');
-  c.clearRect(0, 0, mmBase.width, mmBase.height);
-}
-function paintMinimapTile(L, x, z) {
-  const c = mmBase.getContext('2d');
-  const v = L.grid[z * L.W + x];
-  if (v === 1) c.fillStyle = L.biome === 'town' ? '#7d8a62' : '#6a6478';
-  else if (v === 2) c.fillStyle = '#48425a';
-  else {
-    let near = false;
-    for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1; dx++) if (L.grid[(z + dz) * L.W + x + dx]) { near = true; break; }
-    if (!near) return;
-    c.fillStyle = '#b8924a';
-    c.fillRect(x * MM + 2, z * MM + 2, MM - 4, MM - 4);
-    return;
-  }
-  c.fillRect(x * MM, z * MM, MM, MM);
-}
-function drawMinimap() {
-  const cv = $('#minimap'), c = cv.getContext('2d');
-  const W = cv.width, p = G.player;
-  c.clearRect(0, 0, W, W);
-  c.save();
-  c.beginPath(); c.arc(W / 2, W / 2, W / 2 - 2, 0, Math.PI * 2); c.clip();
-  c.fillStyle = 'rgba(8,6,12,.55)'; c.fillRect(0, 0, W, W);
-  // gira 45° para casar com a câmera isométrica
-  c.translate(W / 2, W / 2);
-  c.rotate(Math.PI / 4);
-  c.translate(-(p.x / TILE) * MM - MM / 2, -(p.z / TILE) * MM - MM / 2);
-  c.globalAlpha = 0.9;
-  c.drawImage(mmBase, 0, 0);
-  c.globalAlpha = 1;
-  const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc((x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2, r, 0, Math.PI * 2); c.fill(); };
-  const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
-  G.loot.forEach((l) => { if (l.ord >= 2) dot(l.x, l.z, 4, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
-  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.elite ? '#6aa0ff' : '#e0453a'); });
-  G.npcs.forEach((n) => dot(n.x, n.z, 6, '#f2cf7a'));
-  [G.exitPortal, G.townPortal].forEach((pt) => { if (pt) dot(pt.x, pt.z, 8, '#b9a4ff'); });
-  G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
-  if (G.L.boss && G.zone === 'dungeon' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
-  c.restore();
-  // jogador no centro
-  c.fillStyle = '#fff';
-  c.beginPath(); c.arc(W / 2, W / 2, 6, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = 'rgba(184,146,74,.9)'; c.lineWidth = 3;
-  c.beginPath(); c.arc(W / 2, W / 2, W / 2 - 2, 0, Math.PI * 2); c.stroke();
-}
-return { drawMinimap, paintMinimapTile, resetMinimap };
 })();
 
 // ---- art/cutaway.js ----
@@ -5166,49 +5121,6 @@ const CUT_GLSL = `uniform vec3 uCutP; uniform vec3 uCutC; uniform float uCutR;
     return t > 0.04 && t < 1.0 && w.y > 0.55 && length( w - ( uCutP + s * t ) ) < uCutR - 0.6;
   }`;
 return { CUT, CUT_GLSL, clearCutaway, cutaway, injectCutaway, setCutaway };
-})();
-
-// ---- world/biomeTextures.js ----
-const { biomeTex } = (() => {
-// ---------- texturas procedurais de cada bioma (chão A/B e paredes) ----------
-/** Texturas de cada bioma (geradas na primeira visita e guardadas). Paletas "pintadas": saturadas, formas grandes. */
-
-function biomeTex(id) {
-  switch (id) {
-    case 'town': return {
-      a: texStones('cobble_town3', { stone: 0x8e7e6c, stone2: 0x786a5e, mortar: 0x4a3e32, n: 24, mossAmt: 0.25, moss: 0x5a7a2a }),
-      b: texGround('grass_town3', { a: 0x46682a, b: 0x5a7a2e, c: 0x9a9280, blades: true, bladeCol: 0x8ab842 }),
-      wall: texPlanks('palisade3', { wood: 0x8a5a34, wood2: 0x6a4426, n: 5 }), wallCol: 0xffffff, capCol: 0.7,
-    };
-    case 'forest': return {
-      a: texGround('grass_forest3', { a: 0x3a6428, b: 0x4e7430, c: 0x8a8672, blades: true, bladeCol: 0x86c048 }),
-      b: texGround('mud_forest3', { a: 0x6a4a2e, b: 0x5a3e28, c: 0x9a9080 }),
-      wall: texRock('cliff_forest3', { a: 0x5a5a4a, b: 0x74805a, n: 18 }), wallCol: 0xffffff, capCol: 0x4e7a2c,
-    };
-    case 'caves': return {
-      a: texRock('floor_caves3', { a: 0x40465e, b: 0x505a78, n: 12, soft: true }),
-      b: texGround('gravel_caves3', { a: 0x363c5c, b: 0x444a6c, c: 0x8a90b8 }),
-      wall: texRock('wall_caves3', { a: 0x343a58, b: 0x4a5278, n: 16 }), wallCol: 0xffffff, capCol: 0x6a74a0,
-    };
-    case 'ruins': return {
-      a: texStones('flag_ruins3', { stone: 0x9e9276, stone2: 0x847a64, mortar: 0x4a3e30, slabs: true, rows: 4, mossAmt: 0.3, moss: 0x5e7a2c }),
-      b: texGround('dirt_ruins3', { a: 0x7a6446, b: 0x5e6a34, c: 0xa89a80, blades: true, bladeCol: 0x8aa844 }),
-      wall: texBricks('wall_ruins3', { brick: 0xaa9a7a, brick2: 0x8c7c64, mortar: 0x3a3024, rows: 5, cols: 3, mossAmt: 0.25 }), wallCol: 0xffffff, capCol: 0x8c8e70,
-    };
-    case 'castle': return {
-      a: texStones('flag_castle3', { stone: 0x685256, stone2: 0x58464a, mortar: 0x221418, slabs: true, rows: 4 }),
-      b: texStones('cobble_castle3', { stone: 0x5e4a4e, stone2: 0x4e3c40, mortar: 0x1e1014, n: 26 }),
-      wall: texBricks('wall_castle3', { brick: 0x6a5256, brick2: 0x564246, mortar: 0x1a0e12, rows: 5, cols: 3 }), wallCol: 0xffffff, capCol: 0x8a3a3a,
-    };
-    case 'abyss': return {
-      a: texRock('floor_abyss3', { a: 0x2c2428, b: 0x3a3034, n: 12, soft: true }),
-      b: texGround('ash_abyss3', { a: 0x3a302c, b: 0x4a3a34, c: 0x7a6a60 }),
-      wall: texRock('wall_abyss3', { a: 0x2a1614, b: 0x46241e, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x3a2420, wallGlow: 0xff6a18,
-    };
-  }
-  return biomeTex('ruins');
-}
-return { biomeTex };
 })();
 
 // ---- world/kit.js ----
@@ -5664,6 +5576,58 @@ function kit(name) {
     case 'grassEdge': // capim alto no pé da parede
       for (let i = 0; i < 9; i++) { const t = (i - 4) * 0.22, h = 0.35 + ((i * 7) % 4) * 0.1; P.push(KP(GEO.blade3, i % 2 ? 0x4e8a34 : 0x6aa840, t, h / 2, ((i * 3) % 3) * 0.08, 0.12, h, 0.05, 0.15 * (i % 3 - 1), i, 0.2 * (i % 2 ? 1 : -1))); }
       break;
+    // ---------- Torre Infinita ----------
+    case 'towerBig': { // torre da cidade: três andares que afinam, janelas e runas em espiral; porta em +z
+      const TS = 0x8e909e, TD = 0x5e6070, TB = 0x3e4050, RUNE = 0x6ad8ff;
+      const oct = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+      P.push(KP(oct, TD, 0, 0.3, 0, 7.0, 0.6, 7.0));
+      P.push(KP(oct, TS, 0, 0.75, 0, 6.2, 0.3, 6.2));
+      const tiers = [[2.5, 0.9, 5.2], [2.1, 6.4, 4.2], [1.75, 10.9, 3.2]]; // raio, base, altura
+      tiers.forEach(([r, y0, h], t) => {
+        P.push(KP(GEO.cyl, t % 2 ? 0x8a8c9a : TS, 0, y0 + h / 2, 0, r * 2, h, r * 2));
+        P.push(KP(oct, TB, 0, y0 + h + 0.15, 0, r * 2 + 0.6, 0.35, r * 2 + 0.6));
+        // janelas estreitas (brilham) com moldura, 6 por andar, desencontradas
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + t * 0.5, x = Math.sin(a) * (r + 0.02), z = Math.cos(a) * (r + 0.02);
+          if (t === 0 && Math.abs(a % (Math.PI * 2)) < 0.4) continue; // lugar da porta
+          P.push(KP(GEO.box, TB, x, y0 + h * 0.55, z, 0.62, 1.5, 0.12, 0, a, 0));
+          Gl.push(KP(GEO.box, RUNE, Math.sin(a) * (r + 0.07), y0 + h * 0.55, Math.cos(a) * (r + 0.07), 0.36, 1.2, 0.04, 0, a, 0));
+        }
+      });
+      // contrafortes no térreo
+      for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + (i * Math.PI) / 2; P.push(KP(GEO.box, TD, Math.sin(a) * 2.55, 2.4, Math.cos(a) * 2.55, 0.7, 4.6, 1.0, 0, a, 0)); P.push(KP(GEO.cone4, TD, Math.sin(a) * 2.55, 5.1, Math.cos(a) * 2.55, 0.9, 0.9, 1.2, 0, a + Math.PI / 4, 0)); }
+      // runas em espiral subindo pelos três andares
+      for (let i = 0; i < 44; i++) {
+        const k = i / 44, y = 1.4 + k * 12.4, a = k * Math.PI * 6;
+        const r = y < 6.4 ? 2.5 : y < 10.9 ? 2.1 : 1.75;
+        Gl.push(KP(GEO.box, i % 3 ? RUNE : 0xb89aff, Math.sin(a) * (r + 0.05), y, Math.cos(a) * (r + 0.05), 0.22, 0.22, 0.04, 0, a, Math.PI / 4));
+      }
+      // ameias no topo
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; P.push(KP(GEO.box, TS, Math.sin(a) * 1.9, 14.65, Math.cos(a) * 1.9, 0.7, 0.8, 0.5, 0, a, 0)); }
+      // porta em arco (+z), com moldura de runas
+      P.push(KP(GEO.box, 0x14161e, 0, 2.1, 2.44, 1.7, 2.6, 0.2));
+      P.push(KP(GEO.box, TB, -1.05, 2.0, 2.52, 0.4, 3.0, 0.3));
+      P.push(KP(GEO.box, TB, 1.05, 2.0, 2.52, 0.4, 3.0, 0.3));
+      P.push(KP(GEO.box, TB, 0, 3.65, 2.52, 2.5, 0.5, 0.3));
+      Gl.push(KP(GEO.box, RUNE, 0, 2.0, 2.56, 1.3, 2.2, 0.02));
+      Gl.push(KP(GEO.oct, 0xb89aff, 0, 3.65, 2.72, 0.4, 0.4, 0.2));
+      break;
+    }
+    case 'obelisk': // obelisco rúnico (adereço alto da torre)
+      P.push(KP(GEO.box, DSTONE, 0, 0.25, 0, 1.3, 0.5, 1.3));
+      P.push(KP(GEO.taper, 0x6a6c7a, 0, 1.9, 0, 0.9, 2.8, 0.9, 0, Math.PI / 8, 0));
+      P.push(KP(GEO.cone4, 0x6a6c7a, 0, 3.6, 0, 0.72, 0.7, 0.72, 0, Math.PI / 4, 0));
+      for (let i = 0; i < 4; i++) { const a = (i * Math.PI) / 2; Gl.push(KP(GEO.box, 0x6ad8ff, Math.sin(a) * 0.4, 1.4 + (i % 2) * 0.7, Math.cos(a) * 0.4, 0.16, 0.6, 0.03, 0, a, 0)); }
+      Gl.push(KP(GEO.oct, 0xb89aff, 0, 4.3, 0, 0.35, 0.5, 0.35));
+      break;
+    case 'bookshelf': // estante de livros (biblioteca arcana)
+      P.push(KP(GEO.box, DWOOD, 0, 1.4, 0, 1.6, 2.8, 0.6));
+      for (let s = 0; s < 4; s++) {
+        P.push(KP(GEO.box, WOOD, 0, 0.3 + s * 0.68, 0.05, 1.5, 0.06, 0.55));
+        for (let b = 0; b < 6; b++) P.push(KP(GEO.box, [0x6a1a2a, 0x2a3a6a, 0x3a5a2a, 0x7a5a2a, 0x4a2a5a][(b + s * 2) % 5], -0.6 + b * 0.24, 0.55 + s * 0.68, 0.08, 0.18, 0.4 + ((b * 7 + s) % 3) * 0.06, 0.42));
+      }
+      Gl.push(KP(GEO.oct, 0xc89aff, 0.5, 2.95, 0.1, 0.18, 0.26, 0.18));
+      break;
     default:
       P.push(KP(GEO.box, 0xff00ff, 0, 0.5, 0, 1));
   }
@@ -5714,6 +5678,298 @@ function roofMat() {
   return _roofMat;
 }
 return { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime };
+})();
+
+// ---- game/npcs.js ----
+const { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals } = (() => {
+// ---------- NPCs e cidade ----------
+
+function spawnNpcs(L) {
+  L.npcs.forEach((n) => {
+    const D = NPCS[n.id];
+    const model = buildHumanoid(Object.assign({ scale: 1.05 }, D.look));
+    const x = n.x * TILE, z = n.z * TILE;
+    model.root.position.set(x, gy(x, z), z);
+    const cx = L.town ? L.town.cx * TILE : 23 * TILE, cz = L.town ? L.town.cz * TILE : 23 * TILE;
+    model.root.rotation.y = Math.atan2(cx - x, cz - z);
+    world.add(model.root);
+    const label = document.createElement('div');
+    label.className = 'label npc';
+    label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + '</small>';
+    label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
+    overlay.appendChild(label);
+    const npc = { id: n.id, D, x, z, model, label, phase: rand() * 6 };
+    G.npcs.push(npc);
+  });
+  if (L.tower) G.townTower = makeTownTower(L.tower.x * TILE, L.tower.z * TILE, L.town ? L.town.cx * TILE : 23 * TILE, L.town ? L.town.cz * TILE : 23 * TILE);
+  // portal da cidade
+  const pp = L.portal;
+  if (pp) G.townPortal = makePortal(pp.x * TILE, pp.z * TILE, 0x9a7aff, 'Portal das Masmorras', () => openNpc('portal'));
+}
+// geometrias do portal: criadas uma vez e compartilhadas por todos os portais
+let portalGeo = null;
+function getPortalGeo() {
+  if (!portalGeo) {
+    portalGeo = { ring: new THREE.TorusGeometry(1.5, 0.18, 8, 32), disc: new THREE.CircleGeometry(1.4, 32) };
+    portalGeo.ring.userData.shared = portalGeo.disc.userData.shared = true;
+  }
+  return portalGeo;
+}
+function makePortal(x, z, color, text, onUse) {
+  const PG = getPortalGeo();
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(PG.ring, glowMat(color, 0.9));
+  ring.position.y = 1.8;
+  g.add(ring);
+  const disc = new THREE.Mesh(PG.disc, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  disc.position.y = 1.8;
+  g.add(disc);
+  const floorRing = new THREE.Mesh(GEO.ring, glowMat(color, 0.6));
+  floorRing.scale.setScalar(1.8); floorRing.position.y = 0.06;
+  g.add(floorRing);
+  g.position.set(x, gy(x, z), z);
+  g.rotation.y = Math.PI / 4;
+  world.add(g);
+  const label = document.createElement('div');
+  label.className = 'label portal';
+  label.textContent = text;
+  const portal = { x, z, g, ring, disc, label, color, onUse };
+  label.addEventListener('pointerdown', (e) => { e.stopPropagation(); G.player.target = { type: 'portal', p: portal }; pathTo(x, z); });
+  overlay.appendChild(label);
+  return portal;
+}
+function removePortal(pt) {
+  if (!pt) return;
+  world.remove(pt.g);
+  disposeObject(pt.g, true);
+  pt.label.remove();
+}
+/**
+ * Torre Infinita na cidade: corpo de pedra com janelas e runas (kit), porta
+ * voltada para a praça e, acima das ameias, anéis de pedra flutuando e subindo
+ * sem fim até sumir, com um cristal girando. Fica translúcida quando o herói
+ * passa atrás dela (ela está na frente da câmera).
+ */
+const TOWER_SCALE = 0.62;
+function makeTownTower(x, z, cx, cz) {
+  const g = new THREE.Group();
+  const k = kit('towerBig');
+  const gr = texGrime();
+  const mat = toonMaterial({ vertexColors: true, map: gr.map, normalMap: gr.normalMap, transparent: true }, { rim: 0.22 });
+  mat.normalScale.setScalar(0.6);
+  const body = new THREE.Mesh(k.geo, mat);
+  body.castShadow = true; body.receiveShadow = true;
+  g.add(body);
+  const glowM = kitGlowMat().clone();
+  glowM.onBeforeCompile = kitGlowMat().onBeforeCompile;
+  glowM.customProgramCacheKey = kitGlowMat().customProgramCacheKey;
+  const glow = new THREE.Mesh(k.glow, glowM);
+  glow.renderOrder = 3;
+  g.add(glow);
+  // anéis flutuantes: pedaços da torre "que continua" acima das ameias
+  const rings = [];
+  const ringGeo = new THREE.TorusGeometry(1.6, 0.28, 6, 10, Math.PI * 1.55);
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.MeshToonMaterial({ color: 0x8e909e, transparent: true });
+    const r = new THREE.Mesh(ringGeo, m);
+    r.rotation.x = Math.PI / 2;
+    r.userData.k = i / 4;
+    g.add(r); rings.push(r);
+  }
+  const crystal = new THREE.Mesh(GEO.oct, glowMat(0x6ad8ff, 0.9));
+  crystal.scale.set(0.9, 1.5, 0.9);
+  g.add(crystal);
+  g.position.set(x, gy(x, z), z);
+  g.scale.setScalar(TOWER_SCALE); // modelada em escala grande; reduzida para não tapar a câmera
+  g.rotation.y = Math.atan2(cx - x, cz - z); // porta (+z) voltada para a praça
+  world.add(g);
+  return { x, z, g, mat, glowM, rings, ringGeo, crystal, fade: 1 };
+}
+/** Anéis sobem, encolhem e somem; a torre fica translúcida com o herói atrás dela. */
+function updateTownTower(T, dt) {
+  const t = G.time;
+  for (const r of T.rings) {
+    const k = (r.userData.k + t * 0.06) % 1;
+    r.position.y = 15.8 + k * 9;
+    r.scale.setScalar(1 - k * 0.45);
+    r.rotation.z = t * 0.4 + r.userData.k * 5;
+    r.material.opacity = Math.min(1, (1 - k) * 1.6) * T.fade;
+  }
+  T.crystal.position.y = 16.4 + Math.sin(t * 1.4) * 0.35;
+  T.crystal.rotation.y = t * 1.2;
+  if (Math.random() < 0.4) emit(T.x + (rand() - 0.5) * 1.6, 15 * TOWER_SCALE, T.z + (rand() - 0.5) * 2.4, { n: 1, color: 0x6ad8ff, speed: 0.3, up: 4, life: 2.2, size: 0.6, grav: -1.2, alpha: 0.8 });
+  // atrás da torre = mais longe da câmera (que olha do sudeste) e perto da linha de visão
+  const p = G.player;
+  let target = 1;
+  if (p && G.mode === 'play') {
+    const dx = T.x - p.x, dz = T.z - p.z, along = (dx + dz) * Math.SQRT1_2, side = Math.abs(dx - dz) * Math.SQRT1_2;
+    if (along > -1 && along < 14 && side < 3.5) target = 0.3;
+  }
+  T.fade += (target - T.fade) * Math.min(1, dt * 6);
+  T.mat.opacity = T.fade;
+  T.mat.depthWrite = T.fade > 0.95;
+  T.glowM.opacity = 0.95 * T.fade;
+}
+function removeTownTower(T) {
+  if (!T) return;
+  world.remove(T.g);
+  T.mat.dispose(); T.glowM.dispose(); T.ringGeo.dispose(); T.crystal.material.dispose();
+  for (const r of T.rings) r.material.dispose();
+}
+function targetNpc(npc) {
+  G.player.target = { type: 'npc', n: npc };
+  pathTo(npc.x, npc.z);
+}
+
+/** NPCs ociosos: só animam quando estão na tela. */
+function updateNpcs(dt) {
+  for (const n of G.npcs) {
+    const vis = inView(n.x, n.model.root.position.y + 1.5, n.z, 3);
+    n.model.root.visible = vis;
+    if (vis) animateModel(n.model, { t: G.time + n.phase, dt, moving: false, attack: 0 });
+  }
+}
+function updatePortals(dt) {
+  if (G.townTower) updateTownTower(G.townTower, dt);
+  for (const pt of [G.exitPortal, G.townPortal]) {
+    if (!pt) continue;
+    pt.ring.rotation.z += dt * 1.5;
+    pt.disc.material.opacity = 0.3 + Math.sin(G.time * 4) * 0.1;
+    if (Math.random() < 0.5) emit(pt.x + (rand() - 0.5) * 2, 0.3, pt.z + (rand() - 0.5) * 2, { n: 1, color: pt.color, speed: 0.5, up: 3, life: 1, size: 0.8, grav: 1.5 });
+  }
+}
+/** Remove NPCs e portais (troca de zona), liberando modelos, materiais e rótulos. */
+function clearNpcs() {
+  for (const n of G.npcs) { world.remove(n.model.root); disposeModel(n.model); n.label.remove(); }
+  G.npcs.length = 0;
+  removePortal(G.exitPortal);
+  removePortal(G.townPortal);
+  removeTownTower(G.townTower);
+  G.exitPortal = G.townPortal = G.townTower = null;
+}
+return { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals };
+})();
+
+// ---- ui/minimap.js ----
+const { drawMinimap, paintMinimapTile, resetMinimap } = (() => {
+// ---------- minimapa ----------
+
+const MM = 10;
+let mmBase = document.createElement('canvas');
+function resetMinimap(L) {
+  mmBase.width = L.W * MM; mmBase.height = L.H * MM;
+  const c = mmBase.getContext('2d');
+  c.clearRect(0, 0, mmBase.width, mmBase.height);
+}
+function paintMinimapTile(L, x, z) {
+  const c = mmBase.getContext('2d');
+  const v = L.grid[z * L.W + x];
+  if (v === 1) c.fillStyle = L.biome === 'town' ? '#7d8a62' : '#6a6478';
+  else if (v === 2) c.fillStyle = '#48425a';
+  else {
+    let near = false;
+    for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1; dx++) if (L.grid[(z + dz) * L.W + x + dx]) { near = true; break; }
+    if (!near) return;
+    c.fillStyle = '#b8924a';
+    c.fillRect(x * MM + 2, z * MM + 2, MM - 4, MM - 4);
+    return;
+  }
+  c.fillRect(x * MM, z * MM, MM, MM);
+}
+function drawMinimap() {
+  const cv = $('#minimap'), c = cv.getContext('2d');
+  const W = cv.width, p = G.player;
+  c.clearRect(0, 0, W, W);
+  c.save();
+  c.beginPath(); c.arc(W / 2, W / 2, W / 2 - 2, 0, Math.PI * 2); c.clip();
+  c.fillStyle = 'rgba(8,6,12,.55)'; c.fillRect(0, 0, W, W);
+  // gira 45° para casar com a câmera isométrica
+  c.translate(W / 2, W / 2);
+  c.rotate(Math.PI / 4);
+  c.translate(-(p.x / TILE) * MM - MM / 2, -(p.z / TILE) * MM - MM / 2);
+  c.globalAlpha = 0.9;
+  c.drawImage(mmBase, 0, 0);
+  c.globalAlpha = 1;
+  const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc((x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2, r, 0, Math.PI * 2); c.fill(); };
+  const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
+  G.loot.forEach((l) => { if (l.ord >= 2) dot(l.x, l.z, 4, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
+  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.elite ? '#6aa0ff' : '#e0453a'); });
+  G.npcs.forEach((n) => dot(n.x, n.z, 6, '#f2cf7a'));
+  [G.exitPortal, G.townPortal].forEach((pt) => { if (pt) dot(pt.x, pt.z, 8, '#b9a4ff'); });
+  G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
+  if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
+  c.restore();
+  // jogador no centro
+  c.fillStyle = '#fff';
+  c.beginPath(); c.arc(W / 2, W / 2, 6, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = 'rgba(184,146,74,.9)'; c.lineWidth = 3;
+  c.beginPath(); c.arc(W / 2, W / 2, W / 2 - 2, 0, Math.PI * 2); c.stroke();
+}
+return { drawMinimap, paintMinimapTile, resetMinimap };
+})();
+
+// ---- world/biomeTextures.js ----
+const { biomeTex } = (() => {
+// ---------- texturas procedurais de cada bioma (chão A/B e paredes) ----------
+/** Texturas de cada bioma (geradas na primeira visita e guardadas). Paletas "pintadas": saturadas, formas grandes. */
+
+function biomeTex(id) {
+  switch (id) {
+    case 'town': return {
+      a: texStones('cobble_town3', { stone: 0x8e7e6c, stone2: 0x786a5e, mortar: 0x4a3e32, n: 24, mossAmt: 0.25, moss: 0x5a7a2a }),
+      b: texGround('grass_town3', { a: 0x46682a, b: 0x5a7a2e, c: 0x9a9280, blades: true, bladeCol: 0x8ab842 }),
+      wall: texPlanks('palisade3', { wood: 0x8a5a34, wood2: 0x6a4426, n: 5 }), wallCol: 0xffffff, capCol: 0.7,
+    };
+    case 'forest': return {
+      a: texGround('grass_forest3', { a: 0x3a6428, b: 0x4e7430, c: 0x8a8672, blades: true, bladeCol: 0x86c048 }),
+      b: texGround('mud_forest3', { a: 0x6a4a2e, b: 0x5a3e28, c: 0x9a9080 }),
+      wall: texRock('cliff_forest3', { a: 0x5a5a4a, b: 0x74805a, n: 18 }), wallCol: 0xffffff, capCol: 0x4e7a2c,
+    };
+    case 'caves': return {
+      a: texRock('floor_caves3', { a: 0x40465e, b: 0x505a78, n: 12, soft: true }),
+      b: texGround('gravel_caves3', { a: 0x363c5c, b: 0x444a6c, c: 0x8a90b8 }),
+      wall: texRock('wall_caves3', { a: 0x343a58, b: 0x4a5278, n: 16 }), wallCol: 0xffffff, capCol: 0x6a74a0,
+    };
+    case 'ruins': return {
+      a: texStones('flag_ruins3', { stone: 0x9e9276, stone2: 0x847a64, mortar: 0x4a3e30, slabs: true, rows: 4, mossAmt: 0.3, moss: 0x5e7a2c }),
+      b: texGround('dirt_ruins3', { a: 0x7a6446, b: 0x5e6a34, c: 0xa89a80, blades: true, bladeCol: 0x8aa844 }),
+      wall: texBricks('wall_ruins3', { brick: 0xaa9a7a, brick2: 0x8c7c64, mortar: 0x3a3024, rows: 5, cols: 3, mossAmt: 0.25 }), wallCol: 0xffffff, capCol: 0x8c8e70,
+    };
+    case 'castle': return {
+      a: texStones('flag_castle3', { stone: 0x685256, stone2: 0x58464a, mortar: 0x221418, slabs: true, rows: 4 }),
+      b: texStones('cobble_castle3', { stone: 0x5e4a4e, stone2: 0x4e3c40, mortar: 0x1e1014, n: 26 }),
+      wall: texBricks('wall_castle3', { brick: 0x6a5256, brick2: 0x564246, mortar: 0x1a0e12, rows: 5, cols: 3 }), wallCol: 0xffffff, capCol: 0x8a3a3a,
+    };
+    case 'abyss': return {
+      a: texRock('floor_abyss3', { a: 0x2c2428, b: 0x3a3034, n: 12, soft: true }),
+      b: texGround('ash_abyss3', { a: 0x3a302c, b: 0x4a3a34, c: 0x7a6a60 }),
+      wall: texRock('wall_abyss3', { a: 0x2a1614, b: 0x46241e, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x3a2420, wallGlow: 0xff6a18,
+    };
+    // ---------- Torre Infinita ----------
+    case 'tw_granite': return {
+      a: texStones('flag_twgranite', { stone: 0x7e828e, stone2: 0x6a6e7a, mortar: 0x262a34, slabs: true, rows: 3 }),
+      b: texStones('cobble_twgranite', { stone: 0x6e727e, stone2: 0x5e626e, mortar: 0x1e222a, n: 30 }),
+      wall: texBricks('wall_twgranite', { brick: 0x7a7e8c, brick2: 0x686c7a, mortar: 0x1c1e26, rows: 6, cols: 2 }), wallCol: 0xffffff, capCol: 0x9aa0b4,
+    };
+    case 'tw_arcane': return {
+      a: texPlanks('floor_twarcane', { wood: 0x5a3a4a, wood2: 0x4a2e3e, n: 6 }),
+      b: texStones('flag_twarcane', { stone: 0x5e4e7a, stone2: 0x4e4068, mortar: 0x1a1428, slabs: true, rows: 4 }),
+      wall: texBricks('wall_twarcane', { brick: 0x5a4a78, brick2: 0x4a3c66, mortar: 0x140e22, rows: 5, cols: 3 }), wallCol: 0xffffff, capCol: 0x8a6ac0,
+    };
+    case 'tw_storm': return {
+      a: texStones('flag_twstorm', { stone: 0x6a7e82, stone2: 0x5a6e72, mortar: 0x1a2426, slabs: true, rows: 4, mossAmt: 0.3, moss: 0x3a6a5a }),
+      b: texGround('moss_twstorm', { a: 0x2e5a4e, b: 0x3a6a5a, c: 0x7a9a96, blades: true, bladeCol: 0x6ab8a0 }),
+      wall: texRock('wall_twstorm', { a: 0x4a5a60, b: 0x5e7278, n: 14 }), wallCol: 0xffffff, capCol: 0x6a9a98,
+    };
+    case 'tw_void': return {
+      a: texRock('floor_twvoid', { a: 0x2a1e2e, b: 0x3a2a3e, n: 12, soft: true }),
+      b: texStones('flag_twvoid', { stone: 0x3a2a40, stone2: 0x2e2034, mortar: 0x0e0610, slabs: true, rows: 3 }),
+      wall: texRock('wall_twvoid', { a: 0x2a1430, b: 0x46204a, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x4a2450, wallGlow: 0xff3ad0,
+    };
+  }
+  return biomeTex('ruins');
+}
+return { biomeTex };
 })();
 
 // ---- world/level.js ----
@@ -5903,7 +6159,10 @@ function buildWalls(L, T, opt) {
 function placeDecals(list, kind, size, opt) {
   if (!list.length) return;
   const t = texDecal(kind);
-  const mat = new THREE.MeshToonMaterial({ map: t.map, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, side: opt && opt.vertical ? THREE.DoubleSide : THREE.FrontSide });
+  // glow: decalque que brilha (runas da torre), aditivo e sem tone mapping
+  const mat = opt && opt.glow
+    ? new THREE.MeshBasicMaterial({ map: t.map, color: opt.glow, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1 })
+    : new THREE.MeshToonMaterial({ map: t.map, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, side: opt && opt.vertical ? THREE.DoubleSide : THREE.FrontSide });
   const geo = GEO.plane;
   const m = new THREE.InstancedMesh(geo, mat, list.length);
   list.forEach((p, i) => {
@@ -6023,6 +6282,10 @@ function buildLevel(L) {
     ruins: { h: 3.4, var: 0.8, lip: 0.18 },
     castle: { h: 4.0, var: 0.2, lip: 0.2 },
     abyss: { h: 3.6, var: 1.0, rough: 1.1, lip: 0.14 },
+    tw_granite: { h: 4.2, var: 0.15, lip: 0.2 },
+    tw_arcane: { h: 4.2, var: 0.1, lip: 0.2 },
+    tw_storm: { h: 3.8, var: 0.35, lip: 0.18 },
+    tw_void: { h: 4.0, var: 0.6, rough: 0.6, lip: 0.16 },
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
@@ -6043,12 +6306,12 @@ function buildLevel(L) {
   placeKit('sconce', sconces, (p) => ({ x: p.x, y: p.y, z: p.z, ry: p.ry }), { noShadow: true });
   // ameias no castelo, estacas na paliçada da cidade
   const tall = walls.filter((w) => !w.low);
-  if (L.biome === 'castle') placeKit('crenel', tall.filter((w) => (w.x + w.z) % 2 === 0), (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE }));
+  if (L.biome === 'castle' || L.tower) placeKit('crenel', tall.filter((w) => (w.x + w.z) % 2 === 0), (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE }));
   if (town) placeKit('stake', tall, (w) => ({ x: w.x * TILE, y: w.h, z: w.z * TILE, s: 1.4, ry: rnd() * 3 }));
   buildProps(L, B, rnd);
   scatterClutter(L, walls);
   buildFlames();
-  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08] }[L.biome];
+  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
 }
@@ -6057,6 +6320,7 @@ function buildLevel(L) {
 const SHAFTS = {
   town: [0x9ab4ff, 4, 0.06], forest: [0xe0f8a8, 10, 0.13], caves: [0x7ab8ff, 6, 0.11],
   ruins: [0xffe2b0, 8, 0.12], castle: [0xff9a8a, 5, 0.09], abyss: [0xff7a3a, 4, 0.07],
+  tw_granite: [0xd8e4ff, 7, 0.11], tw_arcane: [0xd0a8ff, 6, 0.12], tw_storm: [0xbff4ff, 9, 0.13], tw_void: [0xff8ad8, 5, 0.09],
 };
 let shafts = null;
 function buildShafts(L, rnd) {
@@ -6152,6 +6416,8 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
+    // luz fria na porta da Torre Infinita (a porta olha para a praça)
+    if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }
     return;
   }
   const deco = B.decor;
@@ -6170,6 +6436,11 @@ function buildProps(L, B, rnd) {
   else if (deco === 'ruins') { placeDecals(splat.slice(0, half), 'moss', 2.4); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'castle') { placeDecals(splat.slice(0, half), 'blood', 1.8); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'lava') { placeDecals(splat.slice(0, half), 'ash', 2.8); placeDecals(splat.slice(half), 'blood', 1.8); }
+  else if (deco === 'tower') { placeDecals(splat, L.biome === 'tw_void' ? 'ash' : 'crack', 2.4); }
+  if (L.runes) {
+    placeDecals(L.runes.map((r) => ({ x: r.x * T, z: r.z * T, r: r.s, s: r.s })), 'rune', 1, { glow: TOWER_RUNE[L.biome] });
+    for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
+  }
   if (deco === 'forest') {
     placeKit('pine', by(tall, (p) => p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
     placeKit('deadTree', by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
@@ -6203,6 +6474,8 @@ function buildProps(L, B, rnd) {
     placeKit('candles', cd, (p) => ({ ...pos(p, 0.6), s: 0.9 }));
     cd.forEach((p) => { const q = pos(p, 0.6); addFire(q.x, 0.55, q.z, 0.5, 0xffc060); });
     placeKit(castle ? 'skulls' : 'bones', by(low, (p) => p.v >= 0.8).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
+  } else if (deco === 'tower') {
+    buildTowerProps(L, tall, low, decal, pos, by, addFire);
   } else if (deco === 'lava') {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
@@ -6214,6 +6487,47 @@ function buildProps(L, B, rnd) {
     placeKit('skulls', by(low, (p) => p.v >= 0.55 && p.v < 0.8), (p) => ({ ...pos(p, 0.8), ry: p.v * 9 }), { noShadow: true });
     placeKit('rock', by(low, (p) => p.v >= 0.8).concat(by(decal, (p) => p.v >= 0.5)), (p) => ({ ...pos(p, 0.8), s: 0.5 + p.v * 0.5, ry: p.v * 9 }));
   }
+}
+
+/** Cor das runas do chão em cada bioma da torre. */
+const TOWER_RUNE = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
+/**
+ * Adereços da Torre Infinita: obeliscos rúnicos e colunas em todos os andares;
+ * cada bioma troca o resto (estátuas e armaduras no granito, estantes e cristais
+ * na biblioteca, pilares partidos e braseiros no terraço, espinhos e cristais no vazio).
+ */
+function buildTowerProps(L, tall, low, decal, pos, by, addFire) {
+  const T = TILE, b = L.biome;
+  const fireCol = { tw_granite: 0xffa040, tw_arcane: 0xb070ff, tw_storm: 0x6ae0ff, tw_void: 0xff40c0 }[b];
+  placeKit('obelisk', by(tall, (p) => p.v < 0.3), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+  by(tall, (p) => p.v < 0.3).forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  const mid = by(tall, (p) => p.v >= 0.3 && p.v < 0.75), top = by(tall, (p) => p.v >= 0.75);
+  if (b === 'tw_granite') {
+    placeKit('pillar', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+    placeKit('statue', by(top, (p) => p.v < 0.88), (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+    placeKit('armor', by(top, (p) => p.v >= 0.88), (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+  } else if (b === 'tw_arcane') {
+    placeKit('bookshelf', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
+    placeKit('crystalBig', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9, s: 0.8 }));
+    top.forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  } else if (b === 'tw_storm') {
+    placeKit('pillarBroken', mid, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+    placeKit('pillar', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+  } else {
+    placeKit('spikes', mid, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
+    placeKit('crystalBig', top, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9, s: 0.9 }));
+    top.forEach((p) => torches.push({ x: p.x * T, y: 2, z: p.z * T, cold: true }));
+  }
+  placeKit('rubble', by(low, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }), { noShadow: true });
+  const br = by(low, (p) => p.v >= 0.3 && p.v < 0.45);
+  placeKit('brazier', br, (p) => ({ ...pos(p, 0.3) }));
+  br.forEach((p) => { const q = pos(p, 0.3); torches.push({ x: q.x, y: 1.6, z: q.z }); addFire(q.x, 1.55, q.z, 2.2, fireCol); });
+  placeKit(b === 'tw_arcane' ? 'crate' : 'barrel', by(low, (p) => p.v >= 0.45 && p.v < 0.55), (p) => ({ ...pos(p, 0.6), ry: p.v * 9 }));
+  placeKit(b === 'tw_storm' ? 'rock' : 'crystal', by(low, (p) => p.v >= 0.55 && p.v < 0.7), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.7 + p.v * 0.5 }));
+  const cd = by(low, (p) => p.v >= 0.7 && p.v < 0.82);
+  placeKit('candles', cd, (p) => ({ ...pos(p, 0.6), s: 0.9 }));
+  cd.forEach((p) => { const q = pos(p, 0.6); addFire(q.x, 0.55, q.z, 0.5, fireCol); });
+  placeKit('skulls', by(low, (p) => p.v >= 0.82).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
 }
 
 /**
@@ -6228,6 +6542,10 @@ const CLUTTER = {
   ruins: { floor: [['tuft', 0.16], ['pebbles', 0.1], ['flowers', 0.02]], edge: [['baseRocks', 0.3], ['grassEdge', 0.25]] },
   castle: { floor: [['pebbles', 0.07]], edge: [['baseRocks', 0.25]] },
   abyss: { floor: [['ember', 0.09], ['pebbles', 0.08]], edge: [['baseRocks', 0.4]] },
+  tw_granite: { floor: [['pebbles', 0.08]], edge: [['baseRocks', 0.25]] },
+  tw_arcane: { floor: [['shard', 0.05], ['pebbles', 0.05]], edge: [['baseRocks', 0.2]] },
+  tw_storm: { floor: [['tuft', 0.12], ['pebbles', 0.1]], edge: [['baseRocks', 0.3], ['grassEdge', 0.2]] },
+  tw_void: { floor: [['ember', 0.06], ['shard', 0.04], ['pebbles', 0.06]], edge: [['baseRocks', 0.35]] },
 };
 function scatterClutter(L, walls) {
   const C = CLUTTER[L.biome];
@@ -6376,11 +6694,13 @@ function runDelayed(dt) {
   }
 }
 
-const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a };
+const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
 /** Partículas de ambiente: vaga-lumes na floresta, brasas no abismo, poeira nas ruínas. */
 function ambient(p) {
-  if (G.zone !== 'dungeon' || Math.random() >= 0.3) return;
-  emit(p.x + (rand() - 0.5) * 30, 0.5 + rand() * 3, p.z + (rand() - 0.5) * 24, { n: 1, color: AMBIENT[G.biome], speed: 0.3, up: 0.3, life: 3, size: 0.5, grav: G.biome === 'abyss' ? 0.8 : 0.05, alpha: 0.7 });
+  if (G.zone === 'town' || Math.random() >= 0.3) return;
+  // na torre as fagulhas sobem (grav negativa), como se a torre puxasse tudo para o alto
+  const up = G.zone === 'tower';
+  emit(p.x + (rand() - 0.5) * 30, 0.5 + rand() * 3, p.z + (rand() - 0.5) * 24, { n: 1, color: AMBIENT[G.biome], speed: 0.3, up: up ? 1.2 : 0.3, life: 3, size: 0.5, grav: up ? -0.35 : G.biome === 'abyss' ? 0.8 : 0.05, alpha: 0.7 });
 }
 
 const EXPLORE_R = 7;
@@ -6498,6 +6818,7 @@ function spawnMonster(kind, x, z, level, opt) {
   opt = opt || {};
   const T = MON[kind];
   const mod = Object.assign({}, T.mod);
+  if (G.zone === 'tower') { const tm = R.towerMod(G.floor); mod.hp = (mod.hp || 1) * tm.hp; mod.dmg = (mod.dmg || 1) * tm.dmg; }
   let affix = null;
   if (opt.elite) {
     const ks = Object.keys(AFFIX);
@@ -6637,7 +6958,7 @@ function updateBoss(m, d, dt, enrage, p) {
       if ((G.player.x - tx) ** 2 + (G.player.z - tz) ** 2 < 3.4 * 3.4) hurtPlayer(m.dmg * 1.8, m);
     } });
   }
-  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone === 'dungeon') {
+  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
     m.summoned = true;
     const B = BIOMES[G.biome];
     for (let k = 0; k < 4; k++) {
@@ -6691,8 +7012,55 @@ return { QUERY_PAD, aggroPack, clearMonsters, queryMonsters, rebuildMonsterGrid,
 })();
 
 // ---- world/levelgen.js ----
-const { genDungeon, genTown } = (() => {
+const { genDungeon, genTower, genTown } = (() => {
 // ---------- geração procedural (dados puros): masmorras por chunks e a cidade ----------
+
+/** Busca em largura a partir de `sc` pelos tiles de chão (1); -1 = inalcançável. */
+function floodFrom(grid, W, H, sc) {
+  const dist = new Int32Array(W * H).fill(-1);
+  const q = [sc.z * W + sc.x];
+  dist[q[0]] = 0;
+  for (let h = 0; h < q.length; h++) {
+    const i = q[h], x = i % W, z = (i - x) / W;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const j = (z + dz) * W + x + dx;
+      if (grid[j] === 1 && dist[j] < 0) { dist[j] = dist[i] + 1; q.push(j); }
+    }
+  }
+  return dist;
+}
+
+/**
+ * Adereços do andar: altos só encostados em paredes do fundo (norte/oeste),
+ * baixos perto de paredes e decalques soltos. Adereços altos que isolariam
+ * algum pedaço do chão são desfeitos. `avoid` = [[centro, raio], ...] livres.
+ */
+function placeProps(grid, W, H, rnd, sc, avoid) {
+  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
+  const props = [];
+  const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
+  const backWall = (x, z) => at(x - 1, z) === 0 || at(x, z - 1) === 0;
+  const nearCenter = (x, z, c, r) => Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    if (grid[z * W + x] !== 1) continue;
+    if (avoid.some(([c, r]) => nearCenter(x, z, c, r))) continue;
+    const r = rnd();
+    if (backWall(x, z) && !(at(x + 1, z) === 0 || at(x, z + 1) === 0) && r < 0.09) {
+      const fr = [at(x + 1, z), at(x, z + 1), at(x - 1, z + 1) || at(x + 1, z - 1)].every((v) => v === 1);
+      if (fr) { props.push({ x, z, kind: 'tall', v: rnd() }); grid[z * W + x] = 2; }
+    } else if (nearWall(x, z) && r < 0.2) props.push({ x, z, kind: 'low', v: rnd() });
+    else if (r < 0.05) props.push({ x, z, kind: 'decal', v: rnd() });
+  }
+  let dist = floodFrom(grid, W, H, sc);
+  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) {
+    const x = i % W, z = (i - x) / W;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[(z + dz) * W + x + dx] === 2) grid[(z + dz) * W + x + dx] = 1;
+  }
+  for (let i = props.length - 1; i >= 0; i--) if (props[i].kind === 'tall' && grid[props[i].z * W + props[i].x] !== 2) props.splice(i, 1);
+  dist = floodFrom(grid, W, H, sc);
+  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) grid[i] = 0;
+  return props;
+}
 
 /**
  * Gera uma masmorra a partir de "chunks" 12×12 ligados por um labirinto.
@@ -6789,28 +7157,9 @@ function genDungeon(biomeId, floor, seed) {
     if (d > far.d) far = { d, cx, cz };
   }
   const bossC = centerOf(far.cx, far.cz);
-  const props = [];
+  const props = placeProps(grid, W, H, rnd, sc, [[sc, 2], [bossC, 3]]);
   const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
-  const backWall = (x, z) => at(x - 1, z) === 0 || at(x, z - 1) === 0;
   const nearCenter = (x, z, c, r) => Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
-  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
-    if (grid[z * W + x] !== 1) continue;
-    if (nearCenter(x, z, sc, 2) || nearCenter(x, z, bossC, 3)) continue;
-    const r = rnd();
-    if (backWall(x, z) && !(at(x + 1, z) === 0 || at(x, z + 1) === 0) && r < 0.09) {
-      const fr = [at(x + 1, z), at(x, z + 1), at(x - 1, z + 1) || at(x + 1, z - 1)].every((v) => v === 1);
-      if (fr) { props.push({ x, z, kind: 'tall', v: rnd() }); grid[z * W + x] = 2; }
-    } else if (nearWall(x, z) && r < 0.2) props.push({ x, z, kind: 'low', v: rnd() });
-    else if (r < 0.05) props.push({ x, z, kind: 'decal', v: rnd() });
-  }
-  dist = flood();
-  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) {
-    const x = i % W, z = (i - x) / W;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[(z + dz) * W + x + dx] === 2) grid[(z + dz) * W + x + dx] = 1;
-  }
-  for (let i = props.length - 1; i >= 0; i--) if (props[i].kind === 'tall' && grid[props[i].z * W + props[i].x] !== 2) props.splice(i, 1);
-  dist = flood();
-  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) grid[i] = 0;
   const spawns = [];
   for (let cz = 0; cz < chN; cz++) for (let cx = 0; cx < cw; cx++) {
     if (cx === start.cx && cz === start.cz) continue;
@@ -6829,6 +7178,84 @@ function genDungeon(biomeId, floor, seed) {
     if (at(x, z) === 1 && nearWall(x, z) && !nearCenter(x, z, sc, 2)) breakables.push({ x, z });
   }
   return { W, H, grid, biome: biomeId, floor, seed, start: sc, boss: bossC, props, spawns, breakables, templates };
+}
+
+/**
+ * Andar da Torre Infinita: planta circular. Um anel externo dividido em setores
+ * por muretas radiais (cada uma com uma passagem), uma muralha grossa em volta
+ * do salão central e o chefe no centro. A entrada fica na frente (+x/+z, perto
+ * da câmera) e a porta do salão fica no fundo, então é preciso contornar o anel.
+ */
+function genTower(biomeId, floor, seed) {
+  const rnd = R.mulberry32(seed);
+  const W = 52, H = 52, c = 26;
+  const RO = 23.5, RI0 = 8.5, RI1 = 11.5; // raio externo, muralha do salão (de RI0 a RI1)
+  const grid = new Uint8Array(W * H);
+  const set = (x, z, v) => { if (x > 0 && z > 0 && x < W - 1 && z < H - 1) grid[z * W + x] = v; };
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return Math.abs(d); };
+  const FRONT = Math.PI / 4, BACK = FRONT + Math.PI; // ângulo (atan2(z, x)) da entrada e do fundo
+  // portas do salão: uma no fundo e, a partir do andar 4, às vezes outra de lado
+  const doors = [BACK + (rnd() - 0.5) * 1.2];
+  if (floor >= 4 && rnd() < 0.5) doors.push(BACK + (rnd() < 0.5 ? 1 : -1) * (1.4 + rnd() * 0.4));
+  // muretas radiais: 5 ou 6 setores, cada mureta com uma passagem em raio sorteado
+  const nSect = 5 + (rnd() < 0.5 ? 1 : 0), off = rnd() * Math.PI * 2;
+  const spokes = [];
+  for (let k = 0; k < nSect; k++) {
+    const a = off + (k / nSect) * Math.PI * 2;
+    if (angDiff(a, FRONT) < 0.35) continue; // não fecha a entrada
+    spokes.push({ a, gap: RI1 + 2 + rnd() * (RO - RI1 - 5) });
+  }
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    const dx = x - c, dz = z - c, d = Math.hypot(dx, dz), a = Math.atan2(dz, dx);
+    if (d >= RO) continue;
+    let v = 1;
+    if (d >= RI0 && d < RI1 && !doors.some((da) => angDiff(a, da) * d < 1.6)) v = 0;
+    if (d >= RI1) for (const sp of spokes) if (angDiff(a, sp.a) * d < 0.9 && Math.abs(d - sp.gap) > 1.6) v = 0;
+    grid[z * W + x] = v;
+  }
+  // pilares soltos no anel (2×2), longe da entrada e das passagens
+  const start = { x: Math.round(c + Math.cos(FRONT) * (RO - 3.5)), z: Math.round(c + Math.sin(FRONT) * (RO - 3.5)) };
+  const nPil = 3 + Math.floor(rnd() * 4);
+  for (let k = 0, tries = 0; k < nPil && tries < 60; tries++) {
+    const a = rnd() * Math.PI * 2, d = RI1 + 3 + rnd() * (RO - RI1 - 6);
+    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
+    if (Math.hypot(x - start.x, z - start.z) < 6 || spokes.some((sp) => angDiff(a, sp.a) * d < 3)) continue;
+    for (let dz = 0; dz < 2; dz++) for (let dx = 0; dx < 2; dx++) set(x + dx, z + dz, 0);
+    k++;
+  }
+  // salão do chefe: quatro colunas em volta do centro
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2;
+    set(Math.round(c + Math.cos(a) * 5), Math.round(c + Math.sin(a) * 5), 0);
+  }
+  const boss = { x: c, z: c };
+  const props = placeProps(grid, W, H, rnd, start, [[start, 2], [boss, 4]]);
+  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
+  const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
+  // bandos no anel (mais e maiores a cada andar), chefe no centro
+  const spawns = [{ x: boss.x, z: boss.z, boss: true, elite: false, size: 1 }];
+  const nPacks = 7 + Math.min(6, Math.floor(floor / 2));
+  for (let k = 0, tries = 0; k < nPacks && tries < 400; tries++) {
+    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
+    const d = Math.hypot(x - c, z - c);
+    if (at(x, z) !== 1 || d < RI1 + 1 || Math.hypot(x - start.x, z - start.z) < 8) continue;
+    if (spawns.some((s) => Math.abs(s.x - x) + Math.abs(s.z - z) < 5)) continue;
+    spawns.push({ x, z, boss: false, elite: rnd() < 0.14 + Math.min(0.16, floor * 0.01), size: 3 + Math.floor(rnd() * (3 + Math.min(5, floor / 3))) });
+    k++;
+  }
+  const breakables = [];
+  for (let k = 0; k < 14; k++) {
+    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
+    if (at(x, z) === 1 && nearWall(x, z) && Math.hypot(x - start.x, z - start.z) > 3 && Math.hypot(x - c, z - c) > 6) breakables.push({ x, z });
+  }
+  // runas no chão: círculo sob o chefe e alguns selos no anel
+  const runes = [{ x: boss.x, z: boss.z, s: 7 }];
+  for (let k = 0; k < 6; k++) {
+    const a = rnd() * Math.PI * 2, d = RI1 + 2 + rnd() * (RO - RI1 - 4);
+    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
+    if (at(x, z) === 1) runes.push({ x, z, s: 2.4 + rnd() * 1.6 });
+  }
+  return { W, H, grid, biome: biomeId, floor, seed, start, boss, props, spawns, breakables, templates: [], tower: true, runes };
 }
 
 /**
@@ -6878,7 +7305,12 @@ function genTown() {
   if (grid[(cz + 4) * W + cx + 12] === 1) { props.push({ x: cx + 12, z: cz + 4, kind: 'cart' }); grid[(cz + 4) * W + cx + 12] = 2; }
   // cemitério (baixo, na frente-esquerda)
   for (let i = 0; i < 7; i++) { const gx = cx - 11 + (i % 4) * 2, gz = cz + 13 + Math.floor(i / 4) * 2; if (grid[gz * W + gx] === 1) props.push({ x: gx, z: gz, kind: 'grave', v: rnd() }); }
+  // Torre Infinita na parte de baixo do mapa (frente, +x/+z), com o Guardião diante dela
+  const tower = { x: cx + 11, z: cz + 11 };
+  block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
+  for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
   const npcs = [
+    { id: 'tower', x: cx + 8, z: cz + 8 },
     { id: 'smith', x: cx - 7, z: cz - 6 },
     { id: 'merchant', x: cx + 6, z: cz - 7 },
     { id: 'portal', x: cx + 1, z: cz - 9 },
@@ -6887,18 +7319,20 @@ function genTown() {
   ];
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, isPath };
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath };
 }
-return { genDungeon, genTown };
+return { genDungeon, genTower, genTown };
 })();
 
 // ---- game/zones.js ----
-const { clearWorld, enterDungeon, enterTown, hasTownServices, inSafe } = (() => {
+const { clearWorld, enterDungeon, enterTower, enterTown, hasTownServices, inSafe, zoneLevel } = (() => {
 // ---------- limpeza / carregamento de zonas ----------
 
 /** A cidade é a única zona segura. */
 function inSafe() { return G.zone === 'town'; }
 function hasTownServices() { return G.zone === 'town'; }
+/** Nível base dos monstros da zona atual (masmorra ou torre). */
+function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : floorLevel(G.biome, G.floor); }
 
 /** Descarta tudo que pertence à zona atual (o pet e o jogador continuam). */
 function clearWorld() {
@@ -6971,10 +7405,50 @@ function enterDungeon(biome, floor) {
   toast(B.name, 'Andar ' + floor);
   persist();
 }
+/**
+ * Torre Infinita: andares sem fim, cada um mais difícil (nível e multiplicadores
+ * de HP/dano sobem por andar). O bioma troca a cada 5 andares. Guarda o andar
+ * mais alto alcançado para o Guardião oferecer "continuar de onde parou".
+ */
+function enterTower(floor) {
+  clearWorld();
+  const biome = towerBiome(floor, R.TOWER.biomeEvery);
+  G.zone = 'tower'; G.biome = biome; G.floor = floor;
+  G.ch.towerBest = Math.max(G.ch.towerBest || 1, floor);
+  Music.play(biome);
+  const seed = R.hash32('tower', biome, floor, G.ch.name, Date.now());
+  G.L = genTower(biome, floor, seed);
+  buildLevel(G.L);
+  resize();
+  placePlayer(G.L);
+  const B = BIOMES[biome], lvl = R.towerLevel(floor);
+  let pack = 1;
+  G.L.spawns.forEach((s) => {
+    const wx = s.x * TILE, wz = s.z * TILE;
+    if (s.boss) {
+      spawnMonster(B.boss, wx, wz, lvl + 6, { pack });
+      for (let i = 0; i < 2 + Math.min(4, Math.floor(floor / 4)); i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
+    } else {
+      const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
+      for (let i = 0; i < s.size; i++) {
+        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+        if (!walkable(G.L, x, z)) { x = wx; z = wz; }
+        const k2 = rand() < 0.7 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
+        spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });
+      }
+    }
+    pack++;
+  });
+  G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
+  setZoneText('Torre Infinita · Andar ' + floor, B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
+  log('Torre Infinita, andar ' + floor + ' (' + B.name + '). Derrote o chefe no salão central para subir.', 'sys');
+  toast('Torre Infinita', 'Andar ' + floor + ' · ' + B.name);
+  persist();
+}
 function spawnBreakable(x, z, biome) {
-  const c = { forest: 0x8a5a2a, caves: 0x6a5a4a, ruins: 0x9a7a5a, castle: 0x7a3a2a, abyss: 0x4a2a2a }[biome];
+  const c = { forest: 0x8a5a2a, caves: 0x6a5a4a, ruins: 0x9a7a5a, castle: 0x7a3a2a, abyss: 0x4a2a2a, tw_granite: 0x7a7068, tw_arcane: 0x6a4a7a, tw_storm: 0x5a6a6a, tw_void: 0x4a2a4a }[biome];
   const g = new THREE.Group();
-  const k = kit(biome === 'ruins' || biome === 'castle' ? 'crate' : 'barrel');
+  const k = kit(biome === 'ruins' || biome === 'castle' || biome === 'tw_granite' || biome === 'tw_arcane' ? 'crate' : 'barrel');
   const body = new THREE.Mesh(k.geo, kitMat());
   body.castShadow = true; body.receiveShadow = true;
   body.rotation.y = Math.random() * 6;
@@ -6983,7 +7457,7 @@ function spawnBreakable(x, z, biome) {
   world.add(g);
   G.breakables.push({ x, z, mesh: g, color: c, broken: false });
 }
-return { clearWorld, enterDungeon, enterTown, hasTownServices, inSafe };
+return { clearWorld, enterDungeon, enterTower, enterTown, hasTownServices, inSafe, zoneLevel };
 })();
 
 // ---- ui/panes.js ----
@@ -8053,6 +8527,7 @@ function scheduleExplosion(m) {
 function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
+  if (G.zone === 'tower') { dropTowerLoot(m, src, seed); return; }
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
@@ -8066,6 +8541,16 @@ function dropMonsterLoot(m, src) {
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
+/** Torre Infinita: só Gold (igual à masmorra) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+function dropTowerLoot(m, src, seed) {
+  const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
+  for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
+  if (src !== 'boss') return;
+  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' Gold e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Jewels.' : ' Jewel.'), 'loot'); Sfx.loot(3); }
+  else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
+}
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */
 function onBossKilled(m) {
   const ch = G.ch;
@@ -8073,6 +8558,7 @@ function onBossKilled(m) {
   G.boss = null;
   shake(1.2);
   Sfx.boom();
+  if (G.zone === 'tower') { onTowerBossKilled(m); return; }
   if (G.zone !== 'dungeon') { toast('Chefe derrotado', m.name); persist(); return; }
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
@@ -8086,6 +8572,20 @@ function onBossKilled(m) {
   });
   const ev = R.canEvolve(ch);
   if (ev.ok) log('Mestre Orvan sente seu poder: evolução para ' + ev.name + ' disponível na cidade.', 'sys');
+  persist();
+}
+
+/** Chefe de um andar da torre: registra o recorde e abre o portal para subir. */
+function onTowerBossKilled(m) {
+  const ch = G.ch, next = G.floor + 1;
+  ch.towerBest = Math.max(ch.towerBest || 1, next);
+  toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
+  const climb = () => enterTower(next);
+  G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {
+    if (!G.loot.length) { climb(); return true; }
+    confirmDescend(climb);
+    return false;
+  });
   persist();
 }
 
@@ -8148,8 +8648,9 @@ function breakBarrel(b) {
   world.remove(b.mesh);
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
-  const lvl = floorLevel(G.biome, G.floor);
+  const lvl = zoneLevel();
   if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  if (G.zone === 'tower') return; // na torre só cai Gold
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }
@@ -8163,7 +8664,7 @@ const { installDebugHook } = (() => {
 function installDebugHook(loopStats) {
   window.__FORJA_DEBUG = {
     G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
-    renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTown,
+    renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, loopStats,
     worldChildren: () => world.children.length,
   };

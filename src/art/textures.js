@@ -364,6 +364,13 @@ export function texDecal(kind) {
     if (kind === 'moss') { const a = sat((0.7 + n * 0.5 - d) * 3) * sat(n * 2 - 0.4); return { h: n, c: [40 + n * 40, 62 + n * 50, 22], a: a * 230 }; }
     if (kind === 'crack') { const r = Math.abs(fbm(u, v, 4, 3, sd + 1) - 0.5); const a = sat((0.03 - r) * 40) * sat(1 - d); return { h: 0, c: [10, 8, 8], a: a * 230 }; }
     if (kind === 'web') { const ring = Math.abs(Math.sin(d * 24)) < 0.08; const spoke = Math.abs(Math.sin(a0 * 5)) < 0.03; const a = (ring || spoke) && d < 0.95 ? (1 - d) * 0.9 + 0.2 : 0; return { h: 0.5, c: [210, 210, 215], a: a * 200 }; }
+    if (kind === 'rune') { // círculo rúnico: dois anéis, glifos entre eles e uma estrela no meio
+      const ring = sat(1 - Math.abs(d - 0.92) * 40) + sat(1 - Math.abs(d - 0.7) * 50);
+      const seg = Math.floor(((a0 + Math.PI) / (Math.PI * 2)) * 16), f = ((a0 + Math.PI) / (Math.PI * 2)) * 16 - seg;
+      const glyph = d > 0.74 && d < 0.88 && f > 0.25 && f < 0.75 && hash2(seg, Math.floor(d * 20), sd) > 0.35 ? 0.9 : 0;
+      const star = d < 0.68 && Math.abs(Math.sin(a0 * 2.5 + 0.3)) * d < 0.03 ? 0.8 : 0;
+      return { h: 0.5, c: [255, 255, 255], a: Math.min(1, ring + glyph + star) * sat((1 - d) * 20) * 230 };
+    }
     if (kind === 'ash') { const a = sat((0.8 - d) * 2) * n; return { h: 0, c: [25, 22, 20], a: a * 200 }; }
     return { h: 0, c: [0, 0, 0], a: 0 };
   }, { bump: 1, alpha: true });

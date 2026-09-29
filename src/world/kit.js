@@ -454,6 +454,58 @@ export function kit(name) {
     case 'grassEdge': // capim alto no pé da parede
       for (let i = 0; i < 9; i++) { const t = (i - 4) * 0.22, h = 0.35 + ((i * 7) % 4) * 0.1; P.push(KP(GEO.blade3, i % 2 ? 0x4e8a34 : 0x6aa840, t, h / 2, ((i * 3) % 3) * 0.08, 0.12, h, 0.05, 0.15 * (i % 3 - 1), i, 0.2 * (i % 2 ? 1 : -1))); }
       break;
+    // ---------- Torre Infinita ----------
+    case 'towerBig': { // torre da cidade: três andares que afinam, janelas e runas em espiral; porta em +z
+      const TS = 0x8e909e, TD = 0x5e6070, TB = 0x3e4050, RUNE = 0x6ad8ff;
+      const oct = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
+      P.push(KP(oct, TD, 0, 0.3, 0, 7.0, 0.6, 7.0));
+      P.push(KP(oct, TS, 0, 0.75, 0, 6.2, 0.3, 6.2));
+      const tiers = [[2.5, 0.9, 5.2], [2.1, 6.4, 4.2], [1.75, 10.9, 3.2]]; // raio, base, altura
+      tiers.forEach(([r, y0, h], t) => {
+        P.push(KP(GEO.cyl, t % 2 ? 0x8a8c9a : TS, 0, y0 + h / 2, 0, r * 2, h, r * 2));
+        P.push(KP(oct, TB, 0, y0 + h + 0.15, 0, r * 2 + 0.6, 0.35, r * 2 + 0.6));
+        // janelas estreitas (brilham) com moldura, 6 por andar, desencontradas
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + t * 0.5, x = Math.sin(a) * (r + 0.02), z = Math.cos(a) * (r + 0.02);
+          if (t === 0 && Math.abs(a % (Math.PI * 2)) < 0.4) continue; // lugar da porta
+          P.push(KP(GEO.box, TB, x, y0 + h * 0.55, z, 0.62, 1.5, 0.12, 0, a, 0));
+          Gl.push(KP(GEO.box, RUNE, Math.sin(a) * (r + 0.07), y0 + h * 0.55, Math.cos(a) * (r + 0.07), 0.36, 1.2, 0.04, 0, a, 0));
+        }
+      });
+      // contrafortes no térreo
+      for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + (i * Math.PI) / 2; P.push(KP(GEO.box, TD, Math.sin(a) * 2.55, 2.4, Math.cos(a) * 2.55, 0.7, 4.6, 1.0, 0, a, 0)); P.push(KP(GEO.cone4, TD, Math.sin(a) * 2.55, 5.1, Math.cos(a) * 2.55, 0.9, 0.9, 1.2, 0, a + Math.PI / 4, 0)); }
+      // runas em espiral subindo pelos três andares
+      for (let i = 0; i < 44; i++) {
+        const k = i / 44, y = 1.4 + k * 12.4, a = k * Math.PI * 6;
+        const r = y < 6.4 ? 2.5 : y < 10.9 ? 2.1 : 1.75;
+        Gl.push(KP(GEO.box, i % 3 ? RUNE : 0xb89aff, Math.sin(a) * (r + 0.05), y, Math.cos(a) * (r + 0.05), 0.22, 0.22, 0.04, 0, a, Math.PI / 4));
+      }
+      // ameias no topo
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; P.push(KP(GEO.box, TS, Math.sin(a) * 1.9, 14.65, Math.cos(a) * 1.9, 0.7, 0.8, 0.5, 0, a, 0)); }
+      // porta em arco (+z), com moldura de runas
+      P.push(KP(GEO.box, 0x14161e, 0, 2.1, 2.44, 1.7, 2.6, 0.2));
+      P.push(KP(GEO.box, TB, -1.05, 2.0, 2.52, 0.4, 3.0, 0.3));
+      P.push(KP(GEO.box, TB, 1.05, 2.0, 2.52, 0.4, 3.0, 0.3));
+      P.push(KP(GEO.box, TB, 0, 3.65, 2.52, 2.5, 0.5, 0.3));
+      Gl.push(KP(GEO.box, RUNE, 0, 2.0, 2.56, 1.3, 2.2, 0.02));
+      Gl.push(KP(GEO.oct, 0xb89aff, 0, 3.65, 2.72, 0.4, 0.4, 0.2));
+      break;
+    }
+    case 'obelisk': // obelisco rúnico (adereço alto da torre)
+      P.push(KP(GEO.box, DSTONE, 0, 0.25, 0, 1.3, 0.5, 1.3));
+      P.push(KP(GEO.taper, 0x6a6c7a, 0, 1.9, 0, 0.9, 2.8, 0.9, 0, Math.PI / 8, 0));
+      P.push(KP(GEO.cone4, 0x6a6c7a, 0, 3.6, 0, 0.72, 0.7, 0.72, 0, Math.PI / 4, 0));
+      for (let i = 0; i < 4; i++) { const a = (i * Math.PI) / 2; Gl.push(KP(GEO.box, 0x6ad8ff, Math.sin(a) * 0.4, 1.4 + (i % 2) * 0.7, Math.cos(a) * 0.4, 0.16, 0.6, 0.03, 0, a, 0)); }
+      Gl.push(KP(GEO.oct, 0xb89aff, 0, 4.3, 0, 0.35, 0.5, 0.35));
+      break;
+    case 'bookshelf': // estante de livros (biblioteca arcana)
+      P.push(KP(GEO.box, DWOOD, 0, 1.4, 0, 1.6, 2.8, 0.6));
+      for (let s = 0; s < 4; s++) {
+        P.push(KP(GEO.box, WOOD, 0, 0.3 + s * 0.68, 0.05, 1.5, 0.06, 0.55));
+        for (let b = 0; b < 6; b++) P.push(KP(GEO.box, [0x6a1a2a, 0x2a3a6a, 0x3a5a2a, 0x7a5a2a, 0x4a2a5a][(b + s * 2) % 5], -0.6 + b * 0.24, 0.55 + s * 0.68, 0.08, 0.18, 0.4 + ((b * 7 + s) % 3) * 0.06, 0.42));
+      }
+      Gl.push(KP(GEO.oct, 0xc89aff, 0.5, 2.95, 0.1, 0.18, 0.26, 0.18));
+      break;
     default:
       P.push(KP(GEO.box, 0xff00ff, 0, 0.5, 0, 1));
   }

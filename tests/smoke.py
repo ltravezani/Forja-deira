@@ -142,10 +142,23 @@ with sync_playwright() as p:
     pg.click('#btnRespawn')
     check(ev('G.player.alive && G.zone === "town" && G.hp > 0'), 'renasce na cidade')
 
+    # Torre Infinita: Guardião na cidade, só Gold/Jewels, chefe abre o portal para subir e o recorde fica salvo
+    check(ev("G.npcs.some((n) => n.id === 'tower') && !!G.townTower"), 'Guardião da Torre e a torre na cidade')
+    ev("D.enterTower(1)")
+    check(ev("G.zone === 'tower' && G.floor === 1 && G.monsters.some((m) => m.boss)"), 'entra no andar 1 da torre com chefe')
+    lv1 = ev("Math.min(...G.monsters.map((m) => m.level))")
+    ev("(G.monsters.slice().forEach((m) => D.killMonster(m)), 0)")
+    check(ev("G.loot.every((l) => l.type === 'gold' || l.type === 'jewel')"), 'torre só derruba Gold e Jewels (%s)' % ev("[...new Set(G.loot.map((l) => l.type))].join(',')"))
+    check(ev("!!G.exitPortal && G.ch.towerBest >= 2"), 'chefe abre o portal e registra o recorde')
+    ev("(D.G.loot.length = 0, G.exitPortal.onUse(), 0)")
+    check(ev("G.zone === 'tower' && G.floor === 2") and ev("Math.min(...G.monsters.map((m) => m.level))") > lv1, 'sobe para o andar 2, mais difícil')
+    ev("D.enterTown()")
+
     # trocas de zona repetidas: nada deve acumular
     counts = []
     for k in range(3):
         ev("D.enterDungeon('caves', 1)")
+        ev("D.enterTower(%d)" % (1 + k * 5))
         ev("D.enterTown()")
         counts.append(ev('({ world: D.worldChildren(), overlay: document.getElementById("overlay").children.length, loot: G.loot.length, proj: G.projectiles.length })'))
     check(counts[0]['world'] == counts[-1]['world'] and counts[0]['overlay'] == counts[-1]['overlay'], 'trocas de zona não acumulam objetos %s' % json.dumps(counts))
