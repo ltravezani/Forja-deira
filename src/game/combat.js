@@ -15,12 +15,11 @@ import { face } from './movement.js';
 import { makePortal } from './npcs.js';
 import { cancelChannel, fillVitals, recalc } from './player.js';
 import { spawnProjectile } from './projectiles.js';
-import { enterDungeon, enterTown, inSafe } from './zones.js';
+import { enterDungeon, enterTower, enterTown, inSafe, zoneLevel } from './zones.js';
 import { hurtFeedback } from '../ui/feedback.js';
 import { buildSlots } from '../ui/hud.js';
 import { log, toast } from '../ui/log.js';
 import { confirmDescend, showDeath } from '../ui/npcDialogs.js';
-import { floorLevel } from '../world/biomes.js';
 import { walkableR } from '../world/grid.js';
 
 /** Alcance do ataque básico por classe (m), somado ao raio do alvo. */
@@ -167,6 +166,7 @@ function scheduleExplosion(m) {
 function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
+  if (G.zone === 'tower') { dropTowerLoot(m, src, seed); return; }
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
@@ -180,6 +180,16 @@ function dropMonsterLoot(m, src) {
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
+/** Torre Infinita: só Gold (igual à masmorra) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+function dropTowerLoot(m, src, seed) {
+  const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
+  for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
+  if (src !== 'boss') return;
+  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' Gold e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Jewels.' : ' Jewel.'), 'loot'); Sfx.loot(3); }
+  else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
+}
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */
 function onBossKilled(m) {
   const ch = G.ch;
@@ -187,6 +197,7 @@ function onBossKilled(m) {
   G.boss = null;
   shake(1.2);
   Sfx.boom();
+  if (G.zone === 'tower') { onTowerBossKilled(m); return; }
   if (G.zone !== 'dungeon') { toast('Chefe derrotado', m.name); persist(); return; }
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
@@ -200,6 +211,20 @@ function onBossKilled(m) {
   });
   const ev = R.canEvolve(ch);
   if (ev.ok) log('Mestre Orvan sente seu poder: evolução para ' + ev.name + ' disponível na cidade.', 'sys');
+  persist();
+}
+
+/** Chefe de um andar da torre: registra o recorde e abre o portal para subir. */
+function onTowerBossKilled(m) {
+  const ch = G.ch, next = G.floor + 1;
+  ch.towerBest = Math.max(ch.towerBest || 1, next);
+  toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
+  const climb = () => enterTower(next);
+  G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {
+    if (!G.loot.length) { climb(); return true; }
+    confirmDescend(climb);
+    return false;
+  });
   persist();
 }
 
@@ -262,8 +287,9 @@ export function breakBarrel(b) {
   world.remove(b.mesh);
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
-  const lvl = floorLevel(G.biome, G.floor);
+  const lvl = zoneLevel();
   if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  if (G.zone === 'tower') return; // na torre só cai Gold
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }

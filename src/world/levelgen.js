@@ -2,6 +2,53 @@
 import { R } from '../core/util.js';
 import { BIOMES } from './biomes.js';
 
+/** Busca em largura a partir de `sc` pelos tiles de chão (1); -1 = inalcançável. */
+function floodFrom(grid, W, H, sc) {
+  const dist = new Int32Array(W * H).fill(-1);
+  const q = [sc.z * W + sc.x];
+  dist[q[0]] = 0;
+  for (let h = 0; h < q.length; h++) {
+    const i = q[h], x = i % W, z = (i - x) / W;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const j = (z + dz) * W + x + dx;
+      if (grid[j] === 1 && dist[j] < 0) { dist[j] = dist[i] + 1; q.push(j); }
+    }
+  }
+  return dist;
+}
+
+/**
+ * Adereços do andar: altos só encostados em paredes do fundo (norte/oeste),
+ * baixos perto de paredes e decalques soltos. Adereços altos que isolariam
+ * algum pedaço do chão são desfeitos. `avoid` = [[centro, raio], ...] livres.
+ */
+function placeProps(grid, W, H, rnd, sc, avoid) {
+  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
+  const props = [];
+  const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
+  const backWall = (x, z) => at(x - 1, z) === 0 || at(x, z - 1) === 0;
+  const nearCenter = (x, z, c, r) => Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    if (grid[z * W + x] !== 1) continue;
+    if (avoid.some(([c, r]) => nearCenter(x, z, c, r))) continue;
+    const r = rnd();
+    if (backWall(x, z) && !(at(x + 1, z) === 0 || at(x, z + 1) === 0) && r < 0.09) {
+      const fr = [at(x + 1, z), at(x, z + 1), at(x - 1, z + 1) || at(x + 1, z - 1)].every((v) => v === 1);
+      if (fr) { props.push({ x, z, kind: 'tall', v: rnd() }); grid[z * W + x] = 2; }
+    } else if (nearWall(x, z) && r < 0.2) props.push({ x, z, kind: 'low', v: rnd() });
+    else if (r < 0.05) props.push({ x, z, kind: 'decal', v: rnd() });
+  }
+  let dist = floodFrom(grid, W, H, sc);
+  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) {
+    const x = i % W, z = (i - x) / W;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[(z + dz) * W + x + dx] === 2) grid[(z + dz) * W + x + dx] = 1;
+  }
+  for (let i = props.length - 1; i >= 0; i--) if (props[i].kind === 'tall' && grid[props[i].z * W + props[i].x] !== 2) props.splice(i, 1);
+  dist = floodFrom(grid, W, H, sc);
+  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) grid[i] = 0;
+  return props;
+}
+
 /**
  * Gera uma masmorra a partir de "chunks" 12×12 ligados por um labirinto.
  * Regras de câmera (Torchlight): paredes entre a câmera e o chão ficam baixas,
@@ -97,28 +144,9 @@ export function genDungeon(biomeId, floor, seed) {
     if (d > far.d) far = { d, cx, cz };
   }
   const bossC = centerOf(far.cx, far.cz);
-  const props = [];
+  const props = placeProps(grid, W, H, rnd, sc, [[sc, 2], [bossC, 3]]);
   const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
-  const backWall = (x, z) => at(x - 1, z) === 0 || at(x, z - 1) === 0;
   const nearCenter = (x, z, c, r) => Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
-  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
-    if (grid[z * W + x] !== 1) continue;
-    if (nearCenter(x, z, sc, 2) || nearCenter(x, z, bossC, 3)) continue;
-    const r = rnd();
-    if (backWall(x, z) && !(at(x + 1, z) === 0 || at(x, z + 1) === 0) && r < 0.09) {
-      const fr = [at(x + 1, z), at(x, z + 1), at(x - 1, z + 1) || at(x + 1, z - 1)].every((v) => v === 1);
-      if (fr) { props.push({ x, z, kind: 'tall', v: rnd() }); grid[z * W + x] = 2; }
-    } else if (nearWall(x, z) && r < 0.2) props.push({ x, z, kind: 'low', v: rnd() });
-    else if (r < 0.05) props.push({ x, z, kind: 'decal', v: rnd() });
-  }
-  dist = flood();
-  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) {
-    const x = i % W, z = (i - x) / W;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[(z + dz) * W + x + dx] === 2) grid[(z + dz) * W + x + dx] = 1;
-  }
-  for (let i = props.length - 1; i >= 0; i--) if (props[i].kind === 'tall' && grid[props[i].z * W + props[i].x] !== 2) props.splice(i, 1);
-  dist = flood();
-  for (let i = 0; i < grid.length; i++) if (grid[i] === 1 && dist[i] < 0) grid[i] = 0;
   const spawns = [];
   for (let cz = 0; cz < chN; cz++) for (let cx = 0; cx < cw; cx++) {
     if (cx === start.cx && cz === start.cz) continue;
@@ -137,6 +165,84 @@ export function genDungeon(biomeId, floor, seed) {
     if (at(x, z) === 1 && nearWall(x, z) && !nearCenter(x, z, sc, 2)) breakables.push({ x, z });
   }
   return { W, H, grid, biome: biomeId, floor, seed, start: sc, boss: bossC, props, spawns, breakables, templates };
+}
+
+/**
+ * Andar da Torre Infinita: planta circular. Um anel externo dividido em setores
+ * por muretas radiais (cada uma com uma passagem), uma muralha grossa em volta
+ * do salão central e o chefe no centro. A entrada fica na frente (+x/+z, perto
+ * da câmera) e a porta do salão fica no fundo, então é preciso contornar o anel.
+ */
+export function genTower(biomeId, floor, seed) {
+  const rnd = R.mulberry32(seed);
+  const W = 52, H = 52, c = 26;
+  const RO = 23.5, RI0 = 8.5, RI1 = 11.5; // raio externo, muralha do salão (de RI0 a RI1)
+  const grid = new Uint8Array(W * H);
+  const set = (x, z, v) => { if (x > 0 && z > 0 && x < W - 1 && z < H - 1) grid[z * W + x] = v; };
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return Math.abs(d); };
+  const FRONT = Math.PI / 4, BACK = FRONT + Math.PI; // ângulo (atan2(z, x)) da entrada e do fundo
+  // portas do salão: uma no fundo e, a partir do andar 4, às vezes outra de lado
+  const doors = [BACK + (rnd() - 0.5) * 1.2];
+  if (floor >= 4 && rnd() < 0.5) doors.push(BACK + (rnd() < 0.5 ? 1 : -1) * (1.4 + rnd() * 0.4));
+  // muretas radiais: 5 ou 6 setores, cada mureta com uma passagem em raio sorteado
+  const nSect = 5 + (rnd() < 0.5 ? 1 : 0), off = rnd() * Math.PI * 2;
+  const spokes = [];
+  for (let k = 0; k < nSect; k++) {
+    const a = off + (k / nSect) * Math.PI * 2;
+    if (angDiff(a, FRONT) < 0.35) continue; // não fecha a entrada
+    spokes.push({ a, gap: RI1 + 2 + rnd() * (RO - RI1 - 5) });
+  }
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    const dx = x - c, dz = z - c, d = Math.hypot(dx, dz), a = Math.atan2(dz, dx);
+    if (d >= RO) continue;
+    let v = 1;
+    if (d >= RI0 && d < RI1 && !doors.some((da) => angDiff(a, da) * d < 1.6)) v = 0;
+    if (d >= RI1) for (const sp of spokes) if (angDiff(a, sp.a) * d < 0.9 && Math.abs(d - sp.gap) > 1.6) v = 0;
+    grid[z * W + x] = v;
+  }
+  // pilares soltos no anel (2×2), longe da entrada e das passagens
+  const start = { x: Math.round(c + Math.cos(FRONT) * (RO - 3.5)), z: Math.round(c + Math.sin(FRONT) * (RO - 3.5)) };
+  const nPil = 3 + Math.floor(rnd() * 4);
+  for (let k = 0, tries = 0; k < nPil && tries < 60; tries++) {
+    const a = rnd() * Math.PI * 2, d = RI1 + 3 + rnd() * (RO - RI1 - 6);
+    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
+    if (Math.hypot(x - start.x, z - start.z) < 6 || spokes.some((sp) => angDiff(a, sp.a) * d < 3)) continue;
+    for (let dz = 0; dz < 2; dz++) for (let dx = 0; dx < 2; dx++) set(x + dx, z + dz, 0);
+    k++;
+  }
+  // salão do chefe: quatro colunas em volta do centro
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2;
+    set(Math.round(c + Math.cos(a) * 5), Math.round(c + Math.sin(a) * 5), 0);
+  }
+  const boss = { x: c, z: c };
+  const props = placeProps(grid, W, H, rnd, start, [[start, 2], [boss, 4]]);
+  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
+  const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
+  // bandos no anel (mais e maiores a cada andar), chefe no centro
+  const spawns = [{ x: boss.x, z: boss.z, boss: true, elite: false, size: 1 }];
+  const nPacks = 7 + Math.min(6, Math.floor(floor / 2));
+  for (let k = 0, tries = 0; k < nPacks && tries < 400; tries++) {
+    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
+    const d = Math.hypot(x - c, z - c);
+    if (at(x, z) !== 1 || d < RI1 + 1 || Math.hypot(x - start.x, z - start.z) < 8) continue;
+    if (spawns.some((s) => Math.abs(s.x - x) + Math.abs(s.z - z) < 5)) continue;
+    spawns.push({ x, z, boss: false, elite: rnd() < 0.14 + Math.min(0.16, floor * 0.01), size: 3 + Math.floor(rnd() * (3 + Math.min(5, floor / 3))) });
+    k++;
+  }
+  const breakables = [];
+  for (let k = 0; k < 14; k++) {
+    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
+    if (at(x, z) === 1 && nearWall(x, z) && Math.hypot(x - start.x, z - start.z) > 3 && Math.hypot(x - c, z - c) > 6) breakables.push({ x, z });
+  }
+  // runas no chão: círculo sob o chefe e alguns selos no anel
+  const runes = [{ x: boss.x, z: boss.z, s: 7 }];
+  for (let k = 0; k < 6; k++) {
+    const a = rnd() * Math.PI * 2, d = RI1 + 2 + rnd() * (RO - RI1 - 4);
+    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
+    if (at(x, z) === 1) runes.push({ x, z, s: 2.4 + rnd() * 1.6 });
+  }
+  return { W, H, grid, biome: biomeId, floor, seed, start, boss, props, spawns, breakables, templates: [], tower: true, runes };
 }
 
 /**
@@ -186,7 +292,12 @@ export function genTown() {
   if (grid[(cz + 4) * W + cx + 12] === 1) { props.push({ x: cx + 12, z: cz + 4, kind: 'cart' }); grid[(cz + 4) * W + cx + 12] = 2; }
   // cemitério (baixo, na frente-esquerda)
   for (let i = 0; i < 7; i++) { const gx = cx - 11 + (i % 4) * 2, gz = cz + 13 + Math.floor(i / 4) * 2; if (grid[gz * W + gx] === 1) props.push({ x: gx, z: gz, kind: 'grave', v: rnd() }); }
+  // Torre Infinita na parte de baixo do mapa (frente, +x/+z), com o Guardião diante dela
+  const tower = { x: cx + 11, z: cz + 11 };
+  block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
+  for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
   const npcs = [
+    { id: 'tower', x: cx + 8, z: cz + 8 },
     { id: 'smith', x: cx - 7, z: cz - 6 },
     { id: 'merchant', x: cx + 6, z: cz - 7 },
     { id: 'portal', x: cx + 1, z: cz - 9 },
@@ -195,5 +306,5 @@ export function genTown() {
   ];
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, isPath };
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath };
 }

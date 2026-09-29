@@ -37,11 +37,13 @@ function runDelayed(dt) {
   }
 }
 
-const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a };
+const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
 /** Partículas de ambiente: vaga-lumes na floresta, brasas no abismo, poeira nas ruínas. */
 function ambient(p) {
-  if (G.zone !== 'dungeon' || Math.random() >= 0.3) return;
-  emit(p.x + (rand() - 0.5) * 30, 0.5 + rand() * 3, p.z + (rand() - 0.5) * 24, { n: 1, color: AMBIENT[G.biome], speed: 0.3, up: 0.3, life: 3, size: 0.5, grav: G.biome === 'abyss' ? 0.8 : 0.05, alpha: 0.7 });
+  if (G.zone === 'town' || Math.random() >= 0.3) return;
+  // na torre as fagulhas sobem (grav negativa), como se a torre puxasse tudo para o alto
+  const up = G.zone === 'tower';
+  emit(p.x + (rand() - 0.5) * 30, 0.5 + rand() * 3, p.z + (rand() - 0.5) * 24, { n: 1, color: AMBIENT[G.biome], speed: 0.3, up: up ? 1.2 : 0.3, life: 3, size: 0.5, grav: up ? -0.35 : G.biome === 'abyss' ? 0.8 : 0.05, alpha: 0.7 });
 }
 
 const EXPLORE_R = 7;

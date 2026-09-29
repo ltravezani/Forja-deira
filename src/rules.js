@@ -466,7 +466,7 @@
     out.log.push({ what: 'item', roll: ri, threshold: pItem });
     if (ri < pItem) out.items.push(makeEquip(hash32(seed, 'i'), mLevel, null, favorCls, mf, src));
     const rz = rnd();
-    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = Math.floor(mLevel * (18 + rnd() * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+    if (rz < DROP_CHANCE.gold || src === 'boss') out.gold = goldAmount(mLevel, src, rnd());
     for (const j of ['bless', 'soul', 'chaos', 'life']) {
       const rj = rnd();
       const p = DROP_CHANCE[j] * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) * (mLevel < 15 ? 0.3 : 1);
@@ -475,6 +475,54 @@
     }
     const rp = rnd();
     if (rp < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    return out;
+  }
+
+  /** Gold de um abate (mesma fórmula nas masmorras e na torre). */
+  function goldAmount(mLevel, src, r) {
+    return Math.floor(mLevel * (18 + r * 24) * (src === 'boss' ? 12 : src === 'elite' ? 3 : 1) + 15);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Torre Infinita: andares sem fim, cada um mais difícil. Só cai Gold e Jewels.
+  // ---------------------------------------------------------------------------
+  const TOWER = {
+    baseLevel: 20,      // nível dos monstros no andar 1
+    levelPerFloor: 10,  // +níveis por andar
+    hpPerFloor: 0.06,   // +6% de HP por andar (além do nível)
+    dmgPerFloor: 0.035, // +3,5% de dano por andar
+    jewelChance: 0.1,   // monstros: 10% de chance de uma Jewel aleatória
+    bossChance: 0.2,    // chefe do andar: 20% de chance de soltar o tesouro
+    biomeEvery: 5,      // troca de bioma a cada 5 andares
+  };
+  const JEWEL_IDS = ['bless', 'soul', 'chaos', 'life'];
+  function towerLevel(floor) { return TOWER.baseLevel + (Math.max(1, floor) - 1) * TOWER.levelPerFloor; }
+  /** Multiplicadores extras dos monstros do andar (somados aos do tipo de monstro). */
+  function towerMod(floor) {
+    const f = Math.max(1, floor) - 1;
+    return { hp: 1 + f * TOWER.hpPerFloor, dmg: 1 + f * TOWER.dmgPerFloor };
+  }
+  /**
+   * Drop na torre (determinístico pela seed). Monstros: Gold igual ao de um andar
+   * normal de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
+   * soltar Gold de chefe e 1–3 Jewels aleatórias; nos outros 80%, nada.
+   */
+  function rollTowerDrop(opts) {
+    const { seed, mLevel, src } = opts;
+    const rnd = mulberry32(seed);
+    const out = { gold: 0, jewels: [], bossRoll: null };
+    const pick = () => JEWEL_IDS[Math.floor(rnd() * JEWEL_IDS.length)];
+    if (src === 'boss') {
+      out.bossRoll = rnd();
+      if (out.bossRoll < TOWER.bossChance) {
+        out.gold = goldAmount(mLevel, 'boss', rnd());
+        const n = 1 + Math.floor(rnd() * 3);
+        for (let i = 0; i < n; i++) out.jewels.push(pick());
+      }
+      return out;
+    }
+    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd());
+    if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
     return out;
   }
 
@@ -523,7 +571,7 @@
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
-      unlockedFloors: {},
+      unlockedFloors: {}, towerBest: 1,
     };
   }
   function className(ch) {
@@ -710,6 +758,7 @@
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
+    goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     upgradeChance, applyUpgrade, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,

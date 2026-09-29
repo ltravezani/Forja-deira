@@ -45,7 +45,7 @@ export function drawMinimap() {
   G.npcs.forEach((n) => dot(n.x, n.z, 6, '#f2cf7a'));
   [G.exitPortal, G.townPortal].forEach((pt) => { if (pt) dot(pt.x, pt.z, 8, '#b9a4ff'); });
   G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
-  if (G.L.boss && G.zone === 'dungeon' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
+  if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
   c.restore();
   // jogador no centro
   c.fillStyle = '#fff';

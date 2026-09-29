@@ -60,3 +60,35 @@ test('Poção da Ressurreição custa 50.000 Gold e não é bebível', () => {
   assert.equal(D.revive, true);
   assert.equal(R.itemName({ kind: 'potion', id: 'rez' }), 'Poção da Ressurreição');
 });
+
+test('torre: dificuldade cresce a cada andar', () => {
+  for (let f = 1; f < 30; f++) {
+    assert.ok(R.towerLevel(f + 1) > R.towerLevel(f));
+    const a = R.towerMod(f), b = R.towerMod(f + 1);
+    assert.ok(b.hp > a.hp && b.dmg > a.dmg);
+  }
+  assert.deepEqual(R.towerMod(1), { hp: 1, dmg: 1 });
+});
+
+test('torre: só Gold e Jewels; monstros ~10% de Jewel, chefe ~20% de tesouro', () => {
+  const N = 20000;
+  let jewels = 0, gold = 0, bossHit = 0;
+  for (let i = 0; i < N; i++) {
+    const d = R.rollTowerDrop({ seed: R.hash32('tw', i), mLevel: 60, src: 'normal' });
+    assert.deepEqual(Object.keys(d).sort(), ['bossRoll', 'gold', 'jewels']);
+    assert.ok(d.jewels.length <= 1);
+    for (const j of d.jewels) assert.ok(R.JEWELS[j]);
+    jewels += d.jewels.length; if (d.gold) gold++;
+    const b = R.rollTowerDrop({ seed: R.hash32('twb', i), mLevel: 60, src: 'boss' });
+    if (b.gold || b.jewels.length) { bossHit++; assert.ok(b.gold > 0 && b.jewels.length >= 1 && b.jewels.length <= 3); }
+  }
+  assert.ok(Math.abs(jewels / N - 0.1) < 0.015, 'jewel ' + jewels / N);
+  assert.ok(Math.abs(bossHit / N - 0.2) < 0.015, 'chefe ' + bossHit / N);
+  assert.ok(Math.abs(gold / N - R.DROP_CHANCE.gold) < 0.02, 'gold ' + gold / N);
+});
+
+test('torre: Gold igual ao de um andar normal de masmorra (mesma fórmula)', () => {
+  for (const src of ['normal', 'elite']) for (const lv of [20, 90, 300]) {
+    assert.equal(R.goldAmount(lv, src, 0), Math.floor(lv * 18 * (src === 'elite' ? 3 : 1) + 15));
+  }
+});

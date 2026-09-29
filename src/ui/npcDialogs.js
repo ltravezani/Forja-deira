@@ -7,10 +7,10 @@ import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
 import { addToBag, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
-import { enterDungeon } from '../game/zones.js';
+import { enterDungeon, enterTower } from '../game/zones.js';
 import { buildSlots, hudTick } from './hud.js';
 import { log, toast } from './log.js';
-import { BIOMES, DUNGEON_ORDER, floorLevel } from '../world/biomes.js';
+import { BIOMES, DUNGEON_ORDER, floorLevel, towerBiome } from '../world/biomes.js';
 
 function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
 export function closeModal() { $('#modal').hidden = true; }
@@ -29,6 +29,15 @@ export function openNpc(id) {
         '<button class="btn sm" data-npc="go" data-b="' + k + '" data-f="1">Andar 1</button>' + (maxF > 1 ? '<button class="btn sm gold" data-npc="go" data-b="' + k + '" data-f="' + maxF + '">Andar ' + maxF + '</button>' : '') + '</div></div>';
     });
     h += '</div><p class="note" style="margin-top:10px">Nível recomendado ≈ nível dos monstros. Cada andar soma +8 níveis.</p>';
+  } else if (id === 'tower') {
+    const best = ch.towerBest || 1, T = R.TOWER;
+    const row = (f, gold) => {
+      const B = BIOMES[towerBiome(f, T.biomeEvery)], m = R.towerMod(f);
+      return '<div class="dg"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + m.hp.toFixed(2) + ' · dano ×' + m.dmg.toFixed(2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
+    };
+    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
+    h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
+      '<p class="note">Drops: só Gold (igual a um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Jewel aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Gold e Jewels.</p>';
   } else if (id === 'smith') {
     const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
     const sel = items.find((x) => x === UI.smithSel) || items[0];
@@ -71,6 +80,7 @@ function npcAction(e) {
   switch (a) {
     case 'close': closeModal(); return;
     case 'go': closeModal(); enterDungeon(b.dataset.b, +b.dataset.f); return;
+    case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot)); UI.smithSel = items[+b.dataset.i]; break; }
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;

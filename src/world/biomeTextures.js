@@ -34,6 +34,27 @@ export function biomeTex(id) {
       b: texGround('ash_abyss3', { a: 0x3a302c, b: 0x4a3a34, c: 0x7a6a60 }),
       wall: texRock('wall_abyss3', { a: 0x2a1614, b: 0x46241e, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x3a2420, wallGlow: 0xff6a18,
     };
+    // ---------- Torre Infinita ----------
+    case 'tw_granite': return {
+      a: texStones('flag_twgranite', { stone: 0x7e828e, stone2: 0x6a6e7a, mortar: 0x262a34, slabs: true, rows: 3 }),
+      b: texStones('cobble_twgranite', { stone: 0x6e727e, stone2: 0x5e626e, mortar: 0x1e222a, n: 30 }),
+      wall: texBricks('wall_twgranite', { brick: 0x7a7e8c, brick2: 0x686c7a, mortar: 0x1c1e26, rows: 6, cols: 2 }), wallCol: 0xffffff, capCol: 0x9aa0b4,
+    };
+    case 'tw_arcane': return {
+      a: texPlanks('floor_twarcane', { wood: 0x5a3a4a, wood2: 0x4a2e3e, n: 6 }),
+      b: texStones('flag_twarcane', { stone: 0x5e4e7a, stone2: 0x4e4068, mortar: 0x1a1428, slabs: true, rows: 4 }),
+      wall: texBricks('wall_twarcane', { brick: 0x5a4a78, brick2: 0x4a3c66, mortar: 0x140e22, rows: 5, cols: 3 }), wallCol: 0xffffff, capCol: 0x8a6ac0,
+    };
+    case 'tw_storm': return {
+      a: texStones('flag_twstorm', { stone: 0x6a7e82, stone2: 0x5a6e72, mortar: 0x1a2426, slabs: true, rows: 4, mossAmt: 0.3, moss: 0x3a6a5a }),
+      b: texGround('moss_twstorm', { a: 0x2e5a4e, b: 0x3a6a5a, c: 0x7a9a96, blades: true, bladeCol: 0x6ab8a0 }),
+      wall: texRock('wall_twstorm', { a: 0x4a5a60, b: 0x5e7278, n: 14 }), wallCol: 0xffffff, capCol: 0x6a9a98,
+    };
+    case 'tw_void': return {
+      a: texRock('floor_twvoid', { a: 0x2a1e2e, b: 0x3a2a3e, n: 12, soft: true }),
+      b: texStones('flag_twvoid', { stone: 0x3a2a40, stone2: 0x2e2034, mortar: 0x0e0610, slabs: true, rows: 3 }),
+      wall: texRock('wall_twvoid', { a: 0x2a1430, b: 0x46204a, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x4a2450, wallGlow: 0xff3ad0,
+    };
   }
   return biomeTex('ruins');
 }
