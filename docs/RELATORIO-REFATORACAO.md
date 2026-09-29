@@ -11,7 +11,7 @@ O jogo saiu de um arquivo monolítico de 2.779 linhas (mais dois arquivos de art
 - entraram pausa, micro-pausa de impacto, retorno visual de dano, buffer de habilidade e opções de acessibilidade;
 - há **12 testes de lógica** (Node) e um **teste de ponta a ponta** (Playwright) com 30 verificações.
 
-Balanceamento, visual procedural, save (`forjadeira.save.v1`; o save antigo `mutrz.save.v1` é migrado na primeira carga) e controles foram preservados.
+Balanceamento, visual procedural, save (`forjadeira.save.v1`) e controles foram preservados.
 
 ## 2. Problemas encontrados e como foram resolvidos
 
@@ -104,7 +104,7 @@ Tudo discreto e configurável em **Opções → Jogabilidade**:
 - **Alterados:** `tools/build.py` (virou empacotador), `src/rules.js` (cabeçalho e detecção do escopo global para rodar no Node), `docs/GDD.md` (v0.6: arquitetura e sensação de jogo).
 - **Removidos:**
   - `src/game.js`, `src/art_models.js`, `src/art_world.js`, `src/head.html` e `src/tail.html`: substituídos pelos módulos e pelo `shell.html`.
-  - `tools/shot.py`: apontava para a pasta `Data` do cliente MU, que já foi removida.
+  - `tools/shot.py`: apontava para uma pasta de arte externa, que já foi removida.
   - `orig.html`, `antes-depois.png` e `out/`: artefatos antigos.
 
 ## 8. Como executar

@@ -1,8 +1,8 @@
 # Forja-deira
 
 RPG de ação isométrico, sombrio e **100% offline**, feito com Three.js (r160) e arte
-procedural. Progressão ao estilo MU Online (atributos, evolução de classe, resets,
-jewels, itens Excelentes) com masmorras procedurais ao estilo Torchlight.
+procedural. Progressão por atributos, evolução de classe, resets, jewels e itens
+Excelentes, com masmorras procedurais.
 
 ![Forja-deira — tela inicial](docs/screenshots/titulo.jpg)
 

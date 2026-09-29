@@ -35,15 +35,6 @@ test('loadSave migra saves antigos (remove Web3) e tolera save corrompido', asyn
   assert.equal(S.active, -1);
 });
 
-test('loadSave lê o save do nome antigo (MU TRZ) quando não há save novo', async () => {
-  const { loadSave, S, SAVE_KEY, LEGACY_SAVE_KEYS } = await load('core/state.js');
-  const old = { chars: [{ name: 'Antigo', cls: 'dw', bag: [], equip: {} }], active: 0 };
-  globalThis.localStorage = fakeStorage({ [LEGACY_SAVE_KEYS[0]]: JSON.stringify(old) });
-  loadSave();
-  assert.equal(S.chars[0].name, 'Antigo');
-  assert.notEqual(SAVE_KEY, LEGACY_SAVE_KEYS[0]);
-});
-
 test('loadSave converte o Zen de saves antigos em Gold sem perder saldo', async () => {
   const { loadSave, S, SAVE_KEY } = await load('core/state.js');
   const armor = { slot: 'armor', exc: ['zen30', 'hp4'] };

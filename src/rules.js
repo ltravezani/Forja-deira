@@ -4,9 +4,8 @@
  * Funções puras, sem DOM nem Three.js: o jogo as usa no navegador e os testes
  * (tests/) as executam no Node. Todo o balanceamento fica centralizado aqui.
  *
- * Fórmulas de atributos por classe inspiradas no OpenMU
- * (https://github.com/MUnique/OpenMU, licença MIT), que modela cada classe
- * como uma lista de relações "alvo = multiplicador × fonte".
+ * As fórmulas de atributos modelam cada classe como uma lista de relações
+ * "alvo = multiplicador × fonte".
  */
 (function (root, factory) {
   const m = factory();
@@ -60,7 +59,7 @@
   // ---------------------------------------------------------------------------
   // Experiência
   // ---------------------------------------------------------------------------
-  /** EXP para passar do nível L para L+1 (curva clássica do MU + cauda pós-255). */
+  /** EXP para passar do nível L para L+1 (curva clássica + cauda pós-255). */
   function expToNext(level) {
     let e = (level + 9) * level * level * 10;
     if (level > 255) {
@@ -69,7 +68,7 @@
     }
     return e;
   }
-  /** EXP por monstro: fórmula do MU com penalidade quando o monstro é muito mais fraco. */
+  /** EXP por monstro: fórmula clássica com penalidade quando o monstro é muito mais fraco. */
   function monsterExp(mLevel, pLevel, rate) {
     rate = rate || RATES.exp;
     let e = ((mLevel + 25) * mLevel) / 3;
@@ -171,7 +170,7 @@
   ];
 
   // ---------------------------------------------------------------------------
-  // Habilidades (custam MP e AG, como no MU)
+  // Habilidades (custam MP e AG)
   // ---------------------------------------------------------------------------
   const SKILLS = {
     // Dark Knight
@@ -306,7 +305,7 @@
     const pre = it.rarity === 'comum' ? '' : RARITY[it.rarity].name + ' ';
     return pre + base + (it.plus ? ' +' + it.plus : '');
   }
-  /** Requisito de atributo para equipar (como no MU, sobe com o +nível). */
+  /** Requisito de atributo para equipar (sobe com o +nível). */
   function itemReq(it) {
     if (!it.slot || it.slot === 'ring' || it.slot === 'pendant') return null;
     if (it.slot === 'wings') return { stat: 'level', value: 150 + it.tier * 60 };
@@ -500,6 +499,8 @@
     jewelChance: 0.1,   // monstros: 10% de chance de uma Jewel aleatória
     bossChance: 0.2,    // chefe do andar: 20% de chance de soltar o tesouro
     biomeEvery: 5,      // troca de bioma a cada 5 andares
+    monsterMult: 2,     // quantidade de monstros por grupo (2x o de um grupo normal)
+    goldMult: 2,        // Gold dos monstros, do chefe e dos barris (2x o da masmorra)
   };
   const JEWEL_IDS = ['bless', 'soul', 'chaos', 'life'];
   function towerLevel(floor) { return TOWER.baseLevel + (Math.max(1, floor) - 1) * TOWER.levelPerFloor; }
@@ -509,9 +510,9 @@
     return { hp: 1 + f * TOWER.hpPerFloor, dmg: 1 + f * TOWER.dmgPerFloor };
   }
   /**
-   * Drop na torre (determinístico pela seed). Monstros: Gold igual ao de um andar
-   * normal de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
-   * soltar Gold de chefe e 1–3 Jewels aleatórias; nos outros 80%, nada.
+   * Drop na torre (determinístico pela seed). Monstros: Gold em dobro (TOWER.goldMult)
+   * em relação a um andar de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
+   * soltar Gold de chefe (também em dobro) e 1–3 Jewels aleatórias; nos outros 80%, nada.
    */
   function rollTowerDrop(opts) {
     const { seed, mLevel, src } = opts;
@@ -521,13 +522,13 @@
     if (src === 'boss') {
       out.bossRoll = rnd();
       if (out.bossRoll < TOWER.bossChance) {
-        out.gold = goldAmount(mLevel, 'boss', rnd());
+        out.gold = goldAmount(mLevel, 'boss', rnd()) * TOWER.goldMult;
         const n = 1 + Math.floor(rnd() * 3);
         for (let i = 0; i < n; i++) out.jewels.push(pick());
       }
       return out;
     }
-    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd());
+    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd()) * TOWER.goldMult;
     if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
     return out;
   }

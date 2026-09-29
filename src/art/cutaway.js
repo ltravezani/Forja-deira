@@ -1,5 +1,5 @@
 // =============================================================================
-// Recorte de visão (estilo Diablo/Torchlight): paredes e adereços que ficam
+// Recorte de visão (estilo ARPG isométrico): paredes e adereços que ficam
 // entre a câmera e o herói somem num "furo" pontilhado ao redor da linha de
 // visão, deixando só o pé da parede. Assim as paredes podem ser todas altas
 // (labirinto de verdade) sem esconder o jogador.
