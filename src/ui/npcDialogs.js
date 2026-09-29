@@ -9,13 +9,60 @@ import { addToBag, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterTower } from '../game/zones.js';
 import { buildSlots, hudTick } from './hud.js';
+import { glyph, iconHtml } from './icons.js';
 import { log, toast } from './log.js';
 import { BIOMES, DUNGEON_ORDER, floorLevel, towerBiome } from '../world/biomes.js';
 
 function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
 export function closeModal() { $('#modal').hidden = true; }
+const SELL_CATS = { all: 'Todos', equip: 'Equipamentos', jewel: 'Joias', potion: 'Poções' };
+const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');
+/** Joias e Lendários pedem confirmação antes de vender. */
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.rarity === 'lendario';
+function sellSection(ch) {
+  const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
+  const cnt = { all: ch.bag.length, equip: 0, jewel: 0, potion: 0 };
+  ch.bag.forEach((it) => { const c = sellCat(it); if (c in cnt) cnt[c]++; });
+  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Vender item</h4>';
+  h += '<div class="btabs">' + Object.keys(SELL_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="sellf" data-k="' + k + '">' + SELL_CATS[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
+  const idx = [];
+  ch.bag.forEach((it, i) => { if (f === 'all' || sellCat(it) === f) idx.push(i); });
+  idx.sort((a, b) => R.sellValue(ch.bag[b], 1) - R.sellValue(ch.bag[a], 1));
+  if (!idx.length) return h + '<p class="note">Nada ' + (f === 'all' ? 'na mochila' : 'desta categoria na mochila') + ' para vender.</p>';
+  const cf = UI.merchConfirm && ch.bag.includes(UI.merchConfirm.it) ? UI.merchConfirm : null;
+  h += '<div class="list selllist">';
+  idx.forEach((i) => {
+    const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
+    const sub = it.slot ? R.RARITY[it.rarity].name + ' · ' + fmt(R.itemCP(it)) + ' CP' : it.kind === 'jewel' ? 'Joia · você tem ' + q : 'Poção · você tem ' + q;
+    let a;
+    if (cf && cf.it === it) {
+      a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
+    } else {
+      a = q > 1
+        ? '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">×1 · ' + fmt(R.sellValue(it, 1)) + '</button><button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="' + q + '">Tudo · ' + fmt(R.sellValue(it)) + '</button>'
+        : '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">Vender · ' + fmt(R.sellValue(it)) + '</button>';
+    }
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + q : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + (cf && cf.it === it ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+  });
+  return h + '</div>';
+}
+function sellFromBag(ch, i, n, confirmed) {
+  const it = ch.bag[i];
+  if (!it) return;
+  const q = it.qty || 1;
+  n = Math.max(1, Math.min(n || 1, q));
+  if (sellNeedsConfirm(it) && !confirmed) { UI.merchConfirm = { it, n }; return; }
+  UI.merchConfirm = null;
+  const gold = R.sellValue(it, n);
+  ch.gold += gold;
+  if (n >= q) ch.bag.splice(i, 1); else it.qty = q - n;
+  UI.sel = null;
+  log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' Gold.', 'loot');
+  Sfx.coin();
+}
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 export function openNpc(id) {
+  if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
   G.openNpcId = id;
   const ch = G.ch;
   let h = npcHead(id);
@@ -61,6 +108,7 @@ export function openNpc(id) {
     const RZ = R.POTIONS.rez;
     h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Gold · você tem ' + potionCount('rez') + '</span></div>';
     h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button></div>';
+    h += sellSection(ch);
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
@@ -95,6 +143,9 @@ function npcAction(e) {
       break;
     }
     case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break; ch.gold -= D.price * n; Sfx.coin(); break; }
+    case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
+    case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
+    case 'sellno': UI.merchConfirm = null; break;
     case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.gold += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
     case 'evolve': {
       const ev = R.canEvolve(ch);
@@ -120,7 +171,12 @@ function npcAction(e) {
     case 'treereset': if (ch.gold < 100000) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= 100000; ch.tree = {}; recalc(); break;
   }
   persist();
+  const dlg = $('#dialog'), list = dlg.querySelector('.selllist');
+  const top = dlg.scrollTop, listTop = list ? list.scrollTop : 0;
   openNpc(G.openNpcId);
+  dlg.scrollTop = top;
+  const list2 = dlg.querySelector('.selllist');
+  if (list2) list2.scrollTop = listTop;
   hudTick();
 }
 export function showDeath(loss, zl, rez) {

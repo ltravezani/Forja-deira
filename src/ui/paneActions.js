@@ -45,7 +45,7 @@ function paneAction(e) {
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': usePotion(it.id); break;
-    case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
+    case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
