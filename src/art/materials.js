@@ -52,6 +52,6 @@ export function disposeObject(root, geometries) {
   root.traverse((o) => {
     const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
     for (const m of mats) if (!m.userData.shared) m.dispose();
-    if (geometries && o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
+    if ((geometries || o.userData.ownGeo) && o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
   });
 }

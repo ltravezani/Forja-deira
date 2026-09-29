@@ -1,4 +1,5 @@
 // ---------- jogador: status, modelo, movimento, alvo e recuperação ----------
+import { attachHeroAura, attachRefineFx, refineColor, refineK } from '../art/items.js';
 import { animateModel, attachWings, buildHumanoid, disposeModel, flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
@@ -74,7 +75,31 @@ export function buildCharacterModel(ch) {
   if (w) attachWings(m, parseInt(R.RARITY[w.rarity].color.slice(1), 16), 0.75 + w.tier * 0.08);
   else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0 }[ch.cls], 0.8);
   m.orb = m.weapon ? m.weapon.children.find((c) => c.userData.orb) || null : null;
+  applyRefine(m, ch.equip);
   return m;
+}
+/**
+ * Brilho de refino no herói: a arma +10 ganha aura e faíscas; a maior peça de
+ * armadura +10 faz as placas pulsarem e solta faíscas pelo corpo; +15 acende o halo no chão.
+ */
+function applyRefine(m, eq) {
+  const fx = [];
+  const w = eq.weapon;
+  if (w && m.weapon) fx.push(attachRefineFx(m.weapon, w.plus || 0));
+  const ap = Math.max(0, ...['helm', 'armor', 'gloves', 'boots', 'wings'].map((s) => (eq[s] && eq[s].plus) || 0));
+  const ak = refineK(ap), top = Math.max(ap, (w && w.plus) || 0);
+  // o halo no chão aparece com qualquer peça +15; sem armadura refinada, só ele e poucas faíscas
+  if (ak || top >= 15) fx.push(attachHeroAura(m.root, Math.max(ap, top >= 15 ? 10 : 0), 2.45, top >= 15));
+  if (ak) {
+    const c = new THREE.Color(refineColor(ap));
+    fx.push({
+      update(t) {
+        if (m.flashing) return;
+        for (const mat of [m.armorMat, m.trimMat]) { mat.emissive.copy(c); mat.emissiveIntensity = ak * (0.1 + 0.07 * Math.sin(t * 3)); }
+      },
+    });
+  }
+  m.fx = fx.filter(Boolean);
 }
 /** (Re)constrói o modelo do jogador após troca de equipamento ou evolução. */
 export function buildPlayerModel() {

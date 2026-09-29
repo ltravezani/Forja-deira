@@ -288,7 +288,7 @@ export function buildHumanoid(o) {
   if (weapon && o.weapon !== 'bow') weapon.scale.set(1.4, 1.12, 1.4); // armas robustas
   const S = (o.scale || 1) * CARTOON.humanoid;
   root.scale.setScalar(S);
-  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, cape, mats, height: 2.45 * S };
+  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
 // ---------- aranha ----------
@@ -622,8 +622,10 @@ export function animateModel(m, s) {
     m.wingPivots[0].rotation.y = -0.5 - f;
     m.wingPivots[1].rotation.y = 0.5 + f;
   }
+  if (m.fx) for (const fx of m.fx) fx.update(t);
 }
 export function flashModel(m, color, k) {
+  m.flashing = k > 0; // o brilho de refino da armadura espera o piscar acabar
   for (const mat of m.mats) {
     if (k > 0) { mat.emissive.setHex(color); mat.emissiveIntensity = k * 0.8; }
     else { mat.emissive.copy(mat.userData.baseEmissive); mat.emissiveIntensity = mat.userData.baseEI; }
