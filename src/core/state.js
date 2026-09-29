@@ -14,15 +14,12 @@ export const G = {
 /** Save global (mutado no lugar para que os módulos compartilhem a mesma referência). */
 export const S = defaultSave();
 export const SAVE_KEY = 'forjadeira.save.v1';
-/** Chaves de versões anteriores do jogo (quando ainda se chamava Forja-deira): lidas uma vez e migradas. */
-export const LEGACY_SAVE_KEYS = ['mutrz.save.v1'];
 function defaultSave() {
   return { chars: [], active: -1, settings: { quality: 'media', sound: true, labels: true } };
 }
 function readSave() {
   try {
-    let raw = localStorage.getItem(SAVE_KEY);
-    for (const k of LEGACY_SAVE_KEYS) if (!raw) raw = localStorage.getItem(k);
+    const raw = localStorage.getItem(SAVE_KEY);
     if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();

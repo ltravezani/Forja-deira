@@ -1,6 +1,6 @@
 // ---------- ações dos painéis (cliques delegados por data-act) ----------
 import { applyFeelSettings, CONFIG } from '../core/config.js';
-import { G, LEGACY_SAVE_KEYS, persist, S, SAVE_KEY, UI } from '../core/state.js';
+import { G, persist, S, SAVE_KEY, UI } from '../core/state.js';
 import { $, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
@@ -66,7 +66,7 @@ function paneAction(e) {
     case 't-boss': ch.bossKills += 5; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
-    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); LEGACY_SAVE_KEYS.forEach((k) => localStorage.removeItem(k)); } catch { /* */ } location.reload(); return;
+    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } location.reload(); return;
   }
   persist();
   renderPane();
@@ -77,7 +77,7 @@ function paneAction(e) {
 /** Cliques, botão direito e opções dentro do painel lateral. */
 export function initPaneActions() {
   $('#pane').addEventListener('click', paneAction);
-  // Botão direito equipa/desequipa (como no MU); arrastar move entre mochila e equipamento.
+  // Botão direito equipa/desequipa; arrastar move entre mochila e equipamento.
   $('#pane').addEventListener('contextmenu', (e) => {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;

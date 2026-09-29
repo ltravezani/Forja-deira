@@ -180,7 +180,7 @@ function dropMonsterLoot(m, src) {
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
-/** Torre Infinita: só Gold (igual à masmorra) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+/** Torre Infinita: só Gold (em dobro) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
 function dropTowerLoot(m, src, seed) {
   const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
@@ -288,7 +288,8 @@ export function breakBarrel(b) {
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
   const lvl = zoneLevel();
-  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  const goldMult = G.zone === 'tower' ? R.TOWER.goldMult : 1;
+  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor((lvl * (8 + rand() * 12) + 10) * goldMult) });
   if (G.zone === 'tower') return; // na torre só cai Gold
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });

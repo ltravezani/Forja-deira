@@ -51,7 +51,7 @@ function placeProps(grid, W, H, rnd, sc, avoid) {
 
 /**
  * Gera uma masmorra a partir de "chunks" 12×12 ligados por um labirinto.
- * Regras de câmera (Torchlight): paredes entre a câmera e o chão ficam baixas,
+ * Regras de câmera: paredes entre a câmera e o chão ficam baixas,
  * e objetos altos só encostam em paredes do fundo (norte/oeste), nunca no meio.
  */
 export function genDungeon(biomeId, floor, seed) {

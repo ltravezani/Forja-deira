@@ -84,8 +84,9 @@ export function enterDungeon(biome, floor) {
       for (let i = 0; i < 3; i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 5, wz + (rand() - 0.5) * 5, lvl + 2, { pack });
     } else {
       const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
-      for (let i = 0; i < s.size; i++) {
-        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+      const n = s.size * R.TOWER.monsterMult; // grupos em dobro na torre
+      for (let i = 0; i < n; i++) {
+        let x = wx + (rand() - 0.5) * 5, z = wz + (rand() - 0.5) * 5;
         if (!walkable(G.L, x, z)) { x = wx; z = wz; }
         const k2 = rand() < 0.75 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
         spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });
@@ -121,11 +122,13 @@ export function enterTower(floor) {
     const wx = s.x * TILE, wz = s.z * TILE;
     if (s.boss) {
       spawnMonster(B.boss, wx, wz, lvl + 6, { pack });
-      for (let i = 0; i < 2 + Math.min(4, Math.floor(floor / 4)); i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
+      const escort = (2 + Math.min(4, Math.floor(floor / 4))) * R.TOWER.monsterMult;
+      for (let i = 0; i < escort; i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
     } else {
       const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
-      for (let i = 0; i < s.size; i++) {
-        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+      const n = s.size * R.TOWER.monsterMult; // grupos em dobro na torre
+      for (let i = 0; i < n; i++) {
+        let x = wx + (rand() - 0.5) * 5, z = wz + (rand() - 0.5) * 5;
         if (!walkable(G.L, x, z)) { x = wx; z = wz; }
         const k2 = rand() < 0.7 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
         spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });

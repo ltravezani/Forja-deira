@@ -87,9 +87,15 @@ test('torre: só Gold e Jewels; monstros ~10% de Jewel, chefe ~20% de tesouro', 
   assert.ok(Math.abs(gold / N - R.DROP_CHANCE.gold) < 0.02, 'gold ' + gold / N);
 });
 
-test('torre: Gold igual ao de um andar normal de masmorra (mesma fórmula)', () => {
-  for (const src of ['normal', 'elite']) for (const lv of [20, 90, 300]) {
-    assert.equal(R.goldAmount(lv, src, 0), Math.floor(lv * 18 * (src === 'elite' ? 3 : 1) + 15));
+test('torre: Gold em dobro em relação à masmorra (mesma fórmula x2)', () => {
+  assert.equal(R.TOWER.goldMult, 2);
+  assert.equal(R.TOWER.monsterMult, 2);
+  for (let i = 0; i < 500; i++) for (const src of ['normal', 'elite', 'boss']) {
+    const seed = R.hash32('twg', src, i), d = R.rollTowerDrop({ seed, mLevel: 90, src });
+    if (!d.gold) continue;
+    const rnd = R.mulberry32(seed);
+    rnd(); // consome o sorteio de chance (gold ou tesouro do chefe)
+    assert.equal(d.gold, R.goldAmount(90, src, rnd()) * 2);
   }
 });
 

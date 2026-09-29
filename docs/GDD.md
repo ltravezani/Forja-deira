@@ -1,12 +1,12 @@
 # Forja-deira: Documento de Design (GDD) v0.9
 
-> Progressão de personagem ao estilo MU Online + combate isométrico e masmorras procedurais ao estilo Torchlight, num RPG de ação **single-player e 100% offline**.
+> Progressão de personagem por atributos, classes e resets + combate isométrico e masmorras procedurais, num RPG de ação **single-player e 100% offline**.
 
 Status: **protótipo jogável** em um único arquivo HTML (`dist/forja-deira.html`), gerado a partir dos módulos de `src/` por `tools/build.py`. Não precisa de internet nem de servidor: arte, fontes e bibliotecas vão embutidas, e o progresso fica salvo no navegador.
 
 > **Mudança de escopo (27/09/2026):** o jogo passou a ser totalmente offline. Foram removidos carteira, token TRZ, mint de NFT, mercado, staking, servidor autoritativo, chat e PvP online. 
 >
-> **Novo nome (28/09/2026):** o jogo passou a se chamar **Forja-deira** (antes MU TRZ). O arquivo jogável agora é `dist/forja-deira.html` e o save usa a chave `forjadeira.save.v1`; o save antigo é migrado automaticamente na primeira carga.
+> **Novo nome (28/09/2026):** o jogo passou a se chamar **Forja-deira**. O arquivo jogável agora é `dist/forja-deira.html` e o save usa a chave `forjadeira.save.v1`.
 
 ---
 
@@ -16,15 +16,15 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 
 | # | Briefing | Ajuste | Por quê |
 |---|---|---|---|
-| 1 | Nome "MU", classes e mapas do MU Online | Nomes de mapas, NPCs e chefes são **originais** (Aldrena, Floresta Sussurrante, Rainha Aracnídea…). Nomes de classes do MU ficam como **provisórios** | "MU Online" e sua lore são propriedade da Webzen. Antes do lançamento público, trocar também o título e os nomes de classe (ver §10). |
-| 2 | "Inspirar-se em servidor do GitHub" | Base de referência: **OpenMU** (MUnique/OpenMU, licença MIT). As classes seguem o modelo de *relações de atributo* dele (`alvo = multiplicador × fonte`) | É o único servidor de MU open source com licença clara. Emuladores derivados de código vazado (MuEmu, IGCN etc.) **não** devem ser usados: risco jurídico. |
+| 1 | Nomes de mapas e classes | Nomes de mapas, NPCs e chefes são **originais** (Aldrena, Floresta Sussurrante, Rainha Aracnídea…). Nomes de classe ficam como **provisórios** | Antes do lançamento público, revisar também os nomes de classe (ver §10). |
+| 2 | Fórmulas de atributos | As classes seguem um modelo de *relações de atributo* (`alvo = multiplicador × fonte`) | Deixa o balanceamento de cada classe declarativo e fácil de testar. |
 | 3 | 9–15 classes | Elenco de 15 definido, **3 jogáveis no MVP** (DK, DW, Elf), como a própria Fase 1 pede | Cada classe exige ~6 habilidades, árvore, modelo e balanceamento. |
 | 4 | Nível 800–1100+ e resets | **Nível máximo 1000**, **reset a partir do 400**, pontos fixos por reset + bônus por nível acima de 400 | Resolve a tensão entre "cap alto" e "reset": quem gosta de grind vai até 1000; quem gosta de reset reinicia no 400. |
 | 8 | Magic Find visível | Tabela de drop **visível no jogo** (painel Drops), MF com **teto suave** (retorno decrescente) e **seed por drop** | Transparência: a mesma seed sempre gera o mesmo item. |
-| 9 | Aprimoramento estilo MU | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Gold | Perder um item de horas de farm por azar frustra mais do que desafia. |
-| 11 | — | **Pet vendedor** (Torchlight): envia itens comuns para a cidade e volta com Gold | Mantém o ritmo contínuo de combate, que é o pilar Torchlight. |
+| 9 | Aprimoramento de itens | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Gold | Perder um item de horas de farm por azar frustra mais do que desafia. |
+| 11 | — | **Pet vendedor**: envia itens comuns para a cidade e volta com Gold | Mantém o ritmo contínuo de combate, sem voltar à cidade. |
 | 14 | Mobile | Layout responsivo e toque **desde o protótipo** | Portar HUD tarde sai caro; o protótipo já funciona em 390 px. |
-| 15 | Usar assets reais do MU | **Descontinuado (27/09/2026).** O jogo não lê mais a pasta `Data` do cliente MU: modelos, mapas e texturas são só os próprios do projeto | Os arquivos do cliente pertencem à Webzen; manter o carregador criava dependência de um cliente de terceiros e um risco de PI desnecessário. Ver §12. |
+| 15 | Assets de terceiros | **Descontinuado (27/09/2026).** O jogo não lê arquivos de arte de terceiros: modelos, mapas e texturas são só os próprios do projeto | Evita dependência de terceiros e risco de PI. Ver §11. |
 | 16 | Itens NFT, token, mercado e staking | **Descontinuado (27/09/2026).** Jogo 100% offline | Sem dependência de rede, carteira ou regulação de token; o foco fica no combate e no loot. |
 
 ---
@@ -32,7 +32,7 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 ## 2. Pilares
 
 1. **Clique cinético**: combate que responde no mesmo quadro, sem nada esperando rede.
-2. **Progressão MU**: pontos de atributo, evolução de classe, resets, jewels, itens Excelentes.
+2. **Progressão profunda**: pontos de atributo, evolução de classe, resets, jewels, itens Excelentes.
 3. **Loot honesto**: tabela de drops visível e cada rolagem reproduzível pela seed.
 4. **Offline de verdade**: abre e joga sem internet; o save fica no navegador.
 
@@ -48,7 +48,7 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 | 2 | Summoner, Magic Gladiator, Dark Lord, Rage Fighter, Grow Lancer, Rune Wizard, Slayer, Gun Crusher |
 | 3 | Light Wizard, Lemuria Mage, Illusion Knight, Alchemist |
 
-### 3.2 Atributos (modelo OpenMU)
+### 3.2 Atributos (relações de atributo)
 
 Base: STR / AGI / VIT / ENE; 5 pontos por nível.
 
@@ -87,7 +87,7 @@ Todas as fórmulas estão em `shared/rules.js → CLASSES[*].rel`.
 ### 4.1 EXP 1500x
 
 - Próximo nível: `(L+9)·L²·10` e, acima de 255, `+ (x+9)·x²·100` com `x = L−255`.
-- EXP por monstro: `(M+25)·M/3 × 1500`; se `M+10 < L`, multiplica por `(M+10)/L` (regra do MU contra farm de monstro fraco).
+- EXP por monstro: `(M+25)·M/3 × 1500`; se `M+10 < L`, multiplica por `(M+10)/L` (penalidade contra farm de monstro fraco).
 - Elite ×2,5, chefe ×8.
 
 Ritmo resultante (abates por nível):
@@ -149,7 +149,7 @@ Marca do chefe (v0.7): selo rúnico plano no chão, do tamanho do alcance do che
 
 Slots: arma, elmo, armadura, luvas, botas, anel, colar e asas (só de chefes). 10 tiers por nível de drop (0, 15, 35, 60, 95, 140, 200, 270, 350, 450).
 
-Atributos ao estilo MU: **+nível (0–15)**, **Sorte** (+5% crítico, +25% no Soul), **Habilidade** (+10% dano de habilidade), **Opção adicional** (+4 a +16), **opções Excelentes** (6 de arma, 6 de armadura), **Ancestral** (+atributo) e **Lendário** (afixo único, como Encontrar Magia +40%).
+Atributos dos itens: **+nível (0–15)**, **Sorte** (+5% crítico, +25% no Soul), **Habilidade** (+10% dano de habilidade), **Opção adicional** (+4 a +16), **opções Excelentes** (6 de arma, 6 de armadura), **Ancestral** (+atributo) e **Lendário** (afixo único, como Encontrar Magia +40%).
 
 Requisito de atributo: `(15 + 38·tier + 4·plus) × (1 para armas, 0,7 para armaduras)`.
 
@@ -221,7 +221,7 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 - **Laço único** (`core/loop.js`): um `requestAnimationFrame`, delta limitado a 50 ms, sistemas protegidos (uma exceção isolada é registrada e o jogo segue).
 - **Configuração central** (`core/config.js`): câmera, qualidade, tempos de interface, raios de coleta, IA, entrada, sensação de jogo. Balanceamento continua em `src/rules.js`.
 - **Sem rede**: nenhuma requisição externa. Testado com Playwright: zero requisições fora do próprio arquivo.
-- **Save**: `localStorage` (`forjadeira.save.v1`; o save antigo `mutrz.save.v1` é migrado na primeira carga), a cada 15 s e em eventos importantes. Na carga, saves antigos são migrados (Web3 removida) e personagens são saneados (números inválidos, campos ausentes).
+- **Save**: `localStorage` (`forjadeira.save.v1`), a cada 15 s e em eventos importantes. Na carga, saves antigos são migrados (Web3 removida) e personagens são saneados (números inválidos, campos ausentes).
 - **Testes**: `npm test` (regras, A*, grade espacial, geração de masmorras, save) e `tests/smoke.py` (fluxo completo no navegador).
 
 ### 8.1 Orçamento de desempenho (medido no protótipo)
@@ -249,7 +249,7 @@ A redução vem de paredes, chão e objetos em `InstancedMesh`, orçamento fixo 
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| **Propriedade intelectual** (MU Online/Webzen; nome "Torchlight") | Remoção do jogo, processo | Renomear título, classes e lore antes de qualquer lançamento público; usar apenas código MIT (OpenMU) como referência. Toda a arte é própria: o jogo não usa nem lê modelos, mapas ou texturas do cliente MU. |
+| **Propriedade intelectual** (nomes provisórios de classes e itens) | Remoção do jogo, processo | Revisar nomes de classes e itens antes de qualquer lançamento público. Toda a arte é própria: o jogo não usa nem lê modelos, mapas ou texturas de terceiros. |
 | **Perda de save** (limpeza do navegador) | Frustração | Exportar/importar save em arquivo (planejado) |
 | **Desempenho WebGL** em máquinas fracas | Abandono | Três níveis de qualidade, instancing, orçamento de luzes |
 
@@ -257,7 +257,7 @@ A redução vem de paredes, chão e objetos em `InstancedMesh`, orçamento fixo 
 
 ## 11. Arte e assets
 
-Direção (v0.8): **cartoon de fantasia sombria**, na linha de Torchlight: proporções exageradas, formas grandes, cores saturadas e contorno escuro, com o clima sombrio dado pela luz e pela paleta de cada bioma. Terreno, cenário, NPCs, heróis e monstros usam o mesmo sombreamento, para não haver diferença de estilo entre eles. Todos os modelos, texturas e efeitos são gerados em código (`src/art/` e `src/world/`); o jogo não carrega nenhum arquivo externo de arte.
+Direção (v0.8): **cartoon de fantasia sombria**: proporções exageradas, formas grandes, cores saturadas e contorno escuro, com o clima sombrio dado pela luz e pela paleta de cada bioma. Terreno, cenário, NPCs, heróis e monstros usam o mesmo sombreamento, para não haver diferença de estilo entre eles. Todos os modelos, texturas e efeitos são gerados em código (`src/art/` e `src/world/`); o jogo não carrega nenhum arquivo externo de arte.
 
 | Camada | Como é feito |
 |---|---|
@@ -278,4 +278,4 @@ Biomas: Aldrena (vila à noite com casas, mercado, forja, cemitério e paliçada
 
 Desempenho medido (1280×800, v0.8): 170–580 chamadas de desenho e 100–320 mil triângulos por quadro, contando as sombras e as miudezas (antes da v0.8: 210–590 e 80–350 mil). O contorno custa um passe de tela cheia. Na qualidade "baixa" as sombras são desligadas.
 
-A antiga opção de carregar a pasta `Data` de um cliente MU foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).
+A antiga opção de carregar arte de um cliente externo foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).

@@ -122,7 +122,7 @@ export function updatePlayer(dt) {
   if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) { p.x = G.L.start.x * TILE; p.z = G.L.start.z * TILE; p.path = null; }
   p.atkCd -= dt;
   p.moving = false;
-  // segurar o botão = seguir o cursor (estilo Torchlight)
+  // segurar o botão = seguir o cursor (estilo ARPG)
   if (mouse.down && G.time - mouse.lastRepath > CONFIG.player.holdRepath) {
     mouse.lastRepath = G.time;
     clickWorld(mouse.x, mouse.y, true);
@@ -243,7 +243,7 @@ function engageMonster(p, m, dt) {
   if (p.repath <= 0 || !p.path) { p.repath = CONFIG.player.chaseRepath; pathTo(m.x, m.z); }
 }
 
-/** AG rápido como no MU; HP só fora de combate (ou na cidade). */
+/** AG regenera rápido; HP só fora de combate (ou na cidade). */
 function regenerate(p, dt) {
   const st = G.st, P = CONFIG.player, town = inSafe();
   G.ag = Math.min(st.maxAg, G.ag + st.maxAg * st.agRegen * P.regenAgPerSec * dt);

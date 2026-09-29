@@ -546,9 +546,8 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
  * Funções puras, sem DOM nem Three.js: o jogo as usa no navegador e os testes
  * (tests/) as executam no Node. Todo o balanceamento fica centralizado aqui.
  *
- * Fórmulas de atributos por classe inspiradas no OpenMU
- * (https://github.com/MUnique/OpenMU, licença MIT), que modela cada classe
- * como uma lista de relações "alvo = multiplicador × fonte".
+ * As fórmulas de atributos modelam cada classe como uma lista de relações
+ * "alvo = multiplicador × fonte".
  */
 (function (root, factory) {
   const m = factory();
@@ -602,7 +601,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
   // ---------------------------------------------------------------------------
   // Experiência
   // ---------------------------------------------------------------------------
-  /** EXP para passar do nível L para L+1 (curva clássica do MU + cauda pós-255). */
+  /** EXP para passar do nível L para L+1 (curva clássica + cauda pós-255). */
   function expToNext(level) {
     let e = (level + 9) * level * level * 10;
     if (level > 255) {
@@ -611,7 +610,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     }
     return e;
   }
-  /** EXP por monstro: fórmula do MU com penalidade quando o monstro é muito mais fraco. */
+  /** EXP por monstro: fórmula clássica com penalidade quando o monstro é muito mais fraco. */
   function monsterExp(mLevel, pLevel, rate) {
     rate = rate || RATES.exp;
     let e = ((mLevel + 25) * mLevel) / 3;
@@ -713,7 +712,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
   ];
 
   // ---------------------------------------------------------------------------
-  // Habilidades (custam MP e AG, como no MU)
+  // Habilidades (custam MP e AG)
   // ---------------------------------------------------------------------------
   const SKILLS = {
     // Dark Knight
@@ -848,7 +847,7 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     const pre = it.rarity === 'comum' ? '' : RARITY[it.rarity].name + ' ';
     return pre + base + (it.plus ? ' +' + it.plus : '');
   }
-  /** Requisito de atributo para equipar (como no MU, sobe com o +nível). */
+  /** Requisito de atributo para equipar (sobe com o +nível). */
   function itemReq(it) {
     if (!it.slot || it.slot === 'ring' || it.slot === 'pendant') return null;
     if (it.slot === 'wings') return { stat: 'level', value: 150 + it.tier * 60 };
@@ -1042,6 +1041,8 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     jewelChance: 0.1,   // monstros: 10% de chance de uma Jewel aleatória
     bossChance: 0.2,    // chefe do andar: 20% de chance de soltar o tesouro
     biomeEvery: 5,      // troca de bioma a cada 5 andares
+    monsterMult: 2,     // quantidade de monstros por grupo (2x o de um grupo normal)
+    goldMult: 2,        // Gold dos monstros, do chefe e dos barris (2x o da masmorra)
   };
   const JEWEL_IDS = ['bless', 'soul', 'chaos', 'life'];
   function towerLevel(floor) { return TOWER.baseLevel + (Math.max(1, floor) - 1) * TOWER.levelPerFloor; }
@@ -1051,9 +1052,9 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     return { hp: 1 + f * TOWER.hpPerFloor, dmg: 1 + f * TOWER.dmgPerFloor };
   }
   /**
-   * Drop na torre (determinístico pela seed). Monstros: Gold igual ao de um andar
-   * normal de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
-   * soltar Gold de chefe e 1–3 Jewels aleatórias; nos outros 80%, nada.
+   * Drop na torre (determinístico pela seed). Monstros: Gold em dobro (TOWER.goldMult)
+   * em relação a um andar de masmorra + 10% de uma Jewel aleatória. Chefe: 20% de chance de
+   * soltar Gold de chefe (também em dobro) e 1–3 Jewels aleatórias; nos outros 80%, nada.
    */
   function rollTowerDrop(opts) {
     const { seed, mLevel, src } = opts;
@@ -1063,13 +1064,13 @@ window.THREE={ACESFilmicToneMapping:nt,AddEquation:M,AddOperation:K,AdditiveAnim
     if (src === 'boss') {
       out.bossRoll = rnd();
       if (out.bossRoll < TOWER.bossChance) {
-        out.gold = goldAmount(mLevel, 'boss', rnd());
+        out.gold = goldAmount(mLevel, 'boss', rnd()) * TOWER.goldMult;
         const n = 1 + Math.floor(rnd() * 3);
         for (let i = 0; i < n; i++) out.jewels.push(pick());
       }
       return out;
     }
-    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd());
+    if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd()) * TOWER.goldMult;
     if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
     return out;
   }
@@ -1484,7 +1485,7 @@ return { guard, loopStats, reportError, startLoop };
 })();
 
 // ---- core/state.js ----
-const { G, LEGACY_SAVE_KEYS, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter } = (() => {
+const { G, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter } = (() => {
 // ---------- estado do jogo e do save ----------
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
@@ -1501,15 +1502,12 @@ const G = {
 /** Save global (mutado no lugar para que os módulos compartilhem a mesma referência). */
 const S = defaultSave();
 const SAVE_KEY = 'forjadeira.save.v1';
-/** Chaves de versões anteriores do jogo (quando ainda se chamava Forja-deira): lidas uma vez e migradas. */
-const LEGACY_SAVE_KEYS = ['mutrz.save.v1'];
 function defaultSave() {
   return { chars: [], active: -1, settings: { quality: 'media', sound: true, labels: true } };
 }
 function readSave() {
   try {
-    let raw = localStorage.getItem(SAVE_KEY);
-    for (const k of LEGACY_SAVE_KEYS) if (!raw) raw = localStorage.getItem(k);
+    const raw = localStorage.getItem(SAVE_KEY);
     if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();
@@ -1577,7 +1575,7 @@ function sanitizeCharacter(ch) {
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   return ch;
 }
-return { G, LEGACY_SAVE_KEYS, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter };
+return { G, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter };
 })();
 
 // ---- core/util.js ----
@@ -5813,7 +5811,7 @@ return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
 // ---- art/cutaway.js ----
 const { CUT, CUT_GLSL, clearCutaway, cutaway, injectCutaway, setCutaway } = (() => {
 // =============================================================================
-// Recorte de visão (estilo Diablo/Torchlight): paredes e adereços que ficam
+// Recorte de visão (estilo ARPG isométrico): paredes e adereços que ficam
 // entre a câmera e o herói somem num "furo" pontilhado ao redor da linha de
 // visão, deixando só o pé da parede. Assim as paredes podem ser todas altas
 // (labirinto de verdade) sem esconder o jogador.
@@ -8496,7 +8494,7 @@ function placeProps(grid, W, H, rnd, sc, avoid) {
 
 /**
  * Gera uma masmorra a partir de "chunks" 12×12 ligados por um labirinto.
- * Regras de câmera (Torchlight): paredes entre a câmera e o chão ficam baixas,
+ * Regras de câmera: paredes entre a câmera e o chão ficam baixas,
  * e objetos altos só encostam em paredes do fundo (norte/oeste), nunca no meio.
  */
 function genDungeon(biomeId, floor, seed) {
@@ -8892,8 +8890,9 @@ function enterDungeon(biome, floor) {
       for (let i = 0; i < 3; i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 5, wz + (rand() - 0.5) * 5, lvl + 2, { pack });
     } else {
       const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
-      for (let i = 0; i < s.size; i++) {
-        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+      const n = s.size * R.TOWER.monsterMult; // grupos em dobro na torre
+      for (let i = 0; i < n; i++) {
+        let x = wx + (rand() - 0.5) * 5, z = wz + (rand() - 0.5) * 5;
         if (!walkable(G.L, x, z)) { x = wx; z = wz; }
         const k2 = rand() < 0.75 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
         spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });
@@ -8929,11 +8928,13 @@ function enterTower(floor) {
     const wx = s.x * TILE, wz = s.z * TILE;
     if (s.boss) {
       spawnMonster(B.boss, wx, wz, lvl + 6, { pack });
-      for (let i = 0; i < 2 + Math.min(4, Math.floor(floor / 4)); i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
+      const escort = (2 + Math.min(4, Math.floor(floor / 4))) * R.TOWER.monsterMult;
+      for (let i = 0; i < escort; i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
     } else {
       const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
-      for (let i = 0; i < s.size; i++) {
-        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+      const n = s.size * R.TOWER.monsterMult; // grupos em dobro na torre
+      for (let i = 0; i < n; i++) {
+        let x = wx + (rand() - 0.5) * 5, z = wz + (rand() - 0.5) * 5;
         if (!walkable(G.L, x, z)) { x = wx; z = wz; }
         const k2 = rand() < 0.7 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
         spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });
@@ -9574,7 +9575,7 @@ function updatePlayer(dt) {
   if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) { p.x = G.L.start.x * TILE; p.z = G.L.start.z * TILE; p.path = null; }
   p.atkCd -= dt;
   p.moving = false;
-  // segurar o botão = seguir o cursor (estilo Torchlight)
+  // segurar o botão = seguir o cursor (estilo ARPG)
   if (mouse.down && G.time - mouse.lastRepath > CONFIG.player.holdRepath) {
     mouse.lastRepath = G.time;
     clickWorld(mouse.x, mouse.y, true);
@@ -9695,7 +9696,7 @@ function engageMonster(p, m, dt) {
   if (p.repath <= 0 || !p.path) { p.repath = CONFIG.player.chaseRepath; pathTo(m.x, m.z); }
 }
 
-/** AG rápido como no MU; HP só fora de combate (ou na cidade). */
+/** AG regenera rápido; HP só fora de combate (ou na cidade). */
 function regenerate(p, dt) {
   const st = G.st, P = CONFIG.player, town = inSafe();
   G.ag = Math.min(st.maxAg, G.ag + st.maxAg * st.agRegen * P.regenAgPerSec * dt);
@@ -10076,7 +10077,7 @@ function dropMonsterLoot(m, src) {
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
-/** Torre Infinita: só Gold (igual à masmorra) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+/** Torre Infinita: só Gold (em dobro) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
 function dropTowerLoot(m, src, seed) {
   const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
@@ -10184,7 +10185,8 @@ function breakBarrel(b) {
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
   Sfx.noise(0.2, 0.08, 800);
   const lvl = zoneLevel();
-  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor(lvl * (8 + rand() * 12) + 10) });
+  const goldMult = G.zone === 'tower' ? R.TOWER.goldMult : 1;
+  if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor((lvl * (8 + rand() * 12) + 10) * goldMult) });
   if (G.zone === 'tower') return; // na torre só cai Gold
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
@@ -10822,7 +10824,7 @@ function paneAction(e) {
     case 't-boss': ch.bossKills += 5; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
-    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); LEGACY_SAVE_KEYS.forEach((k) => localStorage.removeItem(k)); } catch { /* */ } location.reload(); return;
+    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } location.reload(); return;
   }
   persist();
   renderPane();
@@ -10833,7 +10835,7 @@ function paneAction(e) {
 /** Cliques, botão direito e opções dentro do painel lateral. */
 function initPaneActions() {
   $('#pane').addEventListener('click', paneAction);
-  // Botão direito equipa/desequipa (como no MU); arrastar move entre mochila e equipamento.
+  // Botão direito equipa/desequipa; arrastar move entre mochila e equipamento.
   $('#pane').addEventListener('contextmenu', (e) => {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
