@@ -259,9 +259,7 @@ input, select { font-family: inherit; }
 .cell.bad .gl { opacity: .5; filter: grayscale(.6); }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
-.cell.mk { outline: 2px solid #ffd24a; box-shadow: inset 0 0 12px #ffd24a55; }
-.cell .mkx { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; color: #ffd24a; text-shadow: 0 0 4px #000, 0 1px 2px #000; pointer-events: none; }
-.cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
+.cell .cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }
 .cell.ghost { position: fixed; z-index: 9999; pointer-events: none; opacity: .9; box-shadow: 0 6px 18px rgba(0,0,0,.6); }
@@ -428,7 +426,7 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
         <button data-tab="loot" data-tip="Drops (L)" aria-label="Drops (L)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v9H4z"/><path d="M4 10l2-5h12l2 5"/><path d="M10.5 10v3h3v-3"/></g></svg></button>
         <button data-tab="opts" data-tip="Opções (O)" aria-label="Opções (O)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></g></svg></button>
         <button id="btnPortal" data-tip="Portal para a cidade (T)" aria-label="Portal para a cidade (T)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="9"/><path d="M12 7c2 1.5 2 8.5 0 10"/><path d="M12 7c-2 1.5-2 8.5 0 10" opacity=".6"/></g></svg></button>
-        <button id="btnPet" data-tip="Pet vende itens comuns (P)" aria-label="Pet vende itens comuns (P)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg></button>
+        <button id="btnPet" data-tip="Pet vende equipamentos, exceto Lendários (P)" aria-label="Pet vende equipamentos, exceto Lendários (P)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg></button>
       </nav>
       <div class="buffs" id="buffs"></div>
     </div>

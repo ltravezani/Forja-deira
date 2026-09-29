@@ -62,7 +62,7 @@ export function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null, petPick: false, petMarks: null };
+export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**

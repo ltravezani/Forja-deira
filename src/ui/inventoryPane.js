@@ -2,6 +2,7 @@
 import { G, UI } from '../core/state.js';
 import { esc, fmt, R } from '../core/util.js';
 import { autoEquipOn, BAG_SIZE, bagCat, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
+import { petSellable } from '../game/allies.js';
 import { hasTownServices } from '../game/zones.js';
 import { glyph, iconHtml, iconURI } from './icons.js';
 import { statLabel } from './panes.js';
@@ -22,10 +23,9 @@ function cellHtml(it, attrs, sel, ctx) {
       }
     }
   }
-  const mk = ctx && ctx.marks && ctx.marks.has(it);
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (mk ? ' mk' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + (mk ? '<span class="mkx">✓</span>' : '') + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
@@ -72,12 +72,6 @@ function itemDetail(it, where) {
   h += '</div></div>';
   return h;
 }
-/** Itens marcados para o pet vender (descarta os que já saíram da mochila). */
-export function petMarks() {
-  const bag = G.ch.bag, cur = UI.petMarks || new Set();
-  UI.petMarks = new Set([...cur].filter((it) => bag.includes(it)));
-  return UI.petMarks;
-}
 export function selectedItem() {
   const s = UI.sel;
   if (!s) return null;
@@ -105,8 +99,7 @@ export function paneInv() {
   h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const marks = petMarks();
-  const ctx = { base, marks: UI.petPick ? marks : null };
+  const ctx = { base };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {
@@ -118,10 +111,7 @@ export function paneInv() {
   }
   h += '</div>';
   h += itemDetail(selectedItem(), UI.sel && UI.sel.where);
-  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm' + (UI.petPick ? ' gold' : '') + '" data-act="petpick" title="Clique nos itens da mochila para marcar o que o pet deve vender">' + (UI.petPick ? 'Cancelar seleção' : 'Pet: vender itens selecionados') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
-  if (UI.petPick) {
-    const val = [...marks].reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
-    h += '<p class="note tip">Clique nos itens da mochila para marcar ou desmarcar.</p><div class="row"><button class="btn sm gold" data-act="petsellsel"' + (marks.size ? '' : ' disabled') + '>Enviar pet com ' + marks.size + ' ite' + (marks.size === 1 ? 'm' : 'ns') + ' · ' + fmt(val) + ' Gold</button><button class="btn sm" data-act="petclear"' + (marks.size ? '' : ' disabled') + '>Limpar</button></div>';
-  }
+  const petN = ch.bag.filter(petSellable).length;
+  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell" title="Leva todo equipamento, exceto Lendários; joias e poções ficam na mochila">Enviar pet para vender (P) · ' + petN + ' ite' + (petN === 1 ? 'm' : 'ns') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
   return h;
 }

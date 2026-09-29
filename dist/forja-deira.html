@@ -259,9 +259,7 @@ input, select { font-family: inherit; }
 .cell.bad .gl { opacity: .5; filter: grayscale(.6); }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
-.cell.mk { outline: 2px solid #ffd24a; box-shadow: inset 0 0 12px #ffd24a55; }
-.cell .mkx { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; color: #ffd24a; text-shadow: 0 0 4px #000, 0 1px 2px #000; pointer-events: none; }
-.cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
+.cell .cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }
 .cell.ghost { position: fixed; z-index: 9999; pointer-events: none; opacity: .9; box-shadow: 0 6px 18px rgba(0,0,0,.6); }
@@ -428,7 +426,7 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
         <button data-tab="loot" data-tip="Drops (L)" aria-label="Drops (L)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v9H4z"/><path d="M4 10l2-5h12l2 5"/><path d="M10.5 10v3h3v-3"/></g></svg></button>
         <button data-tab="opts" data-tip="Opções (O)" aria-label="Opções (O)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></g></svg></button>
         <button id="btnPortal" data-tip="Portal para a cidade (T)" aria-label="Portal para a cidade (T)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="9"/><path d="M12 7c2 1.5 2 8.5 0 10"/><path d="M12 7c-2 1.5-2 8.5 0 10" opacity=".6"/></g></svg></button>
-        <button id="btnPet" data-tip="Pet vende itens comuns (P)" aria-label="Pet vende itens comuns (P)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg></button>
+        <button id="btnPet" data-tip="Pet vende equipamentos, exceto Lendários (P)" aria-label="Pet vende equipamentos, exceto Lendários (P)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg></button>
       </nav>
       <div class="buffs" id="buffs"></div>
     </div>
@@ -1526,7 +1524,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null, petPick: false, petMarks: null };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', ptr: false, lastCell: null };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -3849,7 +3847,7 @@ return { clearLog, log, setZoneText, toast };
 })();
 
 // ---- game/allies.js ----
-const { clearAllies, sendPetToSell, spawnAlly, updateAllies } = (() => {
+const { clearAllies, petSellable, sendPetToSell, spawnAlly, updateAllies } = (() => {
 // ---------- aliados (pet e invocações) ----------
 
 function spawnAlly(kind, x, z, dur) {
@@ -3864,18 +3862,15 @@ function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-/**
- * Manda o pet vender na cidade. Sem `picked`, leva os itens Comuns/Mágicos;
- * com `picked` (itens marcados no inventário), leva só esses, de qualquer tipo.
- */
-function sendPetToSell(picked) {
+/** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
+const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
+/** Manda o pet vender na cidade tudo que `petSellable` aceita. */
+function sendPetToSell() {
   const pet = G.pet;
   if (!pet) return false;
   if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
-  const sell = Array.isArray(picked)
-    ? picked.filter((it) => G.ch.bag.includes(it))
-    : G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
-  if (!sell.length) { log(Array.isArray(picked) ? 'Nenhum item marcado para o pet vender.' : 'Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return false; }
+  const sell = G.ch.bag.filter(petSellable);
+  if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
   pet.away = G.time + 18;
@@ -3948,7 +3943,7 @@ function clearAllies(keepPet) {
     G.allies.splice(i, 1);
   }
 }
-return { clearAllies, sendPetToSell, spawnAlly, updateAllies };
+return { clearAllies, petSellable, sendPetToSell, spawnAlly, updateAllies };
 })();
 
 // ---- engine/music.js ----
@@ -5056,6 +5051,78 @@ function initDialogs() {
 return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
 })();
 
+// ---- art/cutaway.js ----
+const { CUT, CUT_GLSL, clearCutaway, cutaway, injectCutaway, setCutaway } = (() => {
+// =============================================================================
+// Recorte de visão (estilo Diablo/Torchlight): paredes e adereços que ficam
+// entre a câmera e o herói somem num "furo" pontilhado ao redor da linha de
+// visão, deixando só o pé da parede. Assim as paredes podem ser todas altas
+// (labirinto de verdade) sem esconder o jogador.
+// =============================================================================
+
+/** Uniformes compartilhados por todos os materiais recortáveis (atualizados a cada quadro). */
+const CUT = {
+  uCutP: { value: new THREE.Vector3(0, -999, 0) }, // ponto do herói (peito)
+  uCutC: { value: new THREE.Vector3(0, 50, 0) },   // câmera
+  uCutR: { value: 4.4 },                            // raio do furo (mundo)
+};
+/** Atualiza o furo: herói em (x, y, z) visto pela câmera `cam`. */
+function setCutaway(x, y, z, cam) {
+  CUT.uCutP.value.set(x, y + 1.1, z);
+  CUT.uCutC.value.copy(cam.position);
+}
+/** Desliga o furo (ex.: tela de título). */
+function clearCutaway() { CUT.uCutP.value.set(0, -999, 0); }
+
+const VERT = `
+  vec4 cutW = vec4( transformed, 1.0 );
+  #ifdef USE_INSTANCING
+    cutW = instanceMatrix * cutW;
+  #endif
+  vCutW = ( modelMatrix * cutW ).xyz;`;
+// ponto mais próximo no segmento herói→câmera; dentro do raio e acima do pé da parede → descarta (com pontilhado na borda)
+const FRAG = `
+  {
+    vec3 cSeg = uCutC - uCutP;
+    float cT = dot( vCutW - uCutP, cSeg ) / dot( cSeg, cSeg );
+    if ( cT > 0.0 && cT < 1.0 && vCutW.y > 0.55 ) {
+      float cD = length( vCutW - ( uCutP + cSeg * cT ) );
+      float cA = 1.0 - smoothstep( uCutR - 1.3, uCutR, cD );
+      cA *= smoothstep( 0.55, 1.0, vCutW.y ) * smoothstep( 0.0, 0.04, cT );
+      // pontilhado ordenado (Bayer 4×4): borda suave sem transparência
+      vec2 cF = floor( gl_FragCoord.xy ), cA2 = mod( cF, 2.0 ), cB2 = mod( floor( cF * 0.5 ), 2.0 );
+      float cB = ( 4.0 * mod( 2.0 * cA2.x + 3.0 * cA2.y, 4.0 ) + mod( 2.0 * cB2.x + 3.0 * cB2.y, 4.0 ) + 0.5 ) / 16.0;
+      if ( cA > cB ) discard;
+    }
+  }`;
+
+/** Injeta o recorte num shader já pronto (vertexShader/fragmentShader de onBeforeCompile). */
+function injectCutaway(sh) {
+  Object.assign(sh.uniforms, CUT);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vCutW;')
+    .replace('#include <project_vertex>', '#include <project_vertex>' + VERT);
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform vec3 uCutP; uniform vec3 uCutC; uniform float uCutR; varying vec3 vCutW;')
+    .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>' + FRAG);
+}
+/** Torna um material recortável (preserva um onBeforeCompile anterior). */
+function cutaway(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => { if (prev) prev(sh, r); injectCutaway(sh); };
+  const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
+  mat.customProgramCacheKey = () => 'cutaway|' + prevKey();
+  return mat;
+}
+/** Trecho GLSL para shaders próprios (ex.: chamas em pontos): `cutHidden(pos)` diz se o ponto está no furo. */
+const CUT_GLSL = `uniform vec3 uCutP; uniform vec3 uCutC; uniform float uCutR;
+  bool cutHidden( vec3 w ) {
+    vec3 s = uCutC - uCutP; float t = dot( w - uCutP, s ) / dot( s, s );
+    return t > 0.04 && t < 1.0 && w.y > 0.55 && length( w - ( uCutP + s * t ) ) < uCutR - 0.6;
+  }`;
+return { CUT, CUT_GLSL, clearCutaway, cutaway, injectCutaway, setCutaway };
+})();
+
 // ---- world/kit.js ----
 const { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } = (() => {
 // =============================================================================
@@ -5173,6 +5240,94 @@ function kit(name) {
       P.push(KP(GEO.sphS, 0x100c08, 0.06, 0.16, 0.14, 0.08, 0.07, 0.04));
       for (let i = 0; i < 3; i++) { const a = 0.8 + i * 1.7; P.push(KP(GEO.cyl6, BONE, Math.cos(a) * 0.4, 0.05, Math.sin(a) * 0.4, 0.06, 0.6, 0.06, Math.PI / 2, a, 0)); }
       P.push(KP(GEO.torus, BONE, 0.3, 0.1, -0.3, 0.4, 0.4, 0.6, Math.PI / 2, 0.4, 0));
+      break;
+    // ---------- detalhes de labirinto: armas quebradas e enfeites de parede (face em +z, fundo em z=0) ----------
+    case 'swordStuck': { // espada quebrada cravada no chão, inclinada, com a ponta partida ao lado
+      const STEEL = 0xb8bcc8, a = 0.28;
+      const tilt = (y) => [Math.sin(a) * y, Math.cos(a) * y];
+      const at = (geo, c, y, sx, sy, sz) => { const [x, yy] = tilt(y); P.push(KP(geo, c, x, yy, 0, sx, sy, sz, 0, 0, -a)); };
+      at(GEO.box, STEEL, 0.3, 0.12, 0.8, 0.03);
+      at(GEO.box, 0x8a8e9a, 0.3, 0.03, 0.8, 0.04); // sulco da lâmina
+      at(GEO.box, 0x6a4a2a, 0.74, 0.56, 0.08, 0.1); // guarda
+      at(GEO.cyl6, 0x3a2418, 0.94, 0.07, 0.32, 0.07); // cabo
+      at(GEO.sphS, 0xa07a2a, 1.14, 0.13, 0.13, 0.13); // pomo
+      P.push(KP(GEO.box, STEEL, 0.42, 0.02, 0.28, 0.1, 0.025, 0.42, 0, 0.7, 0)); // pedaço da lâmina
+      P.push(KP(GEO.cone4, STEEL, 0.5, 0.02, 0.5, 0.1, 0.18, 0.025, Math.PI / 2, 0.7, 0));
+      P.push(KP(GEO.ico0, DSTONE, 0, 0.04, 0, 0.45, 0.1, 0.4)); // terra revolvida
+      break;
+    }
+    case 'swordPile': { // espadas e escudo caídos, restos de uma batalha
+      const STEEL = 0xa8acb8;
+      for (let i = 0; i < 3; i++) {
+        const r = -0.9 + i * 1.1, x = (i - 1) * 0.35, z = (i % 2) * 0.25 - 0.1;
+        P.push(KP(GEO.box, STEEL, x, 0.03, z, 0.1, 0.03, 0.75 - i * 0.12, 0, r, 0));
+        P.push(KP(GEO.box, 0x6a4a2a, x - Math.sin(r) * 0.4, 0.05, z - Math.cos(r) * 0.4, 0.4, 0.06, 0.07, 0, r, 0));
+        P.push(KP(GEO.cyl6, 0x3a2418, x - Math.sin(r) * 0.55, 0.05, z - Math.cos(r) * 0.55, 0.06, 0.24, 0.06, Math.PI / 2, r, 0));
+      }
+      P.push(KP(GEO.cyl, 0x6a3a22, 0.45, 0.07, -0.4, 0.7, 0.07, 0.7, 0.12, 0, 0.1)); // escudo tombado
+      P.push(KP(GEO.torusF, IRON, 0.45, 0.1, -0.4, 0.7, 0.7, 0.6, Math.PI / 2 + 0.12, 0, 0.1));
+      P.push(KP(GEO.sphH, IRON, 0.45, 0.11, -0.4, 0.2, 0.1, 0.2));
+      P.push(KP(GEO.sphH, 0x5a5a66, -0.5, 0.0, 0.45, 0.42, 0.34, 0.4, 0.4, 0.5, 0)); // elmo amassado
+      break;
+    }
+    case 'shieldWall': { // escudo redondo pendurado com duas espadas cruzadas atrás
+      P.push(KP(GEO.box, 0x9aa0ac, -0.02, 2.0, 0.05, 0.09, 1.5, 0.03, 0, 0, 0.75));
+      P.push(KP(GEO.box, 0x9aa0ac, 0.02, 2.0, 0.05, 0.09, 1.5, 0.03, 0, 0, -0.75));
+      for (const sg of [1, -1]) P.push(KP(GEO.box, 0x6a4a2a, sg * 0.46, 1.52, 0.05, 0.3, 0.06, 0.06, 0, 0, sg * -0.75));
+      P.push(KP(GEO.cyl, 0x7a2020, 0, 2.0, 0.12, 0.95, 0.08, 0.95, Math.PI / 2, 0, 0));
+      P.push(KP(GEO.torusF, IRON, 0, 2.0, 0.17, 0.95, 0.95, 0.6));
+      P.push(KP(GEO.box, 0xa07a2a, 0, 2.0, 0.165, 0.9, 0.1, 0.02));
+      P.push(KP(GEO.box, 0xa07a2a, 0, 2.0, 0.165, 0.1, 0.9, 0.02));
+      P.push(KP(GEO.sphH, IRON, 0, 2.0, 0.16, 0.24, 0.24, 0.16, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'chains': // correntes penduradas com grilhões
+      for (const cx of [-0.45, 0.4]) {
+        P.push(KP(GEO.box, IRON, cx, 2.75, 0.04, 0.16, 0.16, 0.08));
+        const n = cx < 0 ? 9 : 6;
+        for (let i = 0; i < n; i++) P.push(KP(GEO.torusF, 0x5a5a64, cx, 2.62 - i * 0.16, 0.1, 0.16, 0.22, 0.5, 0, i % 2 ? Math.PI / 2 : 0, 0));
+        P.push(KP(GEO.torusF, IRON, cx, 2.5 - n * 0.16, 0.12, 0.3, 0.3, 0.9, Math.PI / 2, 0, 0));
+      }
+      break;
+    case 'weaponRack': // suporte de armas encostado na parede
+      P.push(KP(GEO.box, DWOOD, 0, 0.1, 0.35, 1.6, 0.12, 0.34));
+      P.push(KP(GEO.box, DWOOD, 0, 1.55, 0.1, 1.6, 0.12, 0.16));
+      for (const x of [-0.75, 0.75]) P.push(KP(GEO.box, WOOD, x, 0.85, 0.2, 0.1, 1.6, 0.1, 0.2, 0, 0));
+      for (let i = 0; i < 3; i++) {
+        const x = -0.45 + i * 0.45;
+        P.push(KP(GEO.cyl6, WOOD, x, 1.25, 0.22, 0.06, 2.3, 0.06, 0.12, 0, 0));
+        if (i !== 1) P.push(KP(GEO.cone4, 0xb8bcc8, x, 2.5, 0.08, 0.14, 0.34, 0.04, 0.12, 0, 0));
+        else P.push(KP(GEO.cone4, 0xb8bcc8, x + 0.04, 2.42, 0.08, 0.1, 0.12, 0.04, 0.12, 0, 0.6)); // lança partida
+      }
+      P.push(KP(GEO.box, 0xb8bcc8, 0.22, 0.75, 0.3, 0.1, 1.0, 0.03, 0.15, 0, 0.1));
+      P.push(KP(GEO.box, 0x6a4a2a, 0.26, 1.3, 0.24, 0.4, 0.07, 0.08, 0.15, 0, 0.1));
+      break;
+    case 'pilaster': // meia-coluna de pedra colada à parede (quebra a parede lisa)
+      P.push(KP(GEO.box, DSTONE, 0, 0.2, 0.2, 0.95, 0.4, 0.4));
+      P.push(KP(GEO.box, STONE, 0, 1.75, 0.16, 0.7, 2.9, 0.32));
+      P.push(KP(GEO.box, DSTONE, 0, 1.75, 0.33, 0.12, 2.8, 0.02));
+      P.push(KP(GEO.box, DSTONE, 0, 3.25, 0.22, 0.95, 0.3, 0.44));
+      P.push(KP(GEO.box, STONE, 0, 3.45, 0.18, 1.1, 0.14, 0.36));
+      break;
+    case 'skullNiche': // nicho escavado com crânios e uma vela
+      P.push(KP(GEO.box, 0x1a1418, 0, 1.6, 0.03, 1.0, 0.9, 0.06));
+      P.push(KP(GEO.box, DSTONE, 0, 1.12, 0.12, 1.2, 0.1, 0.24));
+      P.push(KP(GEO.box, DSTONE, 0, 2.1, 0.1, 1.2, 0.12, 0.2));
+      for (let i = 0; i < 3; i++) { const x = -0.3 + i * 0.3; P.push(KP(GEO.sphS, BONE, x, 1.32, 0.12, 0.26, 0.24, 0.26)); P.push(KP(GEO.sphS, 0x100c08, x - 0.05, 1.34, 0.24, 0.06)); P.push(KP(GEO.sphS, 0x100c08, x + 0.05, 1.34, 0.24, 0.06)); }
+      P.push(KP(GEO.cyl6, 0xe8dcc0, 0.42, 1.28, 0.14, 0.08, 0.22, 0.08));
+      Gl.push(KP(GEO.cone, 0xffc060, 0.42, 1.46, 0.14, 0.08, 0.16, 0.08));
+      break;
+    case 'vines': // cipós e raízes descendo pela parede
+      for (let i = 0; i < 6; i++) {
+        const x = -0.7 + i * 0.28, len = 1.1 + ((i * 7) % 5) * 0.35, top = 3.2;
+        P.push(KP(GEO.box, i % 2 ? 0x3e7a2e : 0x52903a, x, top - len / 2, 0.06, 0.07, len, 0.05, 0, 0, (i % 3 - 1) * 0.06));
+        for (let k = 0; k < 3; k++) P.push(KP(GEO.ico0, k % 2 ? 0x4e9a38 : 0x64b048, x + (k % 2 ? 0.1 : -0.1), top - len * (0.25 + k * 0.3), 0.1, 0.22, 0.14, 0.1, 0.3, k, 0));
+      }
+      P.push(KP(GEO.cyl6, 0x5a3a22, 0, 3.15, 0.08, 0.12, 1.9, 0.12, 0, 0, Math.PI / 2 - 0.1)); // raiz grossa
+      break;
+    case 'wallCrystals': // cristais brotando da parede (brilham)
+      for (let i = 0; i < 4; i++) { const x = -0.4 + i * 0.28, y = 1.3 + ((i * 5) % 3) * 0.45; Gl.push(KP(GEO.oct, i % 2 ? 0x7ac8ff : 0xb08aff, x, y, 0.2, 0.2, 0.6 + (i % 2) * 0.3, 0.2, 0.9, 0, (i - 1.5) * 0.4)); }
+      P.push(KP(GEO.ico0, 0x4a506e, 0, 1.5, 0.05, 1.1, 0.6, 0.25));
       break;
     case 'skulls':
       for (let i = 0; i < 7; i++) { const a = i * 2.3, r = i < 4 ? 0.35 : 0.15, y = i < 4 ? 0.14 : 0.36; P.push(KP(GEO.sphS, BONE, Math.cos(a) * r, y, Math.sin(a) * r, 0.28, 0.26, 0.3)); P.push(KP(GEO.sphS, 0x100c08, Math.cos(a) * (r + 0.12), y + 0.02, Math.sin(a) * (r + 0.12), 0.07)); }
@@ -5484,7 +5639,7 @@ function kit(name) {
 /** Material dos adereços: cor por vértice × textura de desgaste. */
 let _kitMat = null, _kitGlow = null, _roofMat = null;
 function kitMat() {
-  if (!_kitMat) { const g = texGrime(); _kitMat = toonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap }, { rim: 0.22 }); _kitMat.normalScale.setScalar(0.6); _kitMat.userData.shared = true; }
+  if (!_kitMat) { const g = texGrime(); _kitMat = toonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap }, { rim: 0.22 }); _kitMat.normalScale.setScalar(0.6); _kitMat.userData.shared = true; cutaway(_kitMat); }
   return _kitMat;
 }
 /**
@@ -5514,6 +5669,7 @@ function kitGlowMat() {
     };
     _kitGlow.customProgramCacheKey = () => 'kitGlowPulse';
     _kitGlow.userData.shared = true;
+    cutaway(_kitGlow);
   }
   return _kitGlow;
 }
@@ -5912,6 +6068,8 @@ function buildGround(L, T, blendFn) {
  * Paredes: bloco por tile de parede vizinho do chão. Faces só onde aparecem;
  * UV em mundo (sem esticar), topo escurecido, base com oclusão.
  * rough: jitter das quinas (cavernas/abismo) com ruído determinístico.
+ * Todas as paredes são altas (labirinto): o que fica entre a câmera e o herói
+ * some pelo recorte de visão (art/cutaway.js), em vez de a parede ser baixa.
  */
 function buildWalls(L, T, opt) {
   const { W, H, grid } = L;
@@ -5924,11 +6082,9 @@ function buildWalls(L, T, opt) {
     let adj = false;
     for (let dz = -1; dz <= 1 && !adj; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz)) { adj = true; break; }
     if (!adj) continue;
-    let front = false;
-    for (let dz = 0; dz <= 2 && !front; dz++) for (let dx = 0; dx <= 2; dx++) if ((dx || dz) && at(x - dx, z - dz)) { front = true; break; }
-    const h = front ? 0.7 : opt.h + (rnd() - 0.5) * opt.var;
+    const h = opt.h + (rnd() - 0.5) * opt.var;
     hts[z * W + x] = h;
-    walls.push({ x, z, h, low: front });
+    walls.push({ x, z, h, low: false });
   }
   const P = [], U = [], C = [], N = [];
   const T2 = TILE / 2;
@@ -5955,6 +6111,9 @@ function buildWalls(L, T, opt) {
     const c00 = corner(x, z, top(x, z)), c10 = corner(x + 1, z, top(x + 1, z)), c11 = corner(x + 1, z + 1, top(x + 1, z + 1)), c01 = corner(x, z + 1, top(x, z + 1));
     const tc = capRGB;
     quad(c00, c01, c11, c10, [c00[0] / 4, c00[2] / 4], [c01[0] / 4, c01[2] / 4], [c11[0] / 4, c11[2] / 4], [c10[0] / 4, c10[2] / 4], tc, tc, tc, tc, [0, 1, 0]);
+    // tampa interna na altura do pé da parede: escondida dentro do bloco, aparece só quando o recorte de visão corta a parede
+    const sy = 0.6, s00 = corner(x, z, sy), s10 = corner(x + 1, z, sy), s11 = corner(x + 1, z + 1, sy), s01 = corner(x, z + 1, sy), sc = shadeRGB(tc, 0.6);
+    quad(s00, s01, s11, s10, [s00[0] / 4, s00[2] / 4], [s01[0] / 4, s01[2] / 4], [s11[0] / 4, s11[2] / 4], [s10[0] / 4, s10[2] / 4], sc, sc, sc, sc, [0, 1, 0]);
     // lados: [dx,dz, canto A, canto B, normal]
     for (const [dx, dz, A, Bc, nrm] of [[0, -1, [x + 1, z], [x, z], [0, 0, -1]], [0, 1, [x, z + 1], [x + 1, z + 1], [0, 0, 1]], [-1, 0, [x, z], [x, z + 1], [-1, 0, 0]], [1, 0, [x + 1, z + 1], [x + 1, z], [1, 0, 0]]]) {
       const nx = x + dx, nz = z + dz;
@@ -5989,6 +6148,7 @@ function buildWalls(L, T, opt) {
   mat.normalScale.setScalar(0.7);
   mat.color.setHex(T.wallCol || 0xffffff);
   if (T.wall.emissiveMap) { mat.emissiveMap = T.wall.emissiveMap; mat.emissive = new THREE.Color(T.wallGlow || 0xff5a10); mat.emissiveIntensity = 0.9; }
+  cutaway(mat);
   const m = new THREE.Mesh(g, mat);
   m.castShadow = true; m.receiveShadow = true;
   addLevel(m);
@@ -6011,6 +6171,7 @@ function placeDecals(list, kind, size, opt) {
     else setInstance(m, i, p.x, 0.02 + i * 0.0004, p.z, -Math.PI / 2, 0, p.r || 0, sc, sc, 1);
   });
   m.renderOrder = 1;
+  cutaway(mat);
   m.receiveShadow = true;
   m.computeBoundingSphere();
   addLevel(m);
@@ -6066,8 +6227,8 @@ function buildFlames() {
   geo.setAttribute('fcol', new THREE.BufferAttribute(col, 3));
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uMap: { value: flameTexture() }, uTime: { value: 0 }, uScale: { value: 500 } },
-    vertexShader: 'attribute float size; attribute vec3 fcol; varying vec3 vC; uniform float uTime; uniform float uScale; void main(){ vC = fcol; vec4 mv = modelViewMatrix * vec4(position, 1.0); float f = 0.85 + 0.1 * sin(uTime * 13.0 + position.x * 3.1) + 0.06 * sin(uTime * 29.0 + position.z * 5.3); gl_PointSize = size * f * uScale / -mv.z; gl_Position = projectionMatrix * mv; }',
+    uniforms: { uMap: { value: flameTexture() }, uTime: { value: 0 }, uScale: { value: 500 }, ...CUT },
+    vertexShader: 'attribute float size; attribute vec3 fcol; varying vec3 vC; uniform float uTime; uniform float uScale; ' + CUT_GLSL + ' void main(){ vC = fcol; vec4 mv = modelViewMatrix * vec4(position, 1.0); float f = 0.85 + 0.1 * sin(uTime * 13.0 + position.x * 3.1) + 0.06 * sin(uTime * 29.0 + position.z * 5.3); gl_PointSize = cutHidden(position) ? 0.0 : size * f * uScale / -mv.z; gl_Position = projectionMatrix * mv; }',
     fragmentShader: 'uniform sampler2D uMap; varying vec3 vC; void main(){ vec4 t = texture2D(uMap, gl_PointCoord); gl_FragColor = vec4(t.rgb * vC * 1.6 * t.a, 1.0); }',
   });
   flameSprites = new THREE.Points(geo, mat);
@@ -6128,12 +6289,13 @@ function buildLevel(L) {
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
+  if (!town) decorateMaze(L, walls, R.mulberry32(L.seed * 19 + 5));
   const at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
   const rnd = R.mulberry32(L.seed * 13 + 1);
   // tochas nas paredes altas voltadas para o jogador (+x / +z)
   const sconces = [];
   if (!town) walls.forEach((w) => {
-    if (w.low) return;
+    if (w.low || w.decor) return;
     const fx = at(w.x + 1, w.z) === 1, fz = !fx && at(w.x, w.z + 1) === 1;
     if ((fx || fz) && rnd() < (L.biome === 'caves' ? 0.03 : 0.075)) {
       const ry = fx ? Math.PI / 2 : 0;
@@ -6413,6 +6575,61 @@ function scatterClutter(L, walls) {
   for (const k in lists) placeKit(k, lists[k], (o) => o, { noShadow: true });
 }
 
+/**
+ * Detalhes de labirinto: enfeites nas faces das paredes que a câmera vê (+x/+z),
+ * rachaduras/musgo/sangue pintados nelas, colunas coladas nas paredes retas e
+ * restos de batalha no chão (espadas quebradas cravadas, pilhas de armas).
+ * Só visual: não muda a grade andável. Marca `w.decor` para as tochas não se sobreporem.
+ */
+const MAZE_DECOR = {
+  forest: { wall: [['vines', 0.16], ['shieldWall', 0.02]], paint: ['moss', 'moss', 'crack'], floor: 0.06, pilaster: false },
+  caves: { wall: [['wallCrystals', 0.1], ['chains', 0.03], ['shieldWall', 0.02]], paint: ['crack', 'crack', 'moss'], floor: 0.05, pilaster: false },
+  ruins: { wall: [['shieldWall', 0.05], ['weaponRack', 0.04], ['vines', 0.06], ['chains', 0.03]], paint: ['crack', 'moss', 'moss'], floor: 0.065, pilaster: true },
+  castle: { wall: [['shieldWall', 0.07], ['weaponRack', 0.05], ['chains', 0.05], ['skullNiche', 0.03]], paint: ['crack', 'blood', 'crack'], floor: 0.075, pilaster: true },
+  abyss: { wall: [['chains', 0.08], ['skullNiche', 0.06], ['shieldWall', 0.02]], paint: ['blood', 'ash', 'crack'], floor: 0.06, pilaster: false },
+};
+function decorateMaze(L, walls, rnd) {
+  const D = MAZE_DECOR[L.biome] || MAZE_DECOR.ruins;
+  const T = TILE;
+  const at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
+  const wallAt = (x, z) => !at(x, z);
+  const lists = {}, paint = {};
+  const add = (k, o) => (lists[k] || (lists[k] = [])).push(o);
+  const near = (x, z, c, r) => c && Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
+  for (const w of walls) {
+    for (const [dx, dz] of [[1, 0], [0, 1]]) {
+      if (at(w.x + dx, w.z + dz) !== 1) continue;
+      const ry = Math.atan2(dx, dz);
+      const fx = w.x * T + dx * (T / 2 + 0.02), fz = w.z * T + dz * (T / 2 + 0.02);
+      // parede reta (vizinhos laterais também são parede com o mesmo lado livre): cabe coluna
+      const lx = dz, lz = dx;
+      const straight = wallAt(w.x + lx, w.z + lz) && wallAt(w.x - lx, w.z - lz) && at(w.x + lx + dx, w.z + lz + dz) === 1 && at(w.x - lx + dx, w.z - lz + dz) === 1;
+      const k3 = ((dx ? w.z : w.x) % 3 + 3) % 3;
+      if (D.pilaster && straight && k3 === 0) { add('pilaster', { x: fx, z: fz, ry, sy: w.h / 3.5 }); w.decor = true; continue; }
+      let r = rnd(), put = null;
+      for (const [k, p] of D.wall) { if (r < p) { put = k; break; } r -= p; }
+      if (put && !w.decor) {
+        const j = (rnd() - 0.5) * 0.5;
+        add(put, { x: fx + lx * j, z: fz + lz * j, ry, s: 0.9 + rnd() * 0.2, sy: put === 'vines' ? w.h / 3.4 : undefined });
+        w.decor = true;
+      } else if (rnd() < 0.2) {
+        const kind = D.paint[Math.floor(rnd() * D.paint.length)];
+        (paint[kind] || (paint[kind] = [])).push({ x: fx + dx * 0.02 + lx * (rnd() - 0.5) * 0.6, y: 0.9 + rnd() * 1.4, z: fz + dz * 0.02 + lz * (rnd() - 0.5) * 0.6, ry, s: 0.8 + rnd() * 0.6 });
+      }
+    }
+  }
+  // restos de batalha no chão, de preferência encostados nas paredes
+  for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
+    if (at(x, z) !== 1 || near(x, z, L.start, 2) || near(x, z, L.boss, 2)) continue;
+    const byWall = wallAt(x - 1, z) || wallAt(x + 1, z) || wallAt(x, z - 1) || wallAt(x, z + 1);
+    if (rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
+    const o = { x: x * T + (rnd() - 0.5) * 1.1, z: z * T + (rnd() - 0.5) * 1.1, ry: rnd() * 6.28, s: 0.9 + rnd() * 0.3 };
+    add(rnd() < 0.6 ? 'swordStuck' : 'swordPile', o);
+  }
+  for (const k in lists) placeKit(k, lists[k], (o) => o, { noShadow: k === 'swordPile' || k === 'chains' });
+  for (const k in paint) placeDecals(paint[k], k, 1.5, { vertical: true });
+}
+
 /** Liga as luzes mais próximas do herói (orçamento fixo) e anima chamas, fumaça e névoa. */
 let _tlT = 0;
 function updateTorchLights(px, pz, t) {
@@ -6421,6 +6638,7 @@ function updateTorchLights(px, pz, t) {
   updateMist(px, pz, dt);
   updateShafts(px, pz, t, dt);
   setKitGlowTime(t);
+  setCutaway(px, 0, pz, camera);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;
@@ -7348,7 +7566,7 @@ return { paneChar, paneLoot, paneOpts, paneSkills, statLabel };
 })();
 
 // ---- ui/inventoryPane.js ----
-const { paneInv, petMarks, selectedItem } = (() => {
+const { paneInv, selectedItem } = (() => {
 // ---------- painel Inventário: equipamento, mochila por categoria, detalhe do item ----------
 
 function cellHtml(it, attrs, sel, ctx) {
@@ -7367,10 +7585,9 @@ function cellHtml(it, attrs, sel, ctx) {
       }
     }
   }
-  const mk = ctx && ctx.marks && ctx.marks.has(it);
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (mk ? ' mk' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + (mk ? '<span class="mkx">✓</span>' : '') + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
@@ -7417,12 +7634,6 @@ function itemDetail(it, where) {
   h += '</div></div>';
   return h;
 }
-/** Itens marcados para o pet vender (descarta os que já saíram da mochila). */
-function petMarks() {
-  const bag = G.ch.bag, cur = UI.petMarks || new Set();
-  UI.petMarks = new Set([...cur].filter((it) => bag.includes(it)));
-  return UI.petMarks;
-}
 function selectedItem() {
   const s = UI.sel;
   if (!s) return null;
@@ -7450,8 +7661,7 @@ function paneInv() {
   h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const marks = petMarks();
-  const ctx = { base, marks: UI.petPick ? marks : null };
+  const ctx = { base };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {
@@ -7463,14 +7673,11 @@ function paneInv() {
   }
   h += '</div>';
   h += itemDetail(selectedItem(), UI.sel && UI.sel.where);
-  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell">Enviar pet para vender Comuns/Mágicos (P)</button><button class="btn sm' + (UI.petPick ? ' gold' : '') + '" data-act="petpick" title="Clique nos itens da mochila para marcar o que o pet deve vender">' + (UI.petPick ? 'Cancelar seleção' : 'Pet: vender itens selecionados') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
-  if (UI.petPick) {
-    const val = [...marks].reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
-    h += '<p class="note tip">Clique nos itens da mochila para marcar ou desmarcar.</p><div class="row"><button class="btn sm gold" data-act="petsellsel"' + (marks.size ? '' : ' disabled') + '>Enviar pet com ' + marks.size + ' ite' + (marks.size === 1 ? 'm' : 'ns') + ' · ' + fmt(val) + ' Gold</button><button class="btn sm" data-act="petclear"' + (marks.size ? '' : ' disabled') + '>Limpar</button></div>';
-  }
+  const petN = ch.bag.filter(petSellable).length;
+  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell" title="Leva todo equipamento, exceto Lendários; joias e poções ficam na mochila">Enviar pet para vender (P) · ' + petN + ' ite' + (petN === 1 ? 'm' : 'ns') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
   return h;
 }
-return { paneInv, petMarks, selectedItem };
+return { paneInv, selectedItem };
 })();
 
 // ---- ui/drawer.js ----
@@ -9048,7 +9255,6 @@ function paneAction(e) {
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
-      if (UI.petPick) { const m = petMarks(), x = ch.bag[i]; if (x) { if (m.has(x)) m.delete(x); else m.add(x); } UI.sel = x ? { where: 'bag', idx: i } : null; break; }
       if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
@@ -9063,9 +9269,6 @@ function paneAction(e) {
     case 'sell': ch.gold += Math.floor(R.itemValue(it) * 0.5) * (it.qty && it.kind !== 'jewel' ? 1 : 1); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
-    case 'petpick': UI.petPick = !UI.petPick; if (!UI.petPick) UI.petMarks = null; break;
-    case 'petsellsel': if (sendPetToSell([...petMarks()])) { UI.petPick = false; UI.petMarks = null; UI.sel = null; } break;
-    case 'petclear': UI.petMarks = null; break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
     case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;

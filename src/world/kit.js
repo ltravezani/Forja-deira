@@ -3,6 +3,7 @@
 // vértice (uma só malha e um só material por tipo, desenhados com instancing).
 // =============================================================================
 import { GEO } from '../art/geometry.js';
+import { cutaway } from '../art/cutaway.js';
 import { toonMaterial } from '../art/stylize.js';
 import { texGrime, texShingles } from '../art/textures.js';
 import { V3 } from '../core/util.js';
@@ -117,6 +118,94 @@ export function kit(name) {
       P.push(KP(GEO.sphS, 0x100c08, 0.06, 0.16, 0.14, 0.08, 0.07, 0.04));
       for (let i = 0; i < 3; i++) { const a = 0.8 + i * 1.7; P.push(KP(GEO.cyl6, BONE, Math.cos(a) * 0.4, 0.05, Math.sin(a) * 0.4, 0.06, 0.6, 0.06, Math.PI / 2, a, 0)); }
       P.push(KP(GEO.torus, BONE, 0.3, 0.1, -0.3, 0.4, 0.4, 0.6, Math.PI / 2, 0.4, 0));
+      break;
+    // ---------- detalhes de labirinto: armas quebradas e enfeites de parede (face em +z, fundo em z=0) ----------
+    case 'swordStuck': { // espada quebrada cravada no chão, inclinada, com a ponta partida ao lado
+      const STEEL = 0xb8bcc8, a = 0.28;
+      const tilt = (y) => [Math.sin(a) * y, Math.cos(a) * y];
+      const at = (geo, c, y, sx, sy, sz) => { const [x, yy] = tilt(y); P.push(KP(geo, c, x, yy, 0, sx, sy, sz, 0, 0, -a)); };
+      at(GEO.box, STEEL, 0.3, 0.12, 0.8, 0.03);
+      at(GEO.box, 0x8a8e9a, 0.3, 0.03, 0.8, 0.04); // sulco da lâmina
+      at(GEO.box, 0x6a4a2a, 0.74, 0.56, 0.08, 0.1); // guarda
+      at(GEO.cyl6, 0x3a2418, 0.94, 0.07, 0.32, 0.07); // cabo
+      at(GEO.sphS, 0xa07a2a, 1.14, 0.13, 0.13, 0.13); // pomo
+      P.push(KP(GEO.box, STEEL, 0.42, 0.02, 0.28, 0.1, 0.025, 0.42, 0, 0.7, 0)); // pedaço da lâmina
+      P.push(KP(GEO.cone4, STEEL, 0.5, 0.02, 0.5, 0.1, 0.18, 0.025, Math.PI / 2, 0.7, 0));
+      P.push(KP(GEO.ico0, DSTONE, 0, 0.04, 0, 0.45, 0.1, 0.4)); // terra revolvida
+      break;
+    }
+    case 'swordPile': { // espadas e escudo caídos, restos de uma batalha
+      const STEEL = 0xa8acb8;
+      for (let i = 0; i < 3; i++) {
+        const r = -0.9 + i * 1.1, x = (i - 1) * 0.35, z = (i % 2) * 0.25 - 0.1;
+        P.push(KP(GEO.box, STEEL, x, 0.03, z, 0.1, 0.03, 0.75 - i * 0.12, 0, r, 0));
+        P.push(KP(GEO.box, 0x6a4a2a, x - Math.sin(r) * 0.4, 0.05, z - Math.cos(r) * 0.4, 0.4, 0.06, 0.07, 0, r, 0));
+        P.push(KP(GEO.cyl6, 0x3a2418, x - Math.sin(r) * 0.55, 0.05, z - Math.cos(r) * 0.55, 0.06, 0.24, 0.06, Math.PI / 2, r, 0));
+      }
+      P.push(KP(GEO.cyl, 0x6a3a22, 0.45, 0.07, -0.4, 0.7, 0.07, 0.7, 0.12, 0, 0.1)); // escudo tombado
+      P.push(KP(GEO.torusF, IRON, 0.45, 0.1, -0.4, 0.7, 0.7, 0.6, Math.PI / 2 + 0.12, 0, 0.1));
+      P.push(KP(GEO.sphH, IRON, 0.45, 0.11, -0.4, 0.2, 0.1, 0.2));
+      P.push(KP(GEO.sphH, 0x5a5a66, -0.5, 0.0, 0.45, 0.42, 0.34, 0.4, 0.4, 0.5, 0)); // elmo amassado
+      break;
+    }
+    case 'shieldWall': { // escudo redondo pendurado com duas espadas cruzadas atrás
+      P.push(KP(GEO.box, 0x9aa0ac, -0.02, 2.0, 0.05, 0.09, 1.5, 0.03, 0, 0, 0.75));
+      P.push(KP(GEO.box, 0x9aa0ac, 0.02, 2.0, 0.05, 0.09, 1.5, 0.03, 0, 0, -0.75));
+      for (const sg of [1, -1]) P.push(KP(GEO.box, 0x6a4a2a, sg * 0.46, 1.52, 0.05, 0.3, 0.06, 0.06, 0, 0, sg * -0.75));
+      P.push(KP(GEO.cyl, 0x7a2020, 0, 2.0, 0.12, 0.95, 0.08, 0.95, Math.PI / 2, 0, 0));
+      P.push(KP(GEO.torusF, IRON, 0, 2.0, 0.17, 0.95, 0.95, 0.6));
+      P.push(KP(GEO.box, 0xa07a2a, 0, 2.0, 0.165, 0.9, 0.1, 0.02));
+      P.push(KP(GEO.box, 0xa07a2a, 0, 2.0, 0.165, 0.1, 0.9, 0.02));
+      P.push(KP(GEO.sphH, IRON, 0, 2.0, 0.16, 0.24, 0.24, 0.16, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'chains': // correntes penduradas com grilhões
+      for (const cx of [-0.45, 0.4]) {
+        P.push(KP(GEO.box, IRON, cx, 2.75, 0.04, 0.16, 0.16, 0.08));
+        const n = cx < 0 ? 9 : 6;
+        for (let i = 0; i < n; i++) P.push(KP(GEO.torusF, 0x5a5a64, cx, 2.62 - i * 0.16, 0.1, 0.16, 0.22, 0.5, 0, i % 2 ? Math.PI / 2 : 0, 0));
+        P.push(KP(GEO.torusF, IRON, cx, 2.5 - n * 0.16, 0.12, 0.3, 0.3, 0.9, Math.PI / 2, 0, 0));
+      }
+      break;
+    case 'weaponRack': // suporte de armas encostado na parede
+      P.push(KP(GEO.box, DWOOD, 0, 0.1, 0.35, 1.6, 0.12, 0.34));
+      P.push(KP(GEO.box, DWOOD, 0, 1.55, 0.1, 1.6, 0.12, 0.16));
+      for (const x of [-0.75, 0.75]) P.push(KP(GEO.box, WOOD, x, 0.85, 0.2, 0.1, 1.6, 0.1, 0.2, 0, 0));
+      for (let i = 0; i < 3; i++) {
+        const x = -0.45 + i * 0.45;
+        P.push(KP(GEO.cyl6, WOOD, x, 1.25, 0.22, 0.06, 2.3, 0.06, 0.12, 0, 0));
+        if (i !== 1) P.push(KP(GEO.cone4, 0xb8bcc8, x, 2.5, 0.08, 0.14, 0.34, 0.04, 0.12, 0, 0));
+        else P.push(KP(GEO.cone4, 0xb8bcc8, x + 0.04, 2.42, 0.08, 0.1, 0.12, 0.04, 0.12, 0, 0.6)); // lança partida
+      }
+      P.push(KP(GEO.box, 0xb8bcc8, 0.22, 0.75, 0.3, 0.1, 1.0, 0.03, 0.15, 0, 0.1));
+      P.push(KP(GEO.box, 0x6a4a2a, 0.26, 1.3, 0.24, 0.4, 0.07, 0.08, 0.15, 0, 0.1));
+      break;
+    case 'pilaster': // meia-coluna de pedra colada à parede (quebra a parede lisa)
+      P.push(KP(GEO.box, DSTONE, 0, 0.2, 0.2, 0.95, 0.4, 0.4));
+      P.push(KP(GEO.box, STONE, 0, 1.75, 0.16, 0.7, 2.9, 0.32));
+      P.push(KP(GEO.box, DSTONE, 0, 1.75, 0.33, 0.12, 2.8, 0.02));
+      P.push(KP(GEO.box, DSTONE, 0, 3.25, 0.22, 0.95, 0.3, 0.44));
+      P.push(KP(GEO.box, STONE, 0, 3.45, 0.18, 1.1, 0.14, 0.36));
+      break;
+    case 'skullNiche': // nicho escavado com crânios e uma vela
+      P.push(KP(GEO.box, 0x1a1418, 0, 1.6, 0.03, 1.0, 0.9, 0.06));
+      P.push(KP(GEO.box, DSTONE, 0, 1.12, 0.12, 1.2, 0.1, 0.24));
+      P.push(KP(GEO.box, DSTONE, 0, 2.1, 0.1, 1.2, 0.12, 0.2));
+      for (let i = 0; i < 3; i++) { const x = -0.3 + i * 0.3; P.push(KP(GEO.sphS, BONE, x, 1.32, 0.12, 0.26, 0.24, 0.26)); P.push(KP(GEO.sphS, 0x100c08, x - 0.05, 1.34, 0.24, 0.06)); P.push(KP(GEO.sphS, 0x100c08, x + 0.05, 1.34, 0.24, 0.06)); }
+      P.push(KP(GEO.cyl6, 0xe8dcc0, 0.42, 1.28, 0.14, 0.08, 0.22, 0.08));
+      Gl.push(KP(GEO.cone, 0xffc060, 0.42, 1.46, 0.14, 0.08, 0.16, 0.08));
+      break;
+    case 'vines': // cipós e raízes descendo pela parede
+      for (let i = 0; i < 6; i++) {
+        const x = -0.7 + i * 0.28, len = 1.1 + ((i * 7) % 5) * 0.35, top = 3.2;
+        P.push(KP(GEO.box, i % 2 ? 0x3e7a2e : 0x52903a, x, top - len / 2, 0.06, 0.07, len, 0.05, 0, 0, (i % 3 - 1) * 0.06));
+        for (let k = 0; k < 3; k++) P.push(KP(GEO.ico0, k % 2 ? 0x4e9a38 : 0x64b048, x + (k % 2 ? 0.1 : -0.1), top - len * (0.25 + k * 0.3), 0.1, 0.22, 0.14, 0.1, 0.3, k, 0));
+      }
+      P.push(KP(GEO.cyl6, 0x5a3a22, 0, 3.15, 0.08, 0.12, 1.9, 0.12, 0, 0, Math.PI / 2 - 0.1)); // raiz grossa
+      break;
+    case 'wallCrystals': // cristais brotando da parede (brilham)
+      for (let i = 0; i < 4; i++) { const x = -0.4 + i * 0.28, y = 1.3 + ((i * 5) % 3) * 0.45; Gl.push(KP(GEO.oct, i % 2 ? 0x7ac8ff : 0xb08aff, x, y, 0.2, 0.2, 0.6 + (i % 2) * 0.3, 0.2, 0.9, 0, (i - 1.5) * 0.4)); }
+      P.push(KP(GEO.ico0, 0x4a506e, 0, 1.5, 0.05, 1.1, 0.6, 0.25));
       break;
     case 'skulls':
       for (let i = 0; i < 7; i++) { const a = i * 2.3, r = i < 4 ? 0.35 : 0.15, y = i < 4 ? 0.14 : 0.36; P.push(KP(GEO.sphS, BONE, Math.cos(a) * r, y, Math.sin(a) * r, 0.28, 0.26, 0.3)); P.push(KP(GEO.sphS, 0x100c08, Math.cos(a) * (r + 0.12), y + 0.02, Math.sin(a) * (r + 0.12), 0.07)); }
@@ -428,7 +517,7 @@ export function kit(name) {
 /** Material dos adereços: cor por vértice × textura de desgaste. */
 let _kitMat = null, _kitGlow = null, _roofMat = null;
 export function kitMat() {
-  if (!_kitMat) { const g = texGrime(); _kitMat = toonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap }, { rim: 0.22 }); _kitMat.normalScale.setScalar(0.6); _kitMat.userData.shared = true; }
+  if (!_kitMat) { const g = texGrime(); _kitMat = toonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap }, { rim: 0.22 }); _kitMat.normalScale.setScalar(0.6); _kitMat.userData.shared = true; cutaway(_kitMat); }
   return _kitMat;
 }
 /**
@@ -458,6 +547,7 @@ export function kitGlowMat() {
     };
     _kitGlow.customProgramCacheKey = () => 'kitGlowPulse';
     _kitGlow.userData.shared = true;
+    cutaway(_kitGlow);
   }
   return _kitGlow;
 }
