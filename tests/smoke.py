@@ -114,6 +114,7 @@ with sync_playwright() as p:
 
     # mercadora: vender um item específico (joias e Lendários pedem confirmação)
     ev("(G.ch.bag.push({ kind: 'jewel', id: 'bless', qty: 3, uid: 'tjb' }, { kind: 'potion', id: 'hp', qty: 20, uid: 'tphp' }), D.openNpc('merchant'), 0)")
+    check(ev("G.ch.bag.some((x) => x.slot) && [...document.querySelectorAll('[data-npc=sell]')].every((b) => !G.ch.bag[+b.dataset.i].slot)"), 'mercadora não lista equipamentos para venda')
     pg.click('[data-npc="sellf"][data-k="potion"]')
     g0 = ev('G.ch.gold')
     pg.click('[data-npc="sell"][data-n="1"][data-i="%d"]' % ev("G.ch.bag.findIndex((x) => x.uid === 'tphp')"))
