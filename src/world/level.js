@@ -1,11 +1,12 @@
 // ---------- montagem visual do nível: chão, paredes, adereços, decalques, névoa, chamas e tochas ----------
 import { GEO } from '../art/geometry.js';
 import { disposeObject } from '../art/materials.js';
+import { CUT, CUT_GLSL, cutaway, setCutaway } from '../art/cutaway.js';
 import { stylize, toonGradient, toonMaterial } from '../art/stylize.js';
 import { fbm, hash2, makeTexSet, sat, texDecal, vnoise } from '../art/textures.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
-import { hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
+import { camera, hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
 import { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
@@ -102,6 +103,8 @@ function buildGround(L, T, blendFn) {
  * Paredes: bloco por tile de parede vizinho do chão. Faces só onde aparecem;
  * UV em mundo (sem esticar), topo escurecido, base com oclusão.
  * rough: jitter das quinas (cavernas/abismo) com ruído determinístico.
+ * Todas as paredes são altas (labirinto): o que fica entre a câmera e o herói
+ * some pelo recorte de visão (art/cutaway.js), em vez de a parede ser baixa.
  */
 function buildWalls(L, T, opt) {
   const { W, H, grid } = L;
@@ -114,11 +117,9 @@ function buildWalls(L, T, opt) {
     let adj = false;
     for (let dz = -1; dz <= 1 && !adj; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz)) { adj = true; break; }
     if (!adj) continue;
-    let front = false;
-    for (let dz = 0; dz <= 2 && !front; dz++) for (let dx = 0; dx <= 2; dx++) if ((dx || dz) && at(x - dx, z - dz)) { front = true; break; }
-    const h = front ? 0.7 : opt.h + (rnd() - 0.5) * opt.var;
+    const h = opt.h + (rnd() - 0.5) * opt.var;
     hts[z * W + x] = h;
-    walls.push({ x, z, h, low: front });
+    walls.push({ x, z, h, low: false });
   }
   const P = [], U = [], C = [], N = [];
   const T2 = TILE / 2;
@@ -145,6 +146,9 @@ function buildWalls(L, T, opt) {
     const c00 = corner(x, z, top(x, z)), c10 = corner(x + 1, z, top(x + 1, z)), c11 = corner(x + 1, z + 1, top(x + 1, z + 1)), c01 = corner(x, z + 1, top(x, z + 1));
     const tc = capRGB;
     quad(c00, c01, c11, c10, [c00[0] / 4, c00[2] / 4], [c01[0] / 4, c01[2] / 4], [c11[0] / 4, c11[2] / 4], [c10[0] / 4, c10[2] / 4], tc, tc, tc, tc, [0, 1, 0]);
+    // tampa interna na altura do pé da parede: escondida dentro do bloco, aparece só quando o recorte de visão corta a parede
+    const sy = 0.6, s00 = corner(x, z, sy), s10 = corner(x + 1, z, sy), s11 = corner(x + 1, z + 1, sy), s01 = corner(x, z + 1, sy), sc = shadeRGB(tc, 0.6);
+    quad(s00, s01, s11, s10, [s00[0] / 4, s00[2] / 4], [s01[0] / 4, s01[2] / 4], [s11[0] / 4, s11[2] / 4], [s10[0] / 4, s10[2] / 4], sc, sc, sc, sc, [0, 1, 0]);
     // lados: [dx,dz, canto A, canto B, normal]
     for (const [dx, dz, A, Bc, nrm] of [[0, -1, [x + 1, z], [x, z], [0, 0, -1]], [0, 1, [x, z + 1], [x + 1, z + 1], [0, 0, 1]], [-1, 0, [x, z], [x, z + 1], [-1, 0, 0]], [1, 0, [x + 1, z + 1], [x + 1, z], [1, 0, 0]]]) {
       const nx = x + dx, nz = z + dz;
@@ -179,6 +183,7 @@ function buildWalls(L, T, opt) {
   mat.normalScale.setScalar(0.7);
   mat.color.setHex(T.wallCol || 0xffffff);
   if (T.wall.emissiveMap) { mat.emissiveMap = T.wall.emissiveMap; mat.emissive = new THREE.Color(T.wallGlow || 0xff5a10); mat.emissiveIntensity = 0.9; }
+  cutaway(mat);
   const m = new THREE.Mesh(g, mat);
   m.castShadow = true; m.receiveShadow = true;
   addLevel(m);
@@ -198,6 +203,7 @@ function placeDecals(list, kind, size, opt) {
     else setInstance(m, i, p.x, 0.02 + i * 0.0004, p.z, -Math.PI / 2, 0, p.r || 0, sc, sc, 1);
   });
   m.renderOrder = 1;
+  cutaway(mat);
   m.receiveShadow = true;
   m.computeBoundingSphere();
   addLevel(m);
@@ -253,8 +259,8 @@ function buildFlames() {
   geo.setAttribute('fcol', new THREE.BufferAttribute(col, 3));
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uMap: { value: flameTexture() }, uTime: { value: 0 }, uScale: { value: 500 } },
-    vertexShader: 'attribute float size; attribute vec3 fcol; varying vec3 vC; uniform float uTime; uniform float uScale; void main(){ vC = fcol; vec4 mv = modelViewMatrix * vec4(position, 1.0); float f = 0.85 + 0.1 * sin(uTime * 13.0 + position.x * 3.1) + 0.06 * sin(uTime * 29.0 + position.z * 5.3); gl_PointSize = size * f * uScale / -mv.z; gl_Position = projectionMatrix * mv; }',
+    uniforms: { uMap: { value: flameTexture() }, uTime: { value: 0 }, uScale: { value: 500 }, ...CUT },
+    vertexShader: 'attribute float size; attribute vec3 fcol; varying vec3 vC; uniform float uTime; uniform float uScale; ' + CUT_GLSL + ' void main(){ vC = fcol; vec4 mv = modelViewMatrix * vec4(position, 1.0); float f = 0.85 + 0.1 * sin(uTime * 13.0 + position.x * 3.1) + 0.06 * sin(uTime * 29.0 + position.z * 5.3); gl_PointSize = cutHidden(position) ? 0.0 : size * f * uScale / -mv.z; gl_Position = projectionMatrix * mv; }',
     fragmentShader: 'uniform sampler2D uMap; varying vec3 vC; void main(){ vec4 t = texture2D(uMap, gl_PointCoord); gl_FragColor = vec4(t.rgb * vC * 1.6 * t.a, 1.0); }',
   });
   flameSprites = new THREE.Points(geo, mat);
@@ -311,12 +317,13 @@ export function buildLevel(L) {
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
+  if (!town) decorateMaze(L, walls, R.mulberry32(L.seed * 19 + 5));
   const at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
   const rnd = R.mulberry32(L.seed * 13 + 1);
   // tochas nas paredes altas voltadas para o jogador (+x / +z)
   const sconces = [];
   if (!town) walls.forEach((w) => {
-    if (w.low) return;
+    if (w.low || w.decor) return;
     const fx = at(w.x + 1, w.z) === 1, fz = !fx && at(w.x, w.z + 1) === 1;
     if ((fx || fz) && rnd() < (L.biome === 'caves' ? 0.03 : 0.075)) {
       const ry = fx ? Math.PI / 2 : 0;
@@ -541,6 +548,61 @@ function scatterClutter(L, walls) {
   for (const k in lists) placeKit(k, lists[k], (o) => o, { noShadow: true });
 }
 
+/**
+ * Detalhes de labirinto: enfeites nas faces das paredes que a câmera vê (+x/+z),
+ * rachaduras/musgo/sangue pintados nelas, colunas coladas nas paredes retas e
+ * restos de batalha no chão (espadas quebradas cravadas, pilhas de armas).
+ * Só visual: não muda a grade andável. Marca `w.decor` para as tochas não se sobreporem.
+ */
+const MAZE_DECOR = {
+  forest: { wall: [['vines', 0.16], ['shieldWall', 0.02]], paint: ['moss', 'moss', 'crack'], floor: 0.06, pilaster: false },
+  caves: { wall: [['wallCrystals', 0.1], ['chains', 0.03], ['shieldWall', 0.02]], paint: ['crack', 'crack', 'moss'], floor: 0.05, pilaster: false },
+  ruins: { wall: [['shieldWall', 0.05], ['weaponRack', 0.04], ['vines', 0.06], ['chains', 0.03]], paint: ['crack', 'moss', 'moss'], floor: 0.065, pilaster: true },
+  castle: { wall: [['shieldWall', 0.07], ['weaponRack', 0.05], ['chains', 0.05], ['skullNiche', 0.03]], paint: ['crack', 'blood', 'crack'], floor: 0.075, pilaster: true },
+  abyss: { wall: [['chains', 0.08], ['skullNiche', 0.06], ['shieldWall', 0.02]], paint: ['blood', 'ash', 'crack'], floor: 0.06, pilaster: false },
+};
+function decorateMaze(L, walls, rnd) {
+  const D = MAZE_DECOR[L.biome] || MAZE_DECOR.ruins;
+  const T = TILE;
+  const at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
+  const wallAt = (x, z) => !at(x, z);
+  const lists = {}, paint = {};
+  const add = (k, o) => (lists[k] || (lists[k] = [])).push(o);
+  const near = (x, z, c, r) => c && Math.abs(x - c.x) <= r && Math.abs(z - c.z) <= r;
+  for (const w of walls) {
+    for (const [dx, dz] of [[1, 0], [0, 1]]) {
+      if (at(w.x + dx, w.z + dz) !== 1) continue;
+      const ry = Math.atan2(dx, dz);
+      const fx = w.x * T + dx * (T / 2 + 0.02), fz = w.z * T + dz * (T / 2 + 0.02);
+      // parede reta (vizinhos laterais também são parede com o mesmo lado livre): cabe coluna
+      const lx = dz, lz = dx;
+      const straight = wallAt(w.x + lx, w.z + lz) && wallAt(w.x - lx, w.z - lz) && at(w.x + lx + dx, w.z + lz + dz) === 1 && at(w.x - lx + dx, w.z - lz + dz) === 1;
+      const k3 = ((dx ? w.z : w.x) % 3 + 3) % 3;
+      if (D.pilaster && straight && k3 === 0) { add('pilaster', { x: fx, z: fz, ry, sy: w.h / 3.5 }); w.decor = true; continue; }
+      let r = rnd(), put = null;
+      for (const [k, p] of D.wall) { if (r < p) { put = k; break; } r -= p; }
+      if (put && !w.decor) {
+        const j = (rnd() - 0.5) * 0.5;
+        add(put, { x: fx + lx * j, z: fz + lz * j, ry, s: 0.9 + rnd() * 0.2, sy: put === 'vines' ? w.h / 3.4 : undefined });
+        w.decor = true;
+      } else if (rnd() < 0.2) {
+        const kind = D.paint[Math.floor(rnd() * D.paint.length)];
+        (paint[kind] || (paint[kind] = [])).push({ x: fx + dx * 0.02 + lx * (rnd() - 0.5) * 0.6, y: 0.9 + rnd() * 1.4, z: fz + dz * 0.02 + lz * (rnd() - 0.5) * 0.6, ry, s: 0.8 + rnd() * 0.6 });
+      }
+    }
+  }
+  // restos de batalha no chão, de preferência encostados nas paredes
+  for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
+    if (at(x, z) !== 1 || near(x, z, L.start, 2) || near(x, z, L.boss, 2)) continue;
+    const byWall = wallAt(x - 1, z) || wallAt(x + 1, z) || wallAt(x, z - 1) || wallAt(x, z + 1);
+    if (rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
+    const o = { x: x * T + (rnd() - 0.5) * 1.1, z: z * T + (rnd() - 0.5) * 1.1, ry: rnd() * 6.28, s: 0.9 + rnd() * 0.3 };
+    add(rnd() < 0.6 ? 'swordStuck' : 'swordPile', o);
+  }
+  for (const k in lists) placeKit(k, lists[k], (o) => o, { noShadow: k === 'swordPile' || k === 'chains' });
+  for (const k in paint) placeDecals(paint[k], k, 1.5, { vertical: true });
+}
+
 /** Liga as luzes mais próximas do herói (orçamento fixo) e anima chamas, fumaça e névoa. */
 let _tlT = 0;
 export function updateTorchLights(px, pz, t) {
@@ -549,6 +611,7 @@ export function updateTorchLights(px, pz, t) {
   updateMist(px, pz, dt);
   updateShafts(px, pz, t, dt);
   setKitGlowTime(t);
+  setCutaway(px, 0, pz, camera);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;

@@ -23,18 +23,15 @@ export function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-/**
- * Manda o pet vender na cidade. Sem `picked`, leva os itens Comuns/Mágicos;
- * com `picked` (itens marcados no inventário), leva só esses, de qualquer tipo.
- */
-export function sendPetToSell(picked) {
+/** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
+export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
+/** Manda o pet vender na cidade tudo que `petSellable` aceita. */
+export function sendPetToSell() {
   const pet = G.pet;
   if (!pet) return false;
   if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
-  const sell = Array.isArray(picked)
-    ? picked.filter((it) => G.ch.bag.includes(it))
-    : G.ch.bag.filter((it) => it.slot && R.RARITY[it.rarity].order <= 1 && !it.locked);
-  if (!sell.length) { log(Array.isArray(picked) ? 'Nenhum item marcado para o pet vender.' : 'Nada para vender: o pet só vende itens Comuns e Mágicos.', 'warn'); return false; }
+  const sell = G.ch.bag.filter(petSellable);
+  if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
   pet.away = G.time + 18;
