@@ -375,3 +375,29 @@ export function texDecal(kind) {
     return { h: 0, c: [0, 0, 0], a: 0 };
   }, { bump: 1, alpha: true });
 }
+/**
+ * Rosácea de lajes em anéis concêntricos em volta da fonte (decalque com alfa).
+ * Anel escuro decorativo no meio; some nas bordas para fundir com o calçamento.
+ */
+export function texPlaza() {
+  const sd = 4242, base = [146, 132, 116], band = [112, 92, 88], mortar = [52, 44, 38];
+  const R0 = 0.33, RW = 0.112;
+  return makeTexSet('plaza_rosette', 512, (u, v) => {
+    const dx = u - 0.5, dy = v - 0.5, d = Math.hypot(dx, dy) * 2;
+    if (d < R0 - 0.01 || d > 1) return { h: 0, c: mortar, a: 0 };
+    const k = Math.floor((d - R0) / RW), fr = (d - R0) / RW - k;
+    const rk = R0 + (k + 0.5) * RW, nk = Math.max(8, Math.round((Math.PI * 2 * rk) / 0.13));
+    const af = (Math.atan2(dy, dx) / (Math.PI * 2) + 1 + (k % 2) * (0.5 / nk)) % 1;
+    const seg = Math.floor(af * nk), fs = af * nk - seg;
+    const gapR = 0.09, gapA = 0.012 / ((Math.PI * 2 * rk) / nk);
+    const edge = Math.min(fr, 1 - fr) / gapR, edgeA = Math.min(fs, 1 - fs) / gapA;
+    const inStone = Math.min(edge, edgeA);
+    const id = hash2(seg, k, sd);
+    const col = k === 2 ? vary(band, id, 0.25) : vary(base, id, 0.3);
+    const n = fbm(u, v, 24, 3, sd + k);
+    if (inStone < 1) return { h: 0.1, c: mortar, a: 235 * sat((1 - d) * 14) };
+    const b = sat((inStone - 1) / 2.5);
+    const sh = bevelShade(fs - 0.5, fr - 0.5, b) * (0.9 + n * 0.2);
+    return { h: 0.5 + b * 0.4 + n * 0.1, c: mul3(col, sh), a: 250 * sat((1 - d) * 14) };
+  }, { bump: 2.5, alpha: true });
+}

@@ -292,6 +292,74 @@ export function genTown() {
   if (grid[(cz + 4) * W + cx + 12] === 1) { props.push({ x: cx + 12, z: cz + 4, kind: 'cart' }); grid[(cz + 4) * W + cx + 12] = 2; }
   // cemitério (baixo, na frente-esquerda)
   for (let i = 0; i < 7; i++) { const gx = cx - 11 + (i % 4) * 2, gz = cz + 13 + Math.floor(i / 4) * 2; if (grid[gz * W + gx] === 1) props.push({ x: gx, z: gz, kind: 'grave', v: rnd() }); }
+  // ---------- detalhes de cidade viva: bancos, canteiros, poço, horta, varal, cercado, árvores ----------
+  const free = (x, z) => grid[Math.round(z) * W + Math.round(x)] === 1;
+  const put = (x, z, kind, extra, solid) => {
+    if (!free(x, z)) return false;
+    props.push(Object.assign({ x, z, kind }, extra));
+    if (solid) grid[Math.round(z) * W + Math.round(x)] = 2;
+    return true;
+  };
+  // tira árvores/moitas soltas de uma área (o quintal precisa dela livre)
+  const clearDeco = (x0, z0, x1, z1) => {
+    for (let i = props.length - 1; i >= 0; i--) {
+      const p = props[i];
+      if (p.x < x0 || p.x > x1 || p.z < z0 || p.z > z1 || !(p.kind === 'tree' || p.kind === 'bush' || p.kind === 'decal')) continue;
+      if (p.kind === 'tree') grid[p.z * W + p.x] = 1;
+      props.splice(i, 1);
+    }
+  };
+  const spots = []; // pontos de interesse onde os moradores param (tile, direção para olhar)
+  const spot = (x, z, look) => { if (free(x, z)) spots.push({ x, z, look }); };
+  // bancos em volta da fonte (nas diagonais, fora das ruas), virados para ela
+  for (let i = 0; i < 4; i++) for (const d of [-0.3, 0.3]) {
+    const a = Math.PI / 4 + (i * Math.PI) / 2 + d, x = cx + Math.cos(a) * 6.6, z = cz + Math.sin(a) * 6.6;
+    if (put(Math.round(x), Math.round(z), 'bench', { ry: Math.atan2(cx - x, cz - z) }, true)) spot(Math.round(cx + Math.cos(a) * 5.5), Math.round(cz + Math.sin(a) * 5.5), [cx, cz]);
+  }
+  // canteiros de flores colados na fonte
+  for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + (i * Math.PI) / 2; put(Math.round(cx + Math.cos(a) * 2.9), Math.round(cz + Math.sin(a) * 2.9), 'planter', { v: rnd() }, true); }
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + 0.4; spot(Math.round(cx + Math.cos(a) * 3.2), Math.round(cz + Math.sin(a) * 3.2), [cx, cz]); }
+  // poço com balde, lenha e cepo, varal com roupas
+  if (put(cx - 13, cz - 3, 'well', {}, true)) spot(cx - 12, cz - 2, [cx - 13, cz - 3]);
+  put(cx - 15, cz - 9, 'woodpile', {}, true);
+  put(cx - 13, cz - 8, 'chop', { v: rnd() });
+  if (free(cx - 16, cz - 6) && free(cx - 13, cz - 6)) { put(cx - 14.5, cz - 6, 'clothesline', {}); grid[(cz - 6) * W + cx - 16] = grid[(cz - 6) * W + cx - 13] = 2; }
+  // horta de repolhos e abóboras perto da mercadora
+  clearDeco(cx + 13, cz - 11, cx + 15, cz - 9);
+  let gardenOk = true;
+  for (let z = cz - 11; z <= cz - 9; z++) for (let x = cx + 13; x <= cx + 15; x++) if (!free(x, z)) gardenOk = false;
+  if (gardenOk) { block(cx + 13, cz - 11, cx + 15, cz - 9); props.push({ x: cx + 14, z: cz - 10, kind: 'garden' }); spot(cx + 12, cz - 10, [cx + 14, cz - 10]); }
+  // cercado das galinhas com galinheiro (portão virado para a praça)
+  const pen = { x0: cx + 13, x1: cx + 16, z0: cz - 5, z1: cz - 1 };
+  clearDeco(pen.x0, pen.z0, pen.x1, pen.z1);
+  for (let z = pen.z0; z <= pen.z1; z++) for (let x = pen.x0; x <= pen.x1; x++) {
+    const edge = x === pen.x0 || x === pen.x1 || z === pen.z0 || z === pen.z1;
+    if (!edge || !free(x, z)) continue;
+    if (x === pen.x0 && z === cz - 3) continue; // portão
+    props.push({ x, z, kind: 'fence', ry: x === pen.x0 || x === pen.x1 ? Math.PI / 2 : 0 });
+    grid[z * W + x] = 2;
+  }
+  put(pen.x1 - 1, pen.z0 + 1, 'coop', {}, true);
+  put(cx + 17, cz + 1, 'haystack', { v: rnd() }, true);
+  spot(pen.x0 - 1, cz - 3, [pen.x0 + 1, cz - 3]);
+  put(cx + 14, cz + 7, 'trough', {}, true);
+  // quadro de avisos e placa na entrada do portal
+  if (put(cx - 2, cz - 10, 'notice', {}, true)) spot(cx - 2, cz - 9, [cx - 2, cz - 10]);
+  put(cx + 4, cz - 8, 'signpost', {}, true);
+  // mercadorias soltas perto das barracas
+  put(cx + 7, cz - 10, 'sacks', { v: rnd() });
+  put(cx + 11, cz - 7, 'pots', { v: rnd() });
+  put(cx + 8, cz - 6, 'produce', { v: rnd() });
+  spot(cx + 9, cz - 8, [cx + 9, cz - 9]); spot(cx + 9, cz - 5, [cx + 10, cz - 6]); spot(cx - 9, cz - 7, [cx - 9, cz - 8]);
+  // árvores frondosas no fundo, entre as casas
+  for (const [tx, tz] of [[cx - 3, cz - 14], [cx + 7, cz - 17], [cx - 18, cz - 4], [cx - 16, cz + 6]]) put(tx, tz, 'oak', { v: rnd() }, true);
+  // bandeirolas presas nos quatro lampiões da praça
+  const lampsSq = [[cx - 5, cz - 5], [cx + 6, cz - 5], [cx + 6, cz + 6], [cx - 5, cz + 6]];
+  const bunting = [];
+  for (let i = 0; i < 4; i++) { const [ax, az] = lampsSq[i], [bx, bz] = lampsSq[(i + 1) % 4]; bunting.push({ ax, az, bx, bz }); }
+  // portas das casas e outros cantos: moradores vão e vêm
+  houses.forEach(([hx, hz, r]) => spot(r ? hx + 2 : hx - 1, r ? hz + 1 : hz + 2, null));
+  spot(cx - 7, cz - 5, [cx - 8, cz - 4]); spot(cx - 9, cz + 12, [cx - 9, cz + 13]); spot(cx + 1, cz - 8, [cx + 1, cz - 12]); spot(cx - 3, cz + 1, null); spot(cx + 5, cz + 2, null);
   // Torre Infinita na parte de baixo do mapa (frente, +x/+z), com o Guardião diante dela
   const tower = { x: cx + 11, z: cz + 11 };
   block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
@@ -306,5 +374,5 @@ export function genTown() {
   ];
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath };
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath, spots, pen, bunting, town: { cx, cz } };
 }

@@ -59,10 +59,15 @@ with sync_playwright() as p:
     pg.wait_for_function('window.__FORJA_DEBUG.G.mode === "play"', timeout=60000)
     check(ev('G.zone') == 'town', 'entrou na cidade')
     check(pg.is_visible('#hud'), 'HUD visível')
+    life = ev('D.townLifeCount()')
+    check(life['folk'] >= 8 and life['critters'] >= 10, 'cidade com moradores e bichos %s' % json.dumps(life))
+    wait_game(2.0)
+    check(ev('G.L.props.some((p) => p.kind === "fountain") && D.levelMeshes().length > 40'), 'cidade montada com fonte e cenário')
 
     # masmorra e combate
     ev("D.enterDungeon('forest', 1), G.monsters.length")
     n0 = ev('G.monsters.length')
+    check(ev('D.townLifeCount().folk') == 0, 'moradores somem ao sair da cidade')
     check(n0 > 5, 'masmorra com monstros (%d)' % n0)
     ev("(G.monsters.forEach((m) => { m.x = G.player.x + 2 + Math.random(); m.z = G.player.z + 2 + Math.random(); m.aggro = true; m.dmg = 0; }), 0)")
     ev("(G.ch.level = 60, D.recalc(), G.hp = G.st.maxHp, G.mp = G.st.maxMp, 0)")

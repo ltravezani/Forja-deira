@@ -531,7 +531,7 @@ function blobMaterial(op) {
   }
   return m;
 }
-function addContactShadow(m, spec) {
+export function addContactShadow(m, spec) {
   if (!spec) return;
   const blob = new THREE.Mesh(GEO.plane, blobMaterial(spec[1]));
   blob.rotation.x = -Math.PI / 2;
