@@ -363,6 +363,12 @@
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3));
   }
+  /** Gold recebido ao vender `n` unidades (padrão: a pilha toda) — metade do valor. */
+  function sellValue(it, n) {
+    const qty = it.qty || 1;
+    const k = Math.max(0, Math.min(n == null ? qty : n, qty));
+    return Math.floor(itemValue(Object.assign({}, it, { qty: 1 })) * 0.5) * k;
+  }
   // ---------------------------------------------------------------------------
   // Loot — tabela pública, MF visível, seed por drop
   // ---------------------------------------------------------------------------
@@ -756,7 +762,7 @@
     expToNext, monsterExp, partyShare,
     CLASSES, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
-    plusBonus, itemName, itemReq, itemStats, itemLines, itemValue,
+    plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     upgradeChance, applyUpgrade, monsterStats,

@@ -112,6 +112,20 @@ with sync_playwright() as p:
     pg.keyboard.press('Escape')
     check(pg.is_hidden('#drawer'), 'Esc fecha o painel')
 
+    # mercadora: vender um item específico (joias e Lendários pedem confirmação)
+    ev("(G.ch.bag.push({ kind: 'jewel', id: 'bless', qty: 3, uid: 'tjb' }, { kind: 'potion', id: 'hp', qty: 20, uid: 'tphp' }), D.openNpc('merchant'), 0)")
+    pg.click('[data-npc="sellf"][data-k="potion"]')
+    g0 = ev('G.ch.gold')
+    pg.click('[data-npc="sell"][data-n="1"][data-i="%d"]' % ev("G.ch.bag.findIndex((x) => x.uid === 'tphp')"))
+    check(ev("G.ch.bag.find((x) => x.uid === 'tphp').qty === 19") and ev('G.ch.gold') == g0 + ev("D.R.sellValue({ kind: 'potion', id: 'hp' }, 1)"), 'mercadora vende 1 poção da pilha')
+    pg.click('[data-npc="sellf"][data-k="jewel"]')
+    g0 = ev('G.ch.gold')
+    pg.click('[data-npc="sell"][data-n="1"][data-i="%d"]' % ev("G.ch.bag.findIndex((x) => x.uid === 'tjb')"))
+    check(ev("G.ch.bag.find((x) => x.uid === 'tjb').qty === 3") and ev('G.ch.gold') == g0 and pg.is_visible('[data-npc="sell"][data-ok="1"]'), 'joia pede confirmação antes de vender')
+    pg.click('[data-npc="sell"][data-ok="1"]')
+    check(ev("G.ch.bag.find((x) => x.uid === 'tjb').qty === 2") and ev('G.ch.gold') == g0 + 45000, 'confirmação vende a joia')
+    ev("(G.ch.bag = G.ch.bag.filter((x) => x.uid !== 'tjb' && x.uid !== 'tphp'), D.closeModal(), 0)")
+
     # pausa
     pg.keyboard.press('Escape')
     check(ev('G.paused') and pg.is_visible('#pause'), 'Esc pausa o jogo')

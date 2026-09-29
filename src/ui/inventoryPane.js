@@ -1,4 +1,5 @@
 // ---------- painel Inventário: equipamento, mochila por categoria, detalhe do item ----------
+import { refineColor } from '../art/items.js';
 import { G, UI } from '../core/state.js';
 import { esc, fmt, R } from '../core/util.js';
 import { autoEquipOn, BAG_SIZE, bagCat, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
@@ -23,7 +24,9 @@ function cellHtml(it, attrs, sel, ctx) {
       }
     }
   }
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  // refino +10 a +15: moldura brilhante na cor da faixa (a mesma do brilho 3D)
+  const pl = it.plus || 0, rf = pl >= 10 ? '#' + refineColor(pl).toString(16).padStart(6, '0') : '';
+  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
     (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
 }

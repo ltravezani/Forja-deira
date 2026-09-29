@@ -11,7 +11,7 @@ import { startGame } from '../game/session.js';
 export const TP = { model: null, x: 0, z: 0, rot: 0, key: '' };
 /** Mostra (ou troca) o personagem em 3D no centro da tela; null remove a prévia. */
 export function titlePreview(ch) {
-  const key = ch ? ch.name + '|' + ch.cls + '|' + ch.tier + '|' + JSON.stringify(Object.keys(ch.equip).map((k) => ch.equip[k] && ch.equip[k].uid)) : '';
+  const key = ch ? ch.name + '|' + ch.cls + '|' + ch.tier + '|' + JSON.stringify(Object.keys(ch.equip).map((k) => ch.equip[k] && ch.equip[k].uid + '+' + ch.equip[k].plus)) : '';
   if (key === TP.key) return;
   TP.key = key;
   if (TP.model) { world.remove(TP.model.root); disposeModel(TP.model); TP.model = null; }

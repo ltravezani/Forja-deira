@@ -1,6 +1,7 @@
 // ---------- loot no chão ----------
 import { GEO } from '../art/geometry.js';
-import { glowMat, toon } from '../art/materials.js';
+import { buildItemModel, attachRefineFx } from '../art/items.js';
+import { disposeObject, glowMat, glowShared } from '../art/materials.js';
 import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
 import { fmt, R, rand } from '../core/util.js';
@@ -10,6 +11,7 @@ import { world } from '../engine/renderer.js';
 import { addToBag, autoEquipOn, classOk } from './inventory.js';
 import { pathTo } from './movement.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
+import { glyph } from '../ui/icons.js';
 import { log } from '../ui/log.js';
 import { gy, walkable } from '../world/grid.js';
 
@@ -27,15 +29,20 @@ export function dropLoot(x, z, l) {
   const info = lootLabel(l);
   const col = parseInt(info.color.slice(1), 16);
   const g = new THREE.Group();
-  let mesh;
-  if (l.type === 'gold') mesh = new THREE.Mesh(GEO.cyl, toon(0xffd24a, 0xaa7a00, 0.4)), mesh.scale.set(0.45, 0.12, 0.45);
-  else if (l.type === 'jewel') mesh = new THREE.Mesh(GEO.oct, toon(col, col, 0.6)), mesh.scale.set(0.45, 0.6, 0.45);
-  else if (l.type === 'potion') mesh = new THREE.Mesh(GEO.sphS, toon(col, col, 0.3)), mesh.scale.setScalar(0.4);
-  else mesh = new THREE.Mesh(GEO.box, toon(col, col, 0.25)), mesh.scale.set(0.5, 0.18, 0.7);
-  mesh.position.y = 0.2;
-  mesh.castShadow = true;
+  const gl = l.type === 'gold' ? null : glyph(l.type === 'item' ? l.item : { kind: l.type, id: l.id });
+  const kind = gl ? gl.kind : 'gold';
+  const mesh = buildItemModel(kind, { col: l.type === 'potion' ? parseInt(gl.c.slice(1), 16) : col, tier: l.type === 'item' ? l.item.tier : 0, amount: l.type === 'gold' ? Math.ceil(Math.log10(1 + (l.amount || 1))) : 0 });
+  mesh.position.y = 0.12;
+  mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
   const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' ? 3 : 0;
+  // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
+  if (ord >= 1 || l.type === 'jewel') {
+    const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
+    pool.position.y = 0.05; pool.scale.setScalar(0.45 + ord * 0.05); pool.renderOrder = 1;
+    g.add(pool);
+  }
+  if (l.type === 'item') l.refine = attachRefineFx(mesh.children[0], l.item.plus || 0, { size: 0.12 });
   if (ord >= 1) {
     const beam = new THREE.Mesh(GEO.beam, glowMat(col, ord >= 2 ? 0.55 : 0.3));
     const h = ord >= 2 ? 4 + ord : 1.6;
@@ -79,7 +86,7 @@ export function autoPickup(p) {
 }
 function removeLootVisual(l) {
   world.remove(l.mesh);
-  if (l.beam) l.beam.material.dispose();
+  disposeObject(l.mesh, false);
   l.el.remove();
 }
 export function pickup(l) {
@@ -105,6 +112,8 @@ export function updateLootVisuals(dt) {
     const x = l.fromX + (l.x - l.fromX) * k, z = l.fromZ + (l.z - l.fromZ) * k;
     l.mesh.position.set(x, Math.sin(k * Math.PI) * 1.6 + gy(x, z), z);
     l.item3d.rotation.y += dt * 1.5;
+    l.item3d.position.y = 0.12 + (k >= 1 ? Math.sin(G.time * 2.2 + l.x) * 0.05 : 0);
+    if (l.refine) l.refine.update(G.time);
     if (l.beam) l.beam.material.opacity = (l.ord >= 2 ? 0.45 : 0.25) + Math.sin(G.time * 3 + l.x) * 0.1;
   }
 }
