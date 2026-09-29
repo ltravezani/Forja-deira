@@ -13,15 +13,17 @@ import { clearNpcs, spawnNpcs } from './npcs.js';
 import { clearProjectiles } from './projectiles.js';
 import { log, setZoneText, toast } from '../ui/log.js';
 import { resetMinimap } from '../ui/minimap.js';
-import { BIOMES, floorLevel } from '../world/biomes.js';
+import { BIOMES, floorLevel, towerBiome } from '../world/biomes.js';
 import { gy, walkable } from '../world/grid.js';
 import { kit, kitMat } from '../world/kit.js';
 import { buildLevel } from '../world/level.js';
-import { genDungeon, genTown } from '../world/levelgen.js';
+import { genDungeon, genTower, genTown } from '../world/levelgen.js';
 
 /** A cidade é a única zona segura. */
 export function inSafe() { return G.zone === 'town'; }
 export function hasTownServices() { return G.zone === 'town'; }
+/** Nível base dos monstros da zona atual (masmorra ou torre). */
+export function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : floorLevel(G.biome, G.floor); }
 
 /** Descarta tudo que pertence à zona atual (o pet e o jogador continuam). */
 export function clearWorld() {
@@ -94,10 +96,50 @@ export function enterDungeon(biome, floor) {
   toast(B.name, 'Andar ' + floor);
   persist();
 }
+/**
+ * Torre Infinita: andares sem fim, cada um mais difícil (nível e multiplicadores
+ * de HP/dano sobem por andar). O bioma troca a cada 5 andares. Guarda o andar
+ * mais alto alcançado para o Guardião oferecer "continuar de onde parou".
+ */
+export function enterTower(floor) {
+  clearWorld();
+  const biome = towerBiome(floor, R.TOWER.biomeEvery);
+  G.zone = 'tower'; G.biome = biome; G.floor = floor;
+  G.ch.towerBest = Math.max(G.ch.towerBest || 1, floor);
+  Music.play(biome);
+  const seed = R.hash32('tower', biome, floor, G.ch.name, Date.now());
+  G.L = genTower(biome, floor, seed);
+  buildLevel(G.L);
+  resize();
+  placePlayer(G.L);
+  const B = BIOMES[biome], lvl = R.towerLevel(floor);
+  let pack = 1;
+  G.L.spawns.forEach((s) => {
+    const wx = s.x * TILE, wz = s.z * TILE;
+    if (s.boss) {
+      spawnMonster(B.boss, wx, wz, lvl + 6, { pack });
+      for (let i = 0; i < 2 + Math.min(4, Math.floor(floor / 4)); i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, lvl + 2, { pack });
+    } else {
+      const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
+      for (let i = 0; i < s.size; i++) {
+        let x = wx + (rand() - 0.5) * 4, z = wz + (rand() - 0.5) * 4;
+        if (!walkable(G.L, x, z)) { x = wx; z = wz; }
+        const k2 = rand() < 0.7 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
+        spawnMonster(k2, x, z, lvl + Math.floor(rand() * 4), { pack, elite: s.elite && i === 0 });
+      }
+    }
+    pack++;
+  });
+  G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
+  setZoneText('Torre Infinita · Andar ' + floor, B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
+  log('Torre Infinita, andar ' + floor + ' (' + B.name + '). Derrote o chefe no salão central para subir.', 'sys');
+  toast('Torre Infinita', 'Andar ' + floor + ' · ' + B.name);
+  persist();
+}
 function spawnBreakable(x, z, biome) {
-  const c = { forest: 0x8a5a2a, caves: 0x6a5a4a, ruins: 0x9a7a5a, castle: 0x7a3a2a, abyss: 0x4a2a2a }[biome];
+  const c = { forest: 0x8a5a2a, caves: 0x6a5a4a, ruins: 0x9a7a5a, castle: 0x7a3a2a, abyss: 0x4a2a2a, tw_granite: 0x7a7068, tw_arcane: 0x6a4a7a, tw_storm: 0x5a6a6a, tw_void: 0x4a2a4a }[biome];
   const g = new THREE.Group();
-  const k = kit(biome === 'ruins' || biome === 'castle' ? 'crate' : 'barrel');
+  const k = kit(biome === 'ruins' || biome === 'castle' || biome === 'tw_granite' || biome === 'tw_arcane' ? 'crate' : 'barrel');
   const body = new THREE.Mesh(k.geo, kitMat());
   body.castShadow = true; body.receiveShadow = true;
   body.rotation.y = Math.random() * 6;
