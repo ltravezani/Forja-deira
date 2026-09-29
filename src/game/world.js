@@ -10,6 +10,7 @@ import { rebuildMonsterGrid, updateMonsters } from './monsters.js';
 import { updateNpcs, updatePortals } from './npcs.js';
 import { updatePlayer } from './player.js';
 import { updateProjectiles } from './projectiles.js';
+import { updateTownLife } from './townlife.js';
 import { paintMinimapTile } from '../ui/minimap.js';
 import { updateTorchLights } from '../world/level.js';
 
@@ -72,6 +73,7 @@ export function updateWorld(dt) {
   updateProjectiles(dt);
   runDelayed(dt);
   updateNpcs(dt);
+  if (G.zone === 'town') updateTownLife(dt);
   updateLootVisuals(dt);
   updatePortals(dt);
   const p = G.player;

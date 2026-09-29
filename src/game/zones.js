@@ -11,6 +11,7 @@ import { clearLoot } from './loot.js';
 import { clearMonsters, spawnMonster } from './monsters.js';
 import { clearNpcs, spawnNpcs } from './npcs.js';
 import { clearProjectiles } from './projectiles.js';
+import { clearTownLife, spawnTownLife } from './townlife.js';
 import { log, setZoneText, toast } from '../ui/log.js';
 import { resetMinimap } from '../ui/minimap.js';
 import { BIOMES, floorLevel, towerBiome } from '../world/biomes.js';
@@ -34,6 +35,7 @@ export function clearWorld() {
   for (const b of G.breakables) world.remove(b.mesh);
   G.breakables.length = 0;
   clearNpcs();
+  clearTownLife();
   clearAllies(true);
   clearEffects();
   clearFx();
@@ -57,6 +59,7 @@ export function enterTown() {
   buildLevel(G.L);
   resize();
   spawnNpcs(G.L);
+  spawnTownLife(G.L);
   placePlayer(G.L);
   G.hp = G.st.maxHp; G.mp = G.st.maxMp; G.ag = G.st.maxAg;
   setZoneText(BIOMES.town.name, 'Cidade segura');

@@ -3,13 +3,14 @@ import { GEO } from '../art/geometry.js';
 import { disposeObject } from '../art/materials.js';
 import { CUT, CUT_GLSL, cutaway, setCutaway } from '../art/cutaway.js';
 import { stylize, toonGradient, toonMaterial } from '../art/stylize.js';
-import { fbm, hash2, makeTexSet, sat, texDecal, vnoise } from '../art/textures.js';
+import { fbm, hash2, makeTexSet, sat, texDecal, texPlaza, vnoise } from '../art/textures.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
 import { camera, hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
 import { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
+import { buildTownFx, clearTownFx, updateTownFx } from './townfx.js';
 
 let levelMeshes = [];
 /** Malhas do nível atual (diagnóstico/testes). */
@@ -293,6 +294,7 @@ export function buildLevel(L) {
   fires = [];
   mist = null;
   shafts = null;
+  clearTownFx();
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
   scene.fog = new THREE.Fog(B.fog[0], B.fog[1], B.fog[2]);
@@ -448,6 +450,43 @@ function buildProps(L, B, rnd) {
     placeKit('candles', by(P('grave'), (p) => p.v > 0.7), (p) => ({ x: p.x * T + 0.6, z: p.z * T + 0.6, s: 0.6 }));
     by(P('grave'), (p) => p.v > 0.7).forEach((p) => addFire(p.x * T + 0.6, 0.35, p.z * T + 0.6, 0.35, 0xffc060));
     placeDecals(P('decal').map((p) => ({ ...pos(p, 1), r: p.v * 6, s: 0.8 + p.v })), 'moss', 2.4);
+    // mobiliário, quintais e comércio
+    const simple = (k, fn) => placeKit(k, P(k), fn || ((p) => ({ x: p.x * T, z: p.z * T, ry: p.ry || 0 })));
+    simple('bench');
+    simple('planter', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+    simple('well', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.3 }));
+    simple('woodpile');
+    simple('chop', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
+    simple('clothesline');
+    simple('garden');
+    simple('fence');
+    simple('coop', (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.PI / 2 }));
+    simple('haystack', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
+    simple('trough', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.5 }));
+    simple('notice', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.3 }));
+    simple('signpost', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.4 }));
+    for (const k of ['sacks', 'pots', 'produce']) simple(k, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
+    simple('oak', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6, s: 0.9 + p.v * 0.25 }));
+    // bandeirolas presas no alto dos lampiões da praça
+    const byLen = {};
+    for (const b of L.bunting || []) { const len = Math.round(Math.hypot(b.bx - b.ax, b.bz - b.az) * T); (byLen[len] || (byLen[len] = [])).push(b); }
+    for (const len in byLen) placeKit('bunting' + len, byLen[len], (b) => ({ x: ((b.ax + b.bx) / 2) * T, y: 3.05, z: ((b.az + b.bz) / 2) * T, ry: -Math.atan2(b.bz - b.az, b.bx - b.ax) }), { noShadow: true });
+    // rosácea de lajes em volta da fonte e luz azulada da água
+    const fo = P('fountain')[0];
+    if (fo) {
+      const t = texPlaza();
+      const mat = new THREE.MeshToonMaterial({ map: t.map, normalMap: t.normalMap, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+      mat.normalScale.setScalar(0.6);
+      const m = new THREE.Mesh(GEO.plane, mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(fo.x * T, 0.015, fo.z * T);
+      m.scale.setScalar(17);
+      m.receiveShadow = true;
+      m.renderOrder = 1;
+      addLevel(m);
+      torches.push({ x: fo.x * T, y: 1.4, z: fo.z * T, cold: true, water: true });
+    }
+    buildTownFx(L, addLevel);
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
@@ -674,6 +713,7 @@ export function updateTorchLights(px, pz, t) {
   updateShafts(px, pz, t, dt);
   setKitGlowTime(t);
   setCutaway(px, 0, pz, camera);
+  updateTownFx(px, pz, t, dt, renderer.domElement.height);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;
@@ -692,9 +732,9 @@ export function updateTorchLights(px, pz, t) {
     if (!n || n.d > 1100) { l.intensity = 0; return; }
     const tc = n.tc;
     l.position.set(tc.x, tc.y + 0.3, tc.z);
-    l.color.setHex(tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
+    l.color.setHex(tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
     l.distance = tc.lamp ? 16 : tc.lava ? 10 : 13;
     const flick = tc.cold ? 1 : 0.84 + Math.sin(t * 9 + i * 2) * 0.09 + Math.sin(t * 23 + i) * 0.06;
-    l.intensity = (tc.cold ? 16 : tc.lava ? 24 : tc.lamp ? 30 : 34) * flick;
+    l.intensity = (tc.water ? 7 : tc.cold ? 16 : tc.lava ? 24 : tc.lamp ? 30 : 34) * flick;
   });
 }

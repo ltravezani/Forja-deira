@@ -68,3 +68,16 @@ test('cidade: Torre Infinita na parte de baixo do mapa, com o Guardião em chão
   assert.ok(L.tower.x + L.tower.z > L.W, 'torre deveria ficar na frente/baixo do mapa');
   assert.equal(L.grid[L.tower.z * L.W + L.tower.x], 2, 'torre deveria bloquear a passagem');
 });
+
+test('cidade viva: NPCs, portal e pontos dos moradores alcançáveis; cercado das galinhas com chão livre', async () => {
+  const { genTown } = await load('world/levelgen.js');
+  const L = genTown();
+  const seen = flood(L, L.start.x, L.start.z);
+  for (const n of L.npcs.concat([L.portal])) assert.ok(seen[n.z * L.W + n.x], 'NPC/portal isolado em ' + n.x + ',' + n.z);
+  assert.ok(L.spots.length >= 15, 'poucos pontos de interesse (' + L.spots.length + ')');
+  for (const s of L.spots) assert.ok(seen[s.z * L.W + s.x], 'ponto isolado em ' + s.x + ',' + s.z);
+  let inside = 0;
+  for (let z = L.pen.z0 + 1; z < L.pen.z1; z++) for (let x = L.pen.x0 + 1; x < L.pen.x1; x++) if (L.grid[z * L.W + x] === 1) inside++;
+  assert.ok(inside >= 4, 'cercado sem espaço para as galinhas');
+  for (const k of ['fountain', 'bench', 'well', 'garden', 'oak', 'notice']) assert.ok(L.props.some((p) => p.kind === k), 'faltou ' + k);
+});

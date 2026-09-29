@@ -344,16 +344,39 @@ export function kit(name) {
       P.push(KP(GEO.box, IRON, 0.62, 2.65, 0, 0.3, 0.04, 0.3));
       Gl.push(KP(GEO.box, 0xffc070, 0.62, 2.8, 0, 0.24, 0.3, 0.24));
       break;
-    case 'fountain':
-      P.push(KP(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), DSTONE, 0, 0.35, 0, 5.4, 0.7, 5.4));
-      P.push(KP(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), STONE, 0, 0.74, 0, 5.6, 0.12, 5.6));
-      P.push(KP(GEO.cyl, 0x0e1a24, 0, 0.62, 0, 4.9, 0.05, 4.9));
-      P.push(KP(GEO.cyl, STONE, 0, 1.4, 0, 0.8, 1.6, 0.8));
-      P.push(KP(bowlGeo, STONE, 0, 2.1, 0, 2.2, 0.8, 2.2));
-      P.push(KP(GEO.taper, STONE, 0, 3.0, 0, 0.45, 1.3, 0.35, Math.PI, 0, 0));
-      P.push(KP(GEO.sphS, STONE, 0, 3.8, 0, 0.36));
-      P.push(KP(GEO.sphH, STONE, 0, 3.55, 0, 0.9, 0.3, 0.7));
+    case 'fountain': { // chafariz de três níveis: bacia octogonal, taça grande, taça pequena e pinha; a água é desenhada à parte (townfx)
+      const oct = new THREE.CylinderGeometry(0.5, 0.5, 1, 8), R = 2.8, tn = Math.tan(Math.PI / 8);
+      P.push(KP(oct, DSTONE, 0, 0.08, 0, 6.4, 0.16, 6.4)); // degrau
+      P.push(KP(oct, 0x3a4a52, 0, 0.2, 0, 5.2, 0.2, 5.2)); // fundo (visto através da água)
+      // paredes e borda larga, peça por lado (a bacia é oca)
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + Math.PI / 8, ap = R * Math.cos(Math.PI / 8);
+        P.push(KP(GEO.box, STONE, Math.sin(a) * (ap - 0.18), 0.42, Math.cos(a) * (ap - 0.18), 2 * ap * tn + 0.05, 0.84, 0.36, 0, a, 0));
+        P.push(KP(GEO.box, 0xb8b0a0, Math.sin(a) * (ap - 0.14), 0.9, Math.cos(a) * (ap - 0.14), 2 * (ap + 0.14) * tn + 0.12, 0.14, 0.62, 0, a, 0));
+        P.push(KP(GEO.box, DSTONE, Math.sin(a) * (ap + 0.02), 0.5, Math.cos(a) * (ap + 0.02), 1.2, 0.34, 0.04, 0, a, 0)); // painel
+        const v = i * Math.PI / 4; // pilaretes nos vértices
+        P.push(KP(GEO.box, 0xb8b0a0, Math.sin(v) * R, 0.55, Math.cos(v) * R, 0.36, 1.1, 0.36, 0, v, 0));
+        P.push(KP(GEO.sphS, STONE, Math.sin(v) * R, 1.18, Math.cos(v) * R, 0.26));
+      }
+      // pedestal com quatro carrancas de leão que cospem água
+      P.push(KP(oct, DSTONE, 0, 0.5, 0, 1.5, 0.6, 1.5));
+      P.push(KP(GEO.taper, STONE, 0, 1.2, 0, 0.9, 1.0, 0.9, Math.PI, 0, 0));
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4, x = Math.sin(a), z = Math.cos(a);
+        P.push(KP(GEO.sphS, 0xc8b070, x * 0.48, 1.05, z * 0.48, 0.34, 0.32, 0.3, 0, a, 0));
+        P.push(KP(GEO.sphS, 0xa89050, x * 0.44, 1.12, z * 0.44, 0.44, 0.38, 0.22, 0, a, 0)); // juba
+        P.push(KP(GEO.cyl6, 0x2a2a2a, x * 0.64, 1.0, z * 0.64, 0.08, 0.06, 0.08, Math.PI / 2, a, 0)); // boca
+      }
+      P.push(KP(bowlGeo, STONE, 0, 1.55, 0, 2.6, 0.9, 2.6));
+      P.push(KP(GEO.torusF, 0xb8b0a0, 0, 1.93, 0, 2.86, 2.86, 0.9, Math.PI / 2, 0, 0));
+      P.push(KP(GEO.taper, STONE, 0, 2.3, 0, 0.5, 0.8, 0.5, Math.PI, 0, 0));
+      P.push(KP(bowlGeo, STONE, 0, 2.6, 0, 1.3, 0.7, 1.3));
+      P.push(KP(GEO.torusF, 0xb8b0a0, 0, 2.89, 0, 1.44, 1.44, 0.7, Math.PI / 2, 0, 0));
+      P.push(KP(GEO.cyl6, STONE, 0, 3.05, 0, 0.26, 0.4, 0.26));
+      P.push(KP(GEO.sphS, 0xb8b0a0, 0, 3.3, 0, 0.36, 0.36, 0.36));
+      P.push(KP(GEO.cone, 0xa89a88, 0, 3.6, 0, 0.3, 0.5, 0.3)); // pinha
       break;
+    }
     case 'well':
       P.push(KP(GEO.cyl, DSTONE, 0, 0.45, 0, 1.6, 0.9, 1.6));
       P.push(KP(GEO.cyl, 0x05080a, 0, 0.91, 0, 1.3, 0.02, 1.3));
@@ -415,6 +438,18 @@ export function kit(name) {
       P.push(KP(GEO.box, beam, -1.2, 2.55, Lz / 2 + 0.08, 1.3, 0.14, 0.08));
       for (const x of [1.4, 3.3]) { Gl.push(KP(GEO.box, 0xffaa50, x, 2.0, Lz / 2 + 0.05, 0.8, 0.9, 0.04)); P.push(KP(GEO.box, beam, x, 2.0, Lz / 2 + 0.08, 0.08, 0.95, 0.06)); P.push(KP(GEO.box, beam, x, 2.0, Lz / 2 + 0.08, 0.85, 0.08, 0.06)); }
       Gl.push(KP(GEO.box, 0xffaa50, Lx / 2 + 0.05, 2.0, 0, 0.04, 0.9, 0.8));
+      // floreiras e venezianas nas janelas da frente, lampião ao lado da porta e degrau de pedra
+      for (const x of [1.4, 3.3]) {
+        P.push(KP(GEO.box, DWOOD, x, 1.44, Lz / 2 + 0.2, 1.0, 0.2, 0.3));
+        for (let i = 0; i < 5; i++) P.push(KP(GEO.ico0, [0xf05a6a, 0xf8e070, 0x4e8e3a, 0xa878f0, 0x4e8e3a][(i + (x > 2 ? 2 : 0)) % 5], x - 0.4 + i * 0.2, 1.6, Lz / 2 + 0.22, 0.2, 0.17, 0.2));
+        for (const sx of [-1, 1]) P.push(KP(GEO.box, 0x3a6a4a, x + sx * 0.6, 2.0, Lz / 2 + 0.1, 0.32, 1.0, 0.05, 0, sx * 0.25, 0));
+      }
+      P.push(KP(GEO.box, IRON, -0.35, 2.3, Lz / 2 + 0.22, 0.06, 0.06, 0.34));
+      P.push(KP(GEO.cone4, IRON, -0.35, 2.36, Lz / 2 + 0.38, 0.24, 0.12, 0.24, 0, Math.PI / 4, 0));
+      Gl.push(KP(GEO.box, 0xffc070, -0.35, 2.18, Lz / 2 + 0.38, 0.15, 0.2, 0.15));
+      P.push(KP(GEO.box, STONE, -1.2, 0.3, Lz / 2 + 0.45, 1.5, 0.3, 0.6));
+      // telhadinho sobre a porta
+      P.push(KP(GEO.box, 0x7a3426, -1.2, 2.75, Lz / 2 + 0.3, 1.6, 0.08, 0.7, 0.35, 0, 0));
       // empenas
       for (const sx of [-1, 1]) P.push(KP(gableGeo(Lz, 2.4), 0xe8d8b0, sx * Lx / 2, 0.6 + Hh, 0, 1, 1, 1, 0, sx * Math.PI / 2, 0));
       // chaminé
@@ -506,7 +541,149 @@ export function kit(name) {
       }
       Gl.push(KP(GEO.oct, 0xc89aff, 0.5, 2.95, 0.1, 0.18, 0.26, 0.18));
       break;
+    // ---------- cidade: mobiliário, quintais e comércio ----------
+    case 'bench': // banco de praça: pés de pedra, assento e encosto de ripas
+      for (const x of [-0.75, 0.75]) { P.push(KP(GEO.box, DSTONE, x, 0.24, 0, 0.22, 0.48, 0.5)); P.push(KP(GEO.box, STONE, x, 0.5, 0, 0.3, 0.06, 0.58)); }
+      for (let i = 0; i < 3; i++) P.push(KP(GEO.box, i % 2 ? WOOD : 0x9a6a3e, 0, 0.56, -0.16 + i * 0.16, 1.9, 0.07, 0.14));
+      for (const x of [-0.75, 0.75]) P.push(KP(GEO.box, DWOOD, x, 0.85, -0.3, 0.1, 0.62, 0.08, -0.15, 0, 0));
+      for (let i = 0; i < 2; i++) P.push(KP(GEO.box, WOOD, 0, 0.8 + i * 0.2, -0.32 - i * 0.03, 1.9, 0.12, 0.05, -0.15, 0, 0));
+      break;
+    case 'planter': { // canteiro de pedra com flores e folhagem
+      P.push(KP(GEO.box, DSTONE, 0, 0.3, 0, 1.6, 0.6, 1.6));
+      P.push(KP(GEO.box, STONE, 0, 0.62, 0, 1.75, 0.1, 1.75));
+      P.push(KP(GEO.box, 0x4a3222, 0, 0.62, 0, 1.4, 0.06, 1.4));
+      for (let i = 0; i < 7; i++) { const a = i * 0.9, r = i ? 0.45 : 0; P.push(KP(GEO.sph, i % 2 ? 0x3e7a34 : 0x4e8e3a, Math.cos(a) * r, 0.8, Math.sin(a) * r, 0.5, 0.36, 0.5)); }
+      for (let i = 0; i < 10; i++) { const a = i * 2.3, r = 0.2 + (i % 3) * 0.18; P.push(KP(GEO.ico0, [0xf05a6a, 0xf8e070, 0xa878f0, 0xffffff, 0xff9a40][i % 5], Math.cos(a) * r, 0.98 + (i % 2) * 0.06, Math.sin(a) * r, 0.16, 0.1, 0.16)); }
+      break;
+    }
+    case 'woodpile': // lenha empilhada sob um telhadinho
+      for (let row = 0; row < 3; row++) for (let i = 0; i < 5 - row; i++) {
+        const x = -0.8 + i * 0.4 + row * 0.2, y = 0.2 + row * 0.34;
+        P.push(KP(GEO.cyl6, (i + row) % 2 ? 0x8a5a34 : 0x7a4e2c, x, y, 0, 0.34, 1.2, 0.34, Math.PI / 2, 0, 0));
+        P.push(KP(GEO.cyl6, 0xd8b078, x, y, 0.61, 0.28, 0.02, 0.28, Math.PI / 2, 0, 0));
+      }
+      for (const x of [-1.1, 1.1]) P.push(KP(GEO.box, DWOOD, x, 0.9, -0.3, 0.1, 1.8, 0.1));
+      P.push(KP(GEO.box, 0x6a3a26, 0, 1.8, 0.05, 2.5, 0.08, 1.4, 0.25, 0, 0));
+      break;
+    case 'chop': // cepo com machado cravado
+      P.push(KP(GEO.cyl, 0x7a4e2c, 0, 0.3, 0, 0.8, 0.6, 0.8));
+      P.push(KP(GEO.cyl, 0xd8b078, 0, 0.61, 0, 0.7, 0.02, 0.7));
+      P.push(KP(GEO.cyl6, DWOOD, 0.1, 0.95, 0.05, 0.07, 0.8, 0.07, 0, 0, -0.5));
+      P.push(KP(GEO.box, 0xb8bcc8, -0.05, 0.66, 0.05, 0.3, 0.16, 0.04, 0, 0, -0.5));
+      for (let i = 0; i < 3; i++) P.push(KP(GEO.box, 0xd8b078, 0.5 + i * 0.15, 0.05, 0.3 - i * 0.2, 0.3, 0.08, 0.1, 0, i, 0));
+      break;
+    case 'clothesline': // varal entre dois postes, com roupas coloridas
+      for (const x of [-3, 3]) { P.push(KP(GEO.cyl6, DWOOD, x, 1.1, 0, 0.12, 2.2, 0.12)); P.push(KP(GEO.box, DWOOD, x, 2.15, 0, 0.1, 0.1, 0.5)); }
+      P.push(KP(GEO.cyl6, 0xd8ccb0, 0, 2.05, 0, 0.02, 6, 0.02, 0, 0, Math.PI / 2));
+      [[-2.2, 0xc84a3a, 0.7, 0.8], [-1.2, 0xe8e0cc, 0.6, 1.0], [-0.2, 0x3a6aa0, 0.8, 0.7], [0.9, 0xd8b050, 0.5, 0.6], [1.9, 0x5a8a4a, 0.7, 0.9]].forEach(([x, c, w, h], i) => {
+        P.push(KP(GEO.box, c, x, 2.05 - h / 2, 0, w, h, 0.03, 0, 0, (i % 2 ? 1 : -1) * 0.04));
+        if (i % 2 === 0) for (const sx of [-1, 1]) P.push(KP(GEO.box, c, x + sx * (w / 2 + 0.1), 1.9, 0, 0.22, 0.26, 0.03, 0, 0, sx * 0.6)); // mangas
+      });
+      break;
+    case 'garden': { // horta 3×3 tiles: leiras de terra com repolhos, abóboras e espantalho
+      P.push(KP(GEO.box, 0x5a3e28, 0, 0.04, 0, 5.6, 0.08, 5.6));
+      for (let r = 0; r < 4; r++) {
+        const z = -2.1 + r * 1.4;
+        P.push(KP(GEO.box, 0x6a4a30, 0, 0.14, z, 5.0, 0.2, 0.7));
+        for (let i = 0; i < 6; i++) {
+          const x = -2.1 + i * 0.84;
+          if (r === 3 && i % 2) { P.push(KP(GEO.sphS, 0xe07a20, x, 0.4, z, 0.5, 0.36, 0.5)); P.push(KP(GEO.cyl6, 0x4a6a2a, x, 0.6, z, 0.06, 0.14, 0.06)); }
+          else P.push(KP(GEO.sph, (i + r) % 2 ? 0x5a9a3a : 0x7ab84a, x, 0.4, z, 0.5, 0.36, 0.5));
+        }
+      }
+      for (const [x, z, w, d] of [[0, -2.85, 5.8, 0.08], [0, 2.85, 5.8, 0.08], [-2.85, 0, 0.08, 5.8], [2.85, 0, 0.08, 5.8]]) P.push(KP(GEO.box, WOOD, x, 0.3, z, w, 0.08, d));
+      // espantalho
+      P.push(KP(GEO.cyl6, DWOOD, 1.6, 1.1, 0.7, 0.1, 2.2, 0.1));
+      P.push(KP(GEO.cyl6, DWOOD, 1.6, 1.6, 0.7, 0.08, 1.6, 0.08, 0, 0, Math.PI / 2));
+      P.push(KP(GEO.box, 0x8a3a2a, 1.6, 1.4, 0.7, 0.6, 0.6, 0.3));
+      P.push(KP(GEO.sphS, 0xd8c08a, 1.6, 2.0, 0.7, 0.4));
+      P.push(KP(GEO.cone, 0xc8a050, 1.6, 2.3, 0.7, 0.7, 0.4, 0.7));
+      break;
+    }
+    case 'fence': // trecho de cerca (1 tile, ao longo de x)
+      for (const x of [-0.95, 0.95]) P.push(KP(GEO.box, DWOOD, x, 0.5, 0, 0.14, 1.0, 0.14));
+      for (const y of [0.35, 0.75]) P.push(KP(GEO.box, WOOD, 0, y, 0, 2.0, 0.1, 0.06));
+      break;
+    case 'coop': // galinheiro de tábuas, com rampa
+      P.push(KP(GEO.box, 0x9a6a3e, 0, 0.75, 0, 1.6, 0.9, 1.2));
+      for (const x of [-0.7, 0.7]) for (const z of [-0.5, 0.5]) P.push(KP(GEO.box, DWOOD, x, 0.3, z, 0.1, 0.6, 0.1));
+      P.push(KP(GEO.box, 0x1a120c, 0, 0.7, 0.61, 0.4, 0.45, 0.02));
+      P.push(KP(GEO.box, WOOD, 0, 0.35, 0.95, 0.4, 0.04, 0.8, 0.5, 0, 0));
+      P.push(KP(roofGeo(1.8, 1.4, 0.55, 0.12), 0x7a3426, 0, 1.2, 0, 1));
+      P.push(KP(GEO.box, 0xe8dcc0, 0.4, 0.08, 1.1, 0.3, 0.05, 0.3)); // palha espalhada
+      break;
+    case 'haystack':
+      P.push(KP(GEO.sphH, 0xd8b050, 0, 0, 0, 2.0, 2.2, 2.0));
+      P.push(KP(GEO.sphH, 0xc8a040, 0, 0.9, 0, 1.3, 0.9, 1.3));
+      P.push(KP(GEO.cyl6, DWOOD, 0.6, 1.1, 0.5, 0.06, 2.2, 0.06, 0.3, 0, -0.4)); // forcado
+      for (let i = 0; i < 6; i++) { const a = i * 1.05; P.push(KP(GEO.box, 0xe0c060, Math.cos(a) * 1.05, 0.03, Math.sin(a) * 1.05, 0.5, 0.04, 0.12, 0, a, 0)); }
+      break;
+    case 'trough': // cocho de madeira com água
+      P.push(KP(GEO.box, DWOOD, 0, 0.35, 0, 1.8, 0.5, 0.7));
+      P.push(KP(GEO.box, 0x2a4a6a, 0, 0.58, 0, 1.6, 0.04, 0.5));
+      for (const x of [-0.8, 0.8]) P.push(KP(GEO.box, WOOD, x, 0.2, 0, 0.12, 0.4, 0.9));
+      break;
+    case 'notice': // quadro de avisos com cartazes
+      for (const x of [-0.9, 0.9]) P.push(KP(GEO.box, DWOOD, x, 1.1, 0, 0.16, 2.2, 0.16));
+      P.push(KP(GEO.box, WOOD, 0, 1.45, 0, 1.9, 1.1, 0.1));
+      P.push(KP(roofGeo(2.2, 0.5, 0.35, 0.1), 0x6a3426, 0, 2.1, 0, 1));
+      [[-0.5, 1.6, 0xe8dcc0, 0.5, 0.6], [0.1, 1.5, 0xf0e4b0, 0.4, 0.5], [0.6, 1.65, 0xe8d0a8, 0.4, 0.4], [-0.2, 1.1, 0xd8c8a0, 0.6, 0.3], [0.55, 1.15, 0xe0d8c8, 0.3, 0.35]].forEach(([x, y, c, w, h]) => {
+        P.push(KP(GEO.box, c, x, y, 0.06, w, h, 0.01, 0, 0, (x * 7) % 0.2 - 0.1));
+        P.push(KP(GEO.box, 0x3a2a20, x, y + h * 0.15, 0.067, w * 0.7, 0.03, 0.005));
+        P.push(KP(GEO.box, 0x3a2a20, x, y - h * 0.1, 0.067, w * 0.6, 0.03, 0.005));
+        P.push(KP(GEO.sphS, 0xb03030, x, y + h / 2 - 0.05, 0.07, 0.05));
+      });
+      break;
+    case 'signpost': // placa com setas (masmorras / mercado / torre)
+      P.push(KP(GEO.cyl6, DWOOD, 0, 1.3, 0, 0.14, 2.6, 0.14));
+      [[2.35, 0.3, 0x8a5a34], [1.9, -0.9, 0x9a6a3e], [1.45, 1.8, 0x7a4e2c]].forEach(([y, r, c]) => {
+        P.push(KP(GEO.box, c, 0.45 * Math.cos(r), y, -0.45 * Math.sin(r), 0.9, 0.24, 0.06, 0, r, 0));
+        P.push(KP(GEO.cone4, c, 0.95 * Math.cos(r), y, -0.95 * Math.sin(r), 0.2, 0.2, 0.06, 0, r, -Math.PI / 2));
+        P.push(KP(GEO.box, 0xe8dcc0, 0.45 * Math.cos(r) + 0.04 * Math.sin(r), y, -0.45 * Math.sin(r) + 0.04 * Math.cos(r), 0.6, 0.04, 0.005, 0, r, 0));
+      });
+      P.push(KP(GEO.cone, DWOOD, 0, 2.7, 0, 0.2, 0.2, 0.2));
+      break;
+    case 'sacks': // sacas de grão empilhadas
+      for (const [x, y, z, r] of [[-0.3, 0.3, 0, 0.2], [0.35, 0.3, 0.1, -0.3], [0, 0.3, -0.45, 0.8], [0.05, 0.8, -0.1, 0.1]]) {
+        P.push(KP(GEO.sphS, 0xc8b08a, x, y, z, 0.7, 0.62, 0.55, 0, r, 0));
+        P.push(KP(GEO.cyl6, 0x8a6a3a, x, y + 0.34, z, 0.16, 0.12, 0.16));
+      }
+      P.push(KP(GEO.sphH, 0xe8d8a0, 0.5, 0.02, 0.5, 0.5, 0.12, 0.4)); // grão derramado
+      break;
+    case 'pots': // potes e jarros de barro
+      for (const [x, z, s, c] of [[0, 0, 1, 0xb0643a], [0.5, 0.2, 0.7, 0xc07848], [-0.4, 0.35, 0.8, 0x9a5230], [0.1, -0.5, 0.6, 0xd08a58]]) {
+        P.push(KP(barrelGeo, c, x, 0, z, 0.8 * s, 1.0 * s, 0.8 * s));
+        P.push(KP(GEO.cyl, c, x, 1.02 * s, z, 0.34 * s, 0.14 * s, 0.34 * s));
+        P.push(KP(GEO.torusF, 0x6a3a22, x, 0.6 * s, z, 0.66 * s, 0.66 * s, 0.4, Math.PI / 2, 0, 0));
+      }
+      break;
+    case 'produce': // caixotes abertos com frutas e legumes
+      for (const [x, c] of [[-0.5, 0xd83a2a], [0.5, 0xf0c040]]) {
+        P.push(KP(GEO.box, WOOD, x, 0.3, 0, 0.9, 0.5, 0.8));
+        P.push(KP(GEO.box, DWOOD, x, 0.56, 0, 0.94, 0.06, 0.84));
+        for (let i = 0; i < 6; i++) P.push(KP(GEO.sphLow, c, x - 0.25 + (i % 3) * 0.25, 0.6 + (i > 2 ? 0.08 : 0), -0.15 + Math.floor(i / 3) * 0.3, 0.26));
+      }
+      P.push(KP(GEO.box, WOOD, 0, 0.8, -0.1, 0.9, 0.4, 0.7, 0, 0.3, 0));
+      for (let i = 0; i < 4; i++) P.push(KP(GEO.sph, 0x6aa040, -0.2 + (i % 2) * 0.35, 1.05, -0.2 + Math.floor(i / 2) * 0.25, 0.3, 0.26, 0.3));
+      break;
+    case 'oak': // árvore frondosa: tronco grosso, copa em bolas de folhas
+      P.push(KP(GEO.taper, 0x6a4426, 0, 1.3, 0, 0.8, 2.6, 0.8, Math.PI, 0, 0));
+      for (let i = 0; i < 3; i++) { const a = i * 2.1; P.push(KP(GEO.cone, 0x5a3a22, Math.cos(a) * 0.45, 0.2, Math.sin(a) * 0.45, 0.4, 0.8, 0.4, Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2)); }
+      for (let i = 0; i < 8; i++) {
+        const a = i * 0.8, r = i ? 1.3 : 0, y = i ? 3.3 + (i % 3) * 0.45 : 4.3;
+        P.push(KP(GEO.sph, [0x3a7a30, 0x4a8a38, 0x5a9a3e][i % 3], Math.cos(a) * r, y, Math.sin(a) * r, 2.2 - (i % 2) * 0.4, 1.8, 2.2 - (i % 2) * 0.4));
+      }
+      for (let i = 0; i < 6; i++) { const a = i * 1.1 + 0.3; P.push(KP(GEO.sphLow, 0xd83a2a, Math.cos(a) * 1.6, 3.2 + (i % 2) * 0.6, Math.sin(a) * 1.6, 0.2)); } // maçãs
+      break;
     default:
+      if (name.startsWith('bunting')) { // bandeirolas pendentes de comprimento L (ao longo de x), catenária rasa
+        const L = +name.slice(7) || 10, n = Math.round(L / 0.7), sag = L * 0.08;
+        const yAt = (t) => -sag * (1 - (2 * t - 1) ** 2);
+        const cols = [0xd83a2a, 0xf0c040, 0x3a7ad8, 0x4aa050, 0xe8e0cc, 0xa04ad0];
+        for (let i = 0; i < 24; i++) { const t0 = i / 24, t1 = (i + 1) / 24, x0 = (t0 - 0.5) * L, x1 = (t1 - 0.5) * L, y0 = yAt(t0), y1 = yAt(t1); P.push(KP(GEO.box, 0x3a2a20, (x0 + x1) / 2, (y0 + y1) / 2, 0, Math.hypot(x1 - x0, y1 - y0), 0.03, 0.03, 0, 0, Math.atan2(y1 - y0, x1 - x0))); }
+        for (let i = 1; i < n; i++) { const t = i / n; P.push(KP(GEO.cone4, cols[i % cols.length], (t - 0.5) * L, yAt(t) - 0.3, 0, 0.5, 0.6, 0.04, Math.PI, 0, 0)); }
+        break;
+      }
       P.push(KP(GEO.box, 0xff00ff, 0, 0.5, 0, 1));
   }
   const k = { geo: mergeParts(P), glow: Gl.length ? mergeParts(Gl) : null, roof };
