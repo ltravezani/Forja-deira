@@ -15,25 +15,27 @@ import { BIOMES, DUNGEON_ORDER, floorLevel, towerBiome } from '../world/biomes.j
 
 function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
 export function closeModal() { $('#modal').hidden = true; }
-const SELL_CATS = { all: 'Todos', equip: 'Equipamentos', jewel: 'Joias', potion: 'Poções' };
+const SELL_CATS = { all: 'Todos', jewel: 'Joias', potion: 'Poções' };
 const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');
-/** Joias e Lendários pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.rarity === 'lendario';
+/** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
+const sellListed = (it) => !it.slot;
+/** Joias pedem confirmação antes de vender. */
+const sellNeedsConfirm = (it) => it.kind === 'jewel';
 function sellSection(ch) {
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
-  const cnt = { all: ch.bag.length, equip: 0, jewel: 0, potion: 0 };
-  ch.bag.forEach((it) => { const c = sellCat(it); if (c in cnt) cnt[c]++; });
+  const cnt = { all: 0, jewel: 0, potion: 0 };
+  ch.bag.forEach((it) => { if (!sellListed(it)) return; cnt.all++; const c = sellCat(it); if (c in cnt) cnt[c]++; });
   let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Vender item</h4>';
   h += '<div class="btabs">' + Object.keys(SELL_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="sellf" data-k="' + k + '">' + SELL_CATS[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   const idx = [];
-  ch.bag.forEach((it, i) => { if (f === 'all' || sellCat(it) === f) idx.push(i); });
+  ch.bag.forEach((it, i) => { if (sellListed(it) && (f === 'all' || sellCat(it) === f)) idx.push(i); });
   idx.sort((a, b) => R.sellValue(ch.bag[b], 1) - R.sellValue(ch.bag[a], 1));
   if (!idx.length) return h + '<p class="note">Nada ' + (f === 'all' ? 'na mochila' : 'desta categoria na mochila') + ' para vender.</p>';
   const cf = UI.merchConfirm && ch.bag.includes(UI.merchConfirm.it) ? UI.merchConfirm : null;
   h += '<div class="list selllist">';
   idx.forEach((i) => {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = it.slot ? R.RARITY[it.rarity].name + ' · ' + fmt(R.itemCP(it)) + ' CP' : it.kind === 'jewel' ? 'Joia · você tem ' + q : 'Poção · você tem ' + q;
+    const sub = it.kind === 'jewel' ? 'Joia · você tem ' + q : 'Poção · você tem ' + q;
     let a;
     if (cf && cf.it === it) {
       a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
@@ -42,13 +44,13 @@ function sellSection(ch) {
         ? '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">×1 · ' + fmt(R.sellValue(it, 1)) + '</button><button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="' + q + '">Tudo · ' + fmt(R.sellValue(it)) + '</button>'
         : '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">Vender · ' + fmt(R.sellValue(it)) + '</button>';
     }
-    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + q : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + (cf && cf.it === it ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" title="' + esc(R.itemName(it)) + '" style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + q : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + (cf && cf.it === it ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
   });
   return h + '</div>';
 }
 function sellFromBag(ch, i, n, confirmed) {
   const it = ch.bag[i];
-  if (!it) return;
+  if (!it || !sellListed(it)) return;
   const q = it.qty || 1;
   n = Math.max(1, Math.min(n || 1, q));
   if (sellNeedsConfirm(it) && !confirmed) { UI.merchConfirm = { it, n }; return; }
