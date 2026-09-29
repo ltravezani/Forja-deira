@@ -13,6 +13,7 @@ import { castSkill, castSlot } from './game/skills.js';
 import { updateWorld } from './game/world.js';
 import { enterDungeon, enterTower, enterTown, inSafe } from './game/zones.js';
 import { skillIconURI } from './ui/icons.js';
+import { closeModal, openNpc } from './ui/npcDialogs.js';
 import { findPath } from './world/grid.js';
 import { getLevelMeshes } from './world/level.js';
 
@@ -20,7 +21,7 @@ export function installDebugHook(loopStats) {
   window.__FORJA_DEBUG = {
     G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
-    castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats,
+    castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length,
   };
 }

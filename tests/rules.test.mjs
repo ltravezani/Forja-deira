@@ -92,3 +92,12 @@ test('torre: Gold igual ao de um andar normal de masmorra (mesma fórmula)', () 
     assert.equal(R.goldAmount(lv, src, 0), Math.floor(lv * 18 * (src === 'elite' ? 3 : 1) + 15));
   }
 });
+
+test('sellValue: metade do valor, por unidade em pilhas', () => {
+  const j = { kind: 'jewel', id: 'bless', qty: 5 };
+  assert.equal(R.sellValue(j, 1), 45000);
+  assert.equal(R.sellValue(j), 45000 * 5);
+  assert.equal(R.sellValue(j, 99), 45000 * 5);
+  const p = { kind: 'potion', id: 'hp', qty: 10 };
+  assert.equal(R.sellValue(p), R.sellValue(p, 1) * 10);
+});
