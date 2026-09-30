@@ -99,8 +99,6 @@ export function paneOpts() {
     '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button></div>' +
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
-  h += '<h4>Modo de teste</h4><p class="note">Atalhos para avaliar sistemas de fim de jogo sem grind.</p><div class="row">' +
-    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-gold">+5.000.000 Gold</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
   h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
   return h;
