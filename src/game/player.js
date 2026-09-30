@@ -57,7 +57,7 @@ function playerLook(ch) {
     dw: { gltf: 'mage', skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
     elf: { gltf: 'rogue', skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
     // Dark Elf: pele cinza-lilás, capuz escuro, uma espada em cada mão (só a direita é o item equipado)
-    de: { gltf: 'rogue', tintK: 0.7, skinK: 0.45, skin: 0xb49ccc, hoodColor: [0x2a1a3a, 0x5a0e22, 0x1e0a30][ch.tier] || 0x2a1a3a, cloth: [0x1e1428, 0x3a0a18, 0x160a22][ch.tier] || 0x1e1428, head: 'hair', eye: 0xff4a7a, weapon: 'blade', offhand: true, thin: true, cape: true, capeColor: [0x2a0e2a, 0x4a0a14, 0x1a0628][ch.tier] || 0x2a0e2a },
+    de: { gltf: 'rogue', tintK: 0.7, skinK: 0.45, skin: 0xb49ccc, hoodColor: [0x2a1a3a, 0x5a0e22, 0x1e0a30][ch.tier] || 0x2a1a3a, cloth: [0x1e1428, 0x3a0a18, 0x160a22][ch.tier] || 0x1e1428, head: 'hair', hair: 0xeae4f4, eye: 0xff4a7a, weapon: 'blade', offhand: true, thin: true, cape: true, capeColor: [0x2a0e2a, 0x4a0a14, 0x1a0628][ch.tier] || 0x2a0e2a },
     // Necromancer: manto negro e chapéu; como Death Knight e Bloody Knight veste armadura com elmo e chifres.
     // Sempre um cajado em cada mão (só o da direita é o item equipado).
     nc: ch.tier >= 1
