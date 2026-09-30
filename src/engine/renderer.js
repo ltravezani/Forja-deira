@@ -51,7 +51,8 @@ export function applyQuality(q) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   renderer.shadowMap.enabled = Q.shadows;
   post.samples = Q.msaa;
-  post.bloom = Q.bloom;
+  post.qBloom = Q.bloom;
+  updateBloom();
   if (post.rt) { post.rt.dispose(); post.rt = null; }
   sun.castShadow = Q.shadows;
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -103,7 +104,7 @@ export function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, outline: true, bloom: true, size: new THREE.Vector2(), b: null };
+const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -249,6 +250,18 @@ export function renderFrame() {
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
+/**
+ * Brilho (bloom): segue a qualidade (ligado em alta/média, desligado em baixa)
+ * até o jogador escolher em Opções. Sem alvo HDR (HalfFloat) fica sempre desligado:
+ * num alvo de 8 bits nada passa do limiar.
+ */
+function updateBloom() {
+  post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
+}
+/** on: true/false = escolha do jogador; null = padrão da qualidade. */
+export function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
+/** Estado efetivo do brilho (Opções mostra o que está valendo). */
+export function bloomOn() { return post.bloom; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 export function setOutline(on) { post.outline = !!on; }
 /** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */

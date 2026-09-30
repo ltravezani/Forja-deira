@@ -36,6 +36,8 @@ export const CONFIG = {
     bloom: 0.6,             // intensidade do brilho (partes acima do limiar: fogo, lava, cristais, magia)
     bloomThreshold: 1.5,    // brilho linear (antes do tone mapping) a partir do qual algo "acende"
     vignette: 0.38,         // escurecimento das bordas da tela (0 = sem vinheta)
+    shadowTint: 1.2,        // multiplica a força do tom de sombra de cada bioma (BIOMES[x].shadow)
+    glowCore: 1.8,          // brilhos sólidos (orbes, olhos, núcleos, magias) em HDR: passam do limiar do bloom
   },
   particles: { max: 4000 },
   overlay: {

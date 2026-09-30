@@ -278,4 +278,12 @@ Biomas: Aldrena (vila à noite com casas, mercado, forja, cemitério e paliçada
 
 Desempenho medido (1280×800, v0.8): 170–580 chamadas de desenho e 100–320 mil triângulos por quadro, contando as sombras e as miudezas (antes da v0.8: 210–590 e 80–350 mil). O contorno custa um passe de tela cheia. Na qualidade "baixa" as sombras são desligadas.
 
+### 11.1 Melhorias gráficas (cartoon/anime)
+
+Roteiro em fases (capturas antes/depois com `python3 tools/shots.py --tag <nome> --perf` e `--comparar A B`).
+
+| Fase | Data | O que mudou |
+|---|---|---|
+| 1. Sombras coloridas e brilho | 30/09/2026 | Uniforms compartilhados `STYLE_U` em `stylize.js`: as áreas pouco iluminadas pelo sol ganham o tom do bioma (`BIOMES[x].shadow`: azul na cidade, roxo nas cavernas e ruínas, vinho no Abismo), normalizado para não escurecer. Brilhos sólidos (`glowMat` com opacidade ≥ 0,8) saem em HDR (`CONFIG.style.glowCore`) e acendem no bloom; feixes de loot Ancestral/Lendário também. Opção "Brilho (bloom)" em Opções → Gráficos (segue a qualidade até ser escolhida; desligado sem alvo HalfFloat) |
+
 A antiga opção de carregar arte de um cliente externo foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).

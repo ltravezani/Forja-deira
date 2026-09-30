@@ -1368,6 +1368,8 @@ const CONFIG = {
     bloom: 0.6,             // intensidade do brilho (partes acima do limiar: fogo, lava, cristais, magia)
     bloomThreshold: 1.5,    // brilho linear (antes do tone mapping) a partir do qual algo "acende"
     vignette: 0.38,         // escurecimento das bordas da tela (0 = sem vinheta)
+    shadowTint: 1.2,        // multiplica a força do tom de sombra de cada bioma (BIOMES[x].shadow)
+    glowCore: 1.8,          // brilhos sólidos (orbes, olhos, núcleos, magias) em HDR: passam do limiar do bloom
   },
   particles: { max: 4000 },
   overlay: {
@@ -2120,7 +2122,7 @@ return { GEO, part, pivot };
 })();
 
 // ---- art/stylize.js ----
-const { stylize, toonGradient, toonMaterial } = (() => {
+const { STYLE_U, setShadowTint, stylize, toonGradient, toonMaterial } = (() => {
 // =============================================================================
 // Estilo cartoon unificado: todo material sólido do jogo (heróis, NPCs,
 // monstros, chão, paredes e adereços) passa por aqui, para que o mundo e os
@@ -2143,7 +2145,35 @@ function toonGradient() {
   return _grad;
 }
 
+/**
+ * Uniforms compartilhados por todos os materiais estilizados: trocar de bioma
+ * muda só os valores (sem recompilar shaders). uShadowTint é o tom das áreas
+ * pouco iluminadas pelo sol (normalizado para não mudar o brilho, só a cor);
+ * uShadowStrength vai de 0 (sombra neutra) a 1.
+ */
+const STYLE_U = {
+  uShadowTint: { value: new THREE.Color(1, 1, 1) },
+  uShadowStrength: { value: 0 },
+};
+/** Tom de sombra do bioma atual (hex) e sua força (0–1). */
+function setShadowTint(hex, strength) {
+  STYLE_U.uShadowTint.value.setHex(hex == null ? 0xffffff : hex);
+  STYLE_U.uShadowStrength.value = hex == null ? 0 : strength;
+}
+
 const RIM_CHUNK = `
+  #if NUM_DIR_LIGHTS > 0
+  {
+    // quanto o fragmento recebe do sol: luz difusa direta ÷ (cor × luz do sol).
+    // Já inclui a sombra projetada e a faixa do toon; luzes pontuais somam e "acendem" a área.
+    vec3 sRef = diffuseColor.rgb * RECIPROCAL_PI * directionalLights[ 0 ].color;
+    float sLit = dot( reflectedLight.directDiffuse, vec3( 1.0 ) ) / max( dot( sRef, vec3( 1.0 ) ), 1e-4 );
+    float sShade = ( 1.0 - smoothstep( 0.12, 0.62, sLit ) ) * uShadowStrength;
+    // tom normalizado pela luminância: muda a cor da sombra sem escurecê-la
+    vec3 sTint = min( uShadowTint / max( dot( uShadowTint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-3 ), vec3( 1.7 ) );
+    outgoingLight = ( outgoingLight - totalEmissiveRadiance ) * mix( vec3( 1.0 ), sTint, sShade ) + totalEmissiveRadiance;
+  }
+  #endif
   {
     vec3 sV = normalize( vViewPosition );
     float sNV = 1.0 - clamp( dot( normal, sV ), 0.0, 1.0 );
@@ -2172,9 +2202,9 @@ function stylize(mat, o) {
   mat.userData.stylize = U;
   mat.onBeforeCompile = (sh, r) => {
     if (prev) prev(sh, r);
-    Object.assign(sh.uniforms, U);
+    Object.assign(sh.uniforms, U, STYLE_U);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uSpec; uniform vec3 uRimColor;')
+      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uSpec; uniform vec3 uRimColor; uniform vec3 uShadowTint; uniform float uShadowStrength;')
       .replace('#include <opaque_fragment>', RIM_CHUNK);
   };
   const key = 'toonStyle|' + (prev ? prev.toString() : '');
@@ -2186,7 +2216,7 @@ function stylize(mat, o) {
 function toonMaterial(params, o) {
   return stylize(new THREE.MeshToonMaterial(params), o);
 }
-return { stylize, toonGradient, toonMaterial };
+return { STYLE_U, setShadowTint, stylize, toonGradient, toonMaterial };
 })();
 
 // ---- art/materials.js ----
@@ -2229,8 +2259,17 @@ function toonOwn(color, emissive, ei, o) {
   m.userData.baseEI = m.emissiveIntensity;
   return m;
 }
-/** Material aditivo próprio (a opacidade pode ser animada por instância). */
-const glowMat = (color, op) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op == null ? 0.6 : op, blending: THREE.AdditiveBlending, depthWrite: false });
+/**
+ * Material aditivo próprio (a opacidade pode ser animada por instância). Brilhos
+ * "sólidos" (opacidade ≥ 0,8: orbes, olhos, núcleos, magias) saem em HDR, acima
+ * do limiar do bloom; halos e auras translúcidos ficam como estão.
+ */
+function glowMat(color, op) {
+  op = op == null ? 0.6 : op;
+  const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+  if (op >= 0.8) m.color.multiplyScalar(CONFIG.style.glowCore);
+  return m;
+}
 const glowCache = new Map();
 /** Material aditivo compartilhado, para brilhos que não animam opacidade (projéteis). */
 function glowShared(color, op) {
@@ -3051,7 +3090,7 @@ return { findPath, gy, lineClear, walkable, walkableR };
 })();
 
 // ---- engine/renderer.js ----
-const { CAM, applyQuality, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setGrade, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
+const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
 // ---------- renderer, cena, luzes e câmera ----------
 
 const canvas = $('#view');
@@ -3102,7 +3141,8 @@ function applyQuality(q) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   renderer.shadowMap.enabled = Q.shadows;
   post.samples = Q.msaa;
-  post.bloom = Q.bloom;
+  post.qBloom = Q.bloom;
+  updateBloom();
   if (post.rt) { post.rt.dispose(); post.rt = null; }
   sun.castShadow = Q.shadows;
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -3154,7 +3194,7 @@ function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, outline: true, bloom: true, size: new THREE.Vector2(), b: null };
+const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -3300,6 +3340,18 @@ function renderFrame() {
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
+/**
+ * Brilho (bloom): segue a qualidade (ligado em alta/média, desligado em baixa)
+ * até o jogador escolher em Opções. Sem alvo HDR (HalfFloat) fica sempre desligado:
+ * num alvo de 8 bits nada passa do limiar.
+ */
+function updateBloom() {
+  post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
+}
+/** on: true/false = escolha do jogador; null = padrão da qualidade. */
+function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
+/** Estado efetivo do brilho (Opções mostra o que está valendo). */
+function bloomOn() { return post.bloom; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 function setOutline(on) { post.outline = !!on; }
 /** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */
@@ -3307,7 +3359,7 @@ function setGrade(tint, sat) {
   postMat.uniforms.uTint.value.setHex(tint == null ? 0xffffff : tint);
   postMat.uniforms.uSat.value = sat == null ? 1 : sat;
 }
-return { CAM, applyQuality, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setGrade, setOutline, shake, sun, torchLights, updateCamera, world };
+return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world };
 })();
 
 // ---- engine/audio.js ----
@@ -5603,17 +5655,17 @@ const { BIOMES, DUNGEON_ORDER, TOWER_ORDER, floorLevel, towerBiome } = (() => {
  */
 
 const BIOMES = {
-  town: { name: 'Refúgio de Aldrena', fog: [0x181b26, 34, 88], hemi: [0x7a8ab8, 0x3a2e22, 2.1], sun: [0xa8bcff, 2.3], light: 0xffc07a, exposure: 1.15, grade: [0xc4d0ff, 1.03] },
-  forest: { name: 'Floresta Sussurrante', base: 3, fog: [0x0e1610, 26, 68], hemi: [0x7a9a70, 0x2a2016, 1.8], sun: [0xc8dcb0, 1.8], light: 0xffc88a, exposure: 1.05, grade: [0xd4ecd0, 1.0], templates: ['cave', 'room', 'cave', 'hall'], monsters: ['goblin', 'spider', 'wolf'], boss: 'queen', decor: 'forest', ambient: 0x9aff8a },
-  caves: { name: 'Cavernas de Cristal', base: 30, fog: [0x0a0c1a, 24, 64], hemi: [0x8a92b8, 0x14101c, 1.7], sun: [0xc0caf0, 1.2], light: 0xc8d8ff, exposure: 1.1, grade: [0xc8d4ff, 1.02], templates: ['cave', 'cave', 'room'], monsters: ['bat', 'golem', 'kobold'], boss: 'colossus', decor: 'crystal', ambient: 0x8ad0ff },
-  ruins: { name: 'Ruínas de Kael', base: 70, fog: [0x16131c, 26, 70], hemi: [0x9a90b0, 0x2a2016, 1.6], sun: [0xe0d4ff, 1.7], light: 0xffc890, exposure: 1.05, grade: [0xf0e2d0, 1.0], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['skeleton', 'archer', 'specter'], boss: 'skeking', decor: 'ruins', ambient: 0xd8c8a8 },
-  castle: { name: 'Castelo Carmesim', base: 120, fog: [0x160a0e, 26, 66], hemi: [0xb08090, 0x241018, 1.7], sun: [0xffc8b8, 1.4], light: 0xffb888, exposure: 1.05, grade: [0xffd4dc, 1.02], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['knight', 'gargoyle', 'warlock'], boss: 'lord', decor: 'castle', ambient: 0xff8a6a },
-  abyss: { name: 'Abismo de Obsidiana', base: 180, fog: [0x1c0806, 26, 66], hemi: [0x9a6a64, 0x2a0e0a, 1.5], sun: [0xffa070, 1.4], light: 0xffb080, exposure: 1.1, grade: [0xffd0c0, 0.98], templates: ['cave', 'hall', 'cave', 'room'], monsters: ['lavademon', 'hound', 'herald'], boss: 'tyrant', decor: 'lava', ambient: 0xff7a2a },
+  town: { name: 'Refúgio de Aldrena', fog: [0x181b26, 34, 88], hemi: [0x7a8ab8, 0x3a2e22, 2.1], sun: [0xa8bcff, 2.3], light: 0xffc07a, exposure: 1.15, shadow: [0x4a5cc0, 0.5], grade: [0xc4d0ff, 1.03] },
+  forest: { name: 'Floresta Sussurrante', base: 3, fog: [0x0e1610, 26, 68], hemi: [0x7a9a70, 0x2a2016, 1.8], sun: [0xc8dcb0, 1.8], light: 0xffc88a, exposure: 1.05, shadow: [0x2e6a86, 0.42], grade: [0xd4ecd0, 1.0], templates: ['cave', 'room', 'cave', 'hall'], monsters: ['goblin', 'spider', 'wolf'], boss: 'queen', decor: 'forest', ambient: 0x9aff8a },
+  caves: { name: 'Cavernas de Cristal', base: 30, fog: [0x0a0c1a, 24, 64], hemi: [0x8a92b8, 0x14101c, 1.7], sun: [0xc0caf0, 1.2], light: 0xc8d8ff, exposure: 1.1, shadow: [0x5a44c8, 0.55], grade: [0xc8d4ff, 1.02], templates: ['cave', 'cave', 'room'], monsters: ['bat', 'golem', 'kobold'], boss: 'colossus', decor: 'crystal', ambient: 0x8ad0ff },
+  ruins: { name: 'Ruínas de Kael', base: 70, fog: [0x16131c, 26, 70], hemi: [0x9a90b0, 0x2a2016, 1.6], sun: [0xe0d4ff, 1.7], light: 0xffc890, exposure: 1.05, shadow: [0x54489a, 0.45], grade: [0xf0e2d0, 1.0], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['skeleton', 'archer', 'specter'], boss: 'skeking', decor: 'ruins', ambient: 0xd8c8a8 },
+  castle: { name: 'Castelo Carmesim', base: 120, fog: [0x160a0e, 26, 66], hemi: [0xb08090, 0x241018, 1.7], sun: [0xffc8b8, 1.4], light: 0xffb888, exposure: 1.05, shadow: [0x5a2a78, 0.5], grade: [0xffd4dc, 1.02], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['knight', 'gargoyle', 'warlock'], boss: 'lord', decor: 'castle', ambient: 0xff8a6a },
+  abyss: { name: 'Abismo de Obsidiana', base: 180, fog: [0x1c0806, 26, 66], hemi: [0x9a6a64, 0x2a0e0a, 1.5], sun: [0xffa070, 1.4], light: 0xffb080, exposure: 1.1, shadow: [0x8a1838, 0.55], grade: [0xffd0c0, 0.98], templates: ['cave', 'hall', 'cave', 'room'], monsters: ['lavademon', 'hound', 'herald'], boss: 'tyrant', decor: 'lava', ambient: 0xff7a2a },
   // ---------- Torre Infinita: biomas próprios (monstros reaproveitados), trocados a cada 5 andares ----------
-  tw_granite: { name: 'Salões de Granito', tower: true, fog: [0x10141c, 26, 70], hemi: [0x8a98b8, 0x1e1a22, 1.7], sun: [0xc8d4ff, 1.5], light: 0xffc890, exposure: 1.08, grade: [0xd8e0ff, 1.02], monsters: ['skeleton', 'knight', 'golem'], boss: 'skeking', decor: 'tower', ambient: 0xbfd0ff },
-  tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, grade: [0xe4d4ff, 1.03], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
-  tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, grade: [0xd0f4ff, 1.02], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
-  tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, grade: [0xffd0ec, 1.0], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
+  tw_granite: { name: 'Salões de Granito', tower: true, fog: [0x10141c, 26, 70], hemi: [0x8a98b8, 0x1e1a22, 1.7], sun: [0xc8d4ff, 1.5], light: 0xffc890, exposure: 1.08, shadow: [0x4a58b0, 0.45], grade: [0xd8e0ff, 1.02], monsters: ['skeleton', 'knight', 'golem'], boss: 'skeking', decor: 'tower', ambient: 0xbfd0ff },
+  tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, shadow: [0x5a38c0, 0.55], grade: [0xe4d4ff, 1.03], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
+  tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, shadow: [0x2a6a9a, 0.45], grade: [0xd0f4ff, 1.02], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
+  tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, shadow: [0x7a2080, 0.55], grade: [0xffd0ec, 1.0], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
 };
 const DUNGEON_ORDER = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
 const floorLevel = (biome, floor) => BIOMES[biome].base + (floor - 1) * 8;
@@ -7669,6 +7721,7 @@ function buildLevel(L) {
   heroLight.intensity = L.biome === 'town' ? 26 : 36;
   renderer.toneMappingExposure = (B.exposure || 1.05) * 0.88;
   setGrade(B.grade && B.grade[0], B.grade && B.grade[1]);
+  setShadowTint(B.shadow && B.shadow[0], B.shadow ? B.shadow[1] * CONFIG.style.shadowTint : 0);
   const T = biomeTex(L.biome);
   const town = L.biome === 'town';
   // chão: cidade = calçamento nas ruas, grama fora; masmorras = manchas de A/B
@@ -9061,7 +9114,8 @@ function paneOpts() {
   const s = S.settings;
   let h = '<h3>Opções</h3>';
   h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
-    '<button class="btn" data-act="toggleOutline">Contorno cartoon: ' + (s.outline === false ? 'desligado' : 'ligado') + '</button></div>';
+    '<button class="btn" data-act="toggleOutline">Contorno cartoon: ' + (s.outline === false ? 'desligado' : 'ligado') + '</button>' +
+    '<button class="btn" data-act="toggleBloom">Brilho (bloom): ' + (bloomOn() ? 'ligado' : 'desligado') + '</button></div>';
   h += '<h4>Interface</h4><div class="row"><button class="btn" data-act="toggleSound">Som: ' + (s.sound ? 'ligado' : 'desligado') + '</button><button class="btn" data-act="cycleMusic">Música: ' + MUSIC_LEVELS[musicLevel(s)].name + '</button><button class="btn" data-act="toggleLabels">Nomes de itens: ' + (s.labels ? 'todos' : 'só raros (Alt mostra todos)') + '</button></div>';
   const shakeLv = s.shake == null ? 1 : s.shake;
   h += '<h4>Jogabilidade</h4><div class="row">' +
@@ -9270,6 +9324,7 @@ function dropLoot(x, z, l) {
   if (l.type === 'item') l.refine = attachRefineFx(mesh.children[0], l.item.plus || 0, { size: 0.12 });
   if (ord >= 1) {
     const beam = new THREE.Mesh(GEO.beam, glowMat(col, ord >= 2 ? 0.55 : 0.3));
+    if (ord >= 3) beam.material.color.multiplyScalar(1 + (ord - 2) * 0.5); // Ancestral e Lendário acendem no bloom
     const h = ord >= 2 ? 4 + ord : 1.6;
     beam.scale.set(1, h, 1); beam.position.y = h / 2;
     g.add(beam);
@@ -10825,6 +10880,7 @@ function paneAction(e) {
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
     case 'toggleOutline': S.settings.outline = S.settings.outline === false; setOutline(S.settings.outline); break;
+    case 'toggleBloom': S.settings.bloom = !bloomOn(); setBloom(S.settings.bloom); break;
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
@@ -10856,7 +10912,7 @@ function initPaneActions() {
     renderPane();
   });
 
-  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; applyQuality(e.target.value); persist(); } });
+  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); applyQuality(e.target.value); persist(); renderPane(); } });
 }
 return { initPaneActions };
 })();
@@ -10883,6 +10939,7 @@ function frame(dt) {
 function boot() {
   loadSave();
   applyFeelSettings(S.settings);
+  setBloom(S.settings.bloom);
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;

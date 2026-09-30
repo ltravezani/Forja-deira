@@ -1,6 +1,7 @@
 // ---------- materiais ----------
 // Materiais compartilhados levam userData.shared = true e nunca são liberados
 // junto com um modelo; os próprios de cada modelo/efeito são liberados ao remover.
+import { CONFIG } from '../core/config.js';
 import { stylize } from './stylize.js';
 
 const matCache = new Map();
@@ -37,8 +38,17 @@ export function toonOwn(color, emissive, ei, o) {
   m.userData.baseEI = m.emissiveIntensity;
   return m;
 }
-/** Material aditivo próprio (a opacidade pode ser animada por instância). */
-export const glowMat = (color, op) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op == null ? 0.6 : op, blending: THREE.AdditiveBlending, depthWrite: false });
+/**
+ * Material aditivo próprio (a opacidade pode ser animada por instância). Brilhos
+ * "sólidos" (opacidade ≥ 0,8: orbes, olhos, núcleos, magias) saem em HDR, acima
+ * do limiar do bloom; halos e auras translúcidos ficam como estão.
+ */
+export function glowMat(color, op) {
+  op = op == null ? 0.6 : op;
+  const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false });
+  if (op >= 0.8) m.color.multiplyScalar(CONFIG.style.glowCore);
+  return m;
+}
 const glowCache = new Map();
 /** Material aditivo compartilhado, para brilhos que não animam opacidade (projéteis). */
 export function glowShared(color, op) {

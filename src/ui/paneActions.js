@@ -4,7 +4,7 @@ import { G, persist, S, SAVE_KEY, UI } from '../core/state.js';
 import { $, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
-import { applyQuality, resetCamera, setOutline } from '../engine/renderer.js';
+import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
 import { onLevelUp } from '../game/combat.js';
 import { addToBag, autoEquip, autoEquipOn, bagCat, equipFromBag, unequipSlot, usePotion } from '../game/inventory.js';
@@ -56,6 +56,7 @@ function paneAction(e) {
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
     case 'toggleOutline': S.settings.outline = S.settings.outline === false; setOutline(S.settings.outline); break;
+    case 'toggleBloom': S.settings.bloom = !bloomOn(); setBloom(S.settings.bloom); break;
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
@@ -87,5 +88,5 @@ export function initPaneActions() {
     renderPane();
   });
 
-  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; applyQuality(e.target.value); persist(); } });
+  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); applyQuality(e.target.value); persist(); renderPane(); } });
 }

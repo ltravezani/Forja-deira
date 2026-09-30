@@ -11,7 +11,7 @@ import { Sfx } from './engine/audio.js';
 import { updateParticles, updateRings } from './engine/effects.js';
 import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
-import { applyQuality, camTarget, renderFrame, resize, setOutline } from './engine/renderer.js';
+import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
 import { updatePlayScene } from './scenes/playScene.js';
@@ -39,6 +39,7 @@ function frame(dt) {
 function boot() {
   loadSave();
   applyFeelSettings(S.settings);
+  setBloom(S.settings.bloom);
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;

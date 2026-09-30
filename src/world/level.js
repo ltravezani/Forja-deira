@@ -2,8 +2,9 @@
 import { GEO } from '../art/geometry.js';
 import { disposeObject } from '../art/materials.js';
 import { CUT, CUT_GLSL, cutaway, setCutaway } from '../art/cutaway.js';
-import { stylize, toonGradient, toonMaterial } from '../art/stylize.js';
+import { setShadowTint, stylize, toonGradient, toonMaterial } from '../art/stylize.js';
 import { fbm, hash2, makeTexSet, sat, texDecal, texPlaza, vnoise } from '../art/textures.js';
+import { CONFIG } from '../core/config.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
 import { camera, hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
@@ -304,6 +305,7 @@ export function buildLevel(L) {
   heroLight.intensity = L.biome === 'town' ? 26 : 36;
   renderer.toneMappingExposure = (B.exposure || 1.05) * 0.88;
   setGrade(B.grade && B.grade[0], B.grade && B.grade[1]);
+  setShadowTint(B.shadow && B.shadow[0], B.shadow ? B.shadow[1] * CONFIG.style.shadowTint : 0);
   const T = biomeTex(L.biome);
   const town = L.biome === 'town';
   // chão: cidade = calçamento nas ruas, grama fora; masmorras = manchas de A/B

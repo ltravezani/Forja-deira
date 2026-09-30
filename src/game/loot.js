@@ -45,6 +45,7 @@ export function dropLoot(x, z, l) {
   if (l.type === 'item') l.refine = attachRefineFx(mesh.children[0], l.item.plus || 0, { size: 0.12 });
   if (ord >= 1) {
     const beam = new THREE.Mesh(GEO.beam, glowMat(col, ord >= 2 ? 0.55 : 0.3));
+    if (ord >= 3) beam.material.color.multiplyScalar(1 + (ord - 2) * 0.5); // Ancestral e Lendário acendem no bloom
     const h = ord >= 2 ? 4 + ord : 1.6;
     beam.scale.set(1, h, 1); beam.position.y = h / 2;
     g.add(beam);
