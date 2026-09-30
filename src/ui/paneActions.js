@@ -7,15 +7,13 @@ import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
-import { onLevelUp } from '../game/combat.js';
-import { addToBag, autoEquip, autoEquipOn, bagCat, equipFromBag, unequipSlot, usePotion } from '../game/inventory.js';
+import { autoEquip, autoEquipOn, bagCat, equipFromBag, unequipSlot, usePotion } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { returnToTitle } from '../game/session.js';
 import { Drag } from './dragdrop.js';
 import { renderPane } from './drawer.js';
 import { buildSlots, hudTick } from './hud.js';
 import { selectedItem } from './inventoryPane.js';
-import { log } from './log.js';
 
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
@@ -62,11 +60,6 @@ function paneAction(e) {
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
-    case 't-lvl': { const before = ch.level; const tgt = Math.min(R.RATES.maxLevel, ch.level + 100); while (ch.level < tgt) R.gainExp(ch, R.expToNext(ch.level) - ch.exp); onLevelUp(before); break; }
-    case 't-gold': ch.gold += 5e6; break;
-    case 't-leg': { const x = R.makeEquip(R.hash32('teste', Date.now()), Math.max(20, ch.level), 'lendario', ch.cls, 0, 'boss'); addToBag(x); log('Gerado: ' + R.itemName(x), 'loot'); break; }
-    case 't-jew': ['bless', 'soul', 'chaos', 'life'].forEach((j) => addToBag({ kind: 'jewel', id: j, qty: 10, uid: 'j' + j })); break;
-    case 't-boss': ch.bossKills += 5; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
     case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } location.reload(); return;
