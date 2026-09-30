@@ -382,6 +382,37 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 .t-create { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 150px); overflow-y: auto; box-sizing: border-box; background: linear-gradient(rgba(22,16,30,.94), rgba(12,9,17,.96)); border: 1px solid #5a4630; border-radius: 6px; padding: 14px 16px; box-shadow: 0 14px 40px rgba(0,0,0,.6); }
 .t-crhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .t-crhead h4 { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.t-acct { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; color: #e2d6bd; background: rgba(14,10,20,.72); border: 1px solid #5a4630; border-radius: 4px; z-index: 2; }
+.t-acct svg { width: 18px; height: 18px; flex: none; }
+.t-acct:hover { color: var(--gold); border-color: var(--gold); }
+.t-acct.on { color: #bfe3b0; }
+.t-acct.st-conflict, .t-acct.st-relogin, .t-acct.st-error { color: #ffcf7a; border-color: #b8862e; }
+.t-acct.st-offline { color: var(--muted); }
+@media (max-width: 760px) { .t-acct { top: auto; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); white-space: nowrap; } .t-sel { bottom: 116px; } }
+.modal.acct-on { z-index: 30; } /* a janela da conta abre sobre a tela de título */
+.acct { position: relative; }
+.acct p { line-height: 1.45; }
+.acct-x { position: absolute; top: -6px; right: -6px; }
+.acct-tabs { display: flex; gap: 4px; margin: 10px 0 12px; border-bottom: 1px solid var(--edge); }
+.acct-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; color: var(--muted); font-size: 14px; }
+.acct-tabs button.on { color: var(--gold); border-bottom-color: var(--gold); }
+.acct-form { display: grid; gap: 10px; }
+.acct-f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.acct-f .fld { width: 100%; box-sizing: border-box; font-size: 16px; }
+.acct-actions { justify-content: flex-end; margin-top: 12px; }
+.acct-form .acct-actions { margin-top: 2px; }
+.acct-actions .t-link { margin-right: auto; }
+.acct-err { color: #ff8a7a; margin: 0; }
+.acct-info { color: #bfe3b0; margin: 0 0 8px; }
+.acct-st { margin: 6px 0 12px; color: var(--text); }
+.acct-st.acct-conflict, .acct-st.acct-error, .acct-st.acct-relogin { color: #ffcf7a; }
+.acct-h { margin: 16px 0 8px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.acct-bk { display: grid; gap: 6px; }
+.acct-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 4px; }
+@media (max-width: 520px) { .acct-cmp { grid-template-columns: 1fr; } }
+.acct-chars { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.acct-chars b { color: var(--text); }
+.acct-chars span { font-size: 12px; color: var(--muted); }
 .t-foot { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: #9a8fb0; text-shadow: 0 1px 2px #000; padding: 0 16px; pointer-events: none; }
 .t-foot span { color: #7a7090; }
 .roster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -519,7 +550,8 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
       </div>
       <p class="note" id="createErr"></p>
     </aside>
-    <footer class="t-foot">Clique ou WASD move · clique ataca · 1–6 e botão direito: habilidades · Q/E poções · Espaço coleta · T portal · Alt mostra itens<br><span>Jogo offline · progresso salvo neste navegador</span></footer>
+    <button class="t-acct" id="tAcct" type="button"></button>
+    <footer class="t-foot">Clique ou WASD move · clique ataca · 1–6 e botão direito: habilidades · Q/E poções · Espaço coleta · T portal · Alt mostra itens<br><span id="tFootSave">Jogo offline · progresso salvo neste navegador</span></footer>
   </section>
 </div>
 <div class="fatal" id="fatal" hidden role="alert"><div><h2>Não foi possível iniciar o jogo</h2><p id="fatalMsg"></p><button class="btn gold" onclick="location.reload()">Tentar de novo</button></div></div>
@@ -6206,6 +6238,16 @@ const CONFIG = {
     maxVoicesPerFrame: 6,   // sons iniciados por quadro (evita estouro em AoE)
   },
   bag: { size: 48 },
+  // Save na nuvem (Supabase). Só a chave PÚBLICA (anon/publishable) pode ficar aqui:
+  // quem protege os dados é o Row Level Security da tabela `saves`
+  // (supabase/migrations/). Chave vazia = nuvem desligada, o jogo segue só local.
+  cloud: {
+    url: 'https://vsntbdwlxngqcmpcibub.supabase.co',
+    anonKey: '',            // TODO: colar a chave "anon public" (Project Settings → API)
+    pushInterval: 60,       // s entre envios durante a partida (o save local continua a cada 15 s)
+    pushIntervalTitle: 4,   // s na tela de título (logo depois de voltar da partida)
+    retryInterval: 90,      // s até tentar de novo após falha de rede
+  },
 };
 
 /** Preferências do jogador que afetam CONFIG (aplicadas ao carregar o save e ao mudar Opções). */
@@ -7299,8 +7341,60 @@ function loopStats() {
 return { guard, loopStats, reportError, startLoop };
 })();
 
+// ---- core/cloudSync.js ----
+const { decideSync, hasChars, saveSummary, stableJson } = (() => {
+// ---------- decisão de sincronização com a nuvem (lógica pura, sem rede) ----------
+// O save local é sempre a fonte do jogo; a nuvem é uma cópia com número de
+// revisão (`rev`). `sync` guarda, neste aparelho, a última revisão combinada com
+// a nuvem e se o save local mudou desde então (`dirty`). Regra de ouro: nada é
+// sobrescrito sem que o outro lado já esteja contido nele ou o jogador escolha.
+
+/** Save tem ao menos um personagem? */
+function hasChars(save) {
+  return !!(save && Array.isArray(save.chars) && save.chars.length);
+}
+
+/** JSON com chaves ordenadas (o jsonb do Postgres reordena as chaves dos objetos). */
+function stableJson(v) {
+  if (Array.isArray(v)) return '[' + v.map(stableJson).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => JSON.stringify(k) + ':' + stableJson(v[k])).join(',') + '}';
+  return v === undefined ? 'null' : JSON.stringify(v);
+}
+
+/**
+ * O que fazer ao comparar o save local com o da nuvem.
+ * @param local  save deste aparelho (objeto S)
+ * @param cloud  { data, rev } da nuvem, ou null se a conta ainda não tem save
+ * @param sync   { userId, rev, dirty } gravado neste aparelho (ou null)
+ * @param userId conta atual
+ * @returns 'none' | 'same' | 'upload' | 'download' | 'conflict'
+ */
+function decideSync({ local, cloud, sync, userId }) {
+  if (!cloud) return hasChars(local) || (sync && sync.userId === userId && sync.dirty) ? 'upload' : 'none';
+  if (stableJson(local) === stableJson(cloud.data)) return 'same';
+  const linked = !!(sync && sync.userId === userId);
+  // a nuvem não mudou desde a última troca: o que difere é novo aqui
+  if (linked && sync.rev === cloud.rev) return 'upload';
+  // a nuvem avançou (outro aparelho) e aqui nada mudou: baixar não perde nada
+  if (linked && cloud.rev > sync.rev && !sync.dirty) return 'download';
+  // um dos lados não tem personagens: fica o que tem (só opções se perderiam)
+  if (!hasChars(local)) return 'download';
+  if (!hasChars(cloud.data)) return 'upload';
+  return 'conflict';
+}
+
+/** Resumo curto de um save para a janela de escolha. */
+function saveSummary(save) {
+  if (!hasChars(save)) return [];
+  return save.chars.filter((c) => c && typeof c.name === 'string').map((c) => ({
+    name: c.name, cls: c.cls, tier: Number.isInteger(c.tier) ? c.tier : 0, level: Number.isFinite(c.level) ? c.level : 1, resets: Number.isFinite(c.resets) ? c.resets : 0,
+  }));
+}
+return { decideSync, hasChars, saveSummary, stableJson };
+})();
+
 // ---- core/state.js ----
-const { G, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter } = (() => {
+const { G, S, SAVE_KEY, SaveHooks, UI, loadSave, persist, sanitizeCharacter } = (() => {
 // ---------- estado do jogo e do save ----------
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
@@ -7320,16 +7414,16 @@ const SAVE_KEY = 'forjadeira.save.v1';
 function defaultSave() {
   return { chars: [], active: -1, settings: { quality: 'media', sound: true, labels: true } };
 }
-function readSave() {
+function readSave(obj) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
+    if (obj === undefined) { const raw = localStorage.getItem(SAVE_KEY); obj = raw ? JSON.parse(raw) : null; }
+    if (obj && typeof obj === 'object') { const s = Object.assign(defaultSave(), JSON.parse(JSON.stringify(obj))); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();
 }
-/** Carrega o save do navegador para dentro de `S`. */
-function loadSave() {
-  const data = readSave();
+/** Carrega o save do navegador para dentro de `S` (ou, se `obj` vier, esse save; ex.: o baixado da nuvem). */
+function loadSave(obj) {
+  const data = readSave(obj);
   if (!Array.isArray(data.chars)) data.chars = [];
   data.chars = data.chars.filter((c) => c && typeof c === 'object' && typeof c.name === 'string');
   if (!data.settings || typeof data.settings !== 'object') data.settings = defaultSave().settings;
@@ -7357,8 +7451,11 @@ function migrateGold(s) {
     (ch.bag || []).forEach(opt); Object.values(ch.equip || {}).forEach(opt);
   });
 }
+/** Ganchos do save: a nuvem se registra aqui para saber quando algo foi salvo. */
+const SaveHooks = { afterPersist: null };
 function persist() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
+  if (SaveHooks.afterPersist) SaveHooks.afterPersist();
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
@@ -7390,7 +7487,359 @@ function sanitizeCharacter(ch) {
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   return ch;
 }
-return { G, S, SAVE_KEY, UI, loadSave, persist, sanitizeCharacter };
+return { G, S, SAVE_KEY, SaveHooks, UI, loadSave, persist, sanitizeCharacter };
+})();
+
+// ---- core/cloud.js ----
+const { BACKUP_KEY, CLOUD_KEY, Cloud, cloudDebug, cloudEnabled, cloudTick, forgetCloudLocal, initCloud, listBackups, postponeConflict, resolveConflict, restoreBackup, sendPasswordReset, setNewPassword, signIn, signOut, signUp, syncByUser, syncNow } = (() => {
+// ---------- save na nuvem (Supabase) ----------
+// Conta por e-mail e senha (Supabase Auth) e uma linha por jogador na tabela
+// `saves`, protegida por Row Level Security (supabase/migrations/): cada conta só
+// lê e grava a própria linha. Fala direto com a API REST (sem biblioteca extra).
+//
+// O jogo continua 100% local: o save do navegador é sempre o que vale durante a
+// partida e a nuvem recebe cópias. Cada cópia tem um número de revisão (`rev`);
+// um envio só grava se a nuvem ainda estiver na revisão que este aparelho conhece,
+// então dois aparelhos nunca se sobrescrevem em silêncio. Quando os dois lados
+// mudaram, o jogador escolhe, e o lado descartado vira uma cópia de segurança.
+
+const CLOUD_KEY = 'forjadeira.cloud.v1';
+const BACKUP_KEY = 'forjadeira.save.backups';
+const MAX_BACKUPS = 3;
+const KEEPALIVE_MAX = 60000; // bytes: limite do navegador para envio ao fechar a página
+
+/**
+ * Estado visível da nuvem. status: off (sem conta) | busy | synced | offline |
+ * conflict (esperando escolha) | relogin (sessão expirou) | error.
+ */
+const Cloud = { user: null, status: 'off', msg: '', lastSync: 0, conflict: null };
+
+let session = null; // { access_token, refresh_token, expires_at, user: { id, email } }
+let sync = null;    // { userId, rev, dirty }: última revisão combinada com a nuvem neste aparelho
+let gen = 0;        // conta os saves locais (detecta mudança durante um envio)
+let busy = false, pending = false, conflictShown = false, lastPush = 0, retryAt = 0, refreshing = null;
+const hooks = { onChange: null, onConflict: null, onApplied: null };
+
+function cfg() {
+  const o = typeof window !== 'undefined' && window.FORJA_CLOUD_OVERRIDE; // usado pelos testes automatizados
+  return o ? Object.assign({}, CONFIG.cloud, o) : CONFIG.cloud;
+}
+/** A nuvem está configurada (URL e chave pública)? Sem isso o jogo segue só local. */
+function cloudEnabled() { const c = cfg(); return !!(c.url && c.anonKey); }
+const uid = () => (session && session.user ? session.user.id : null);
+
+function readMeta() {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLOUD_KEY) || 'null');
+    if (m && typeof m === 'object') { session = m.session && m.session.user ? m.session : null; sync = m.sync || null; }
+  } catch { /* sem armazenamento: nuvem só nesta aba */ }
+  Cloud.user = session ? session.user : null;
+}
+function writeMeta() { try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ session, sync })); } catch { /* ignora */ } }
+function setStatus(status, msg) { Cloud.status = status; Cloud.msg = msg || ''; if (hooks.onChange) hooks.onChange(); }
+
+// ---------- HTTP ----------
+class CloudError extends Error {
+  constructor(msg, code, status) { super(msg); this.code = code; this.status = status || 0; }
+}
+const MSG = {
+  invalid_credentials: 'E-mail ou senha incorretos.',
+  invalid_grant: 'E-mail ou senha incorretos.',
+  email_not_confirmed: 'Confirme seu e-mail pelo link que enviamos antes de entrar.',
+  user_already_exists: 'Já existe uma conta com esse e-mail. Use "Entrar".',
+  email_exists: 'Já existe uma conta com esse e-mail. Use "Entrar".',
+  weak_password: 'Senha fraca: use ao menos 6 caracteres.',
+  same_password: 'A nova senha precisa ser diferente da anterior.',
+  email_address_invalid: 'E-mail inválido.',
+  validation_failed: 'Confira o e-mail e a senha.',
+  over_email_send_rate_limit: 'Muitos e-mails enviados. Espere alguns minutos.',
+  over_request_rate_limit: 'Muitas tentativas. Espere um pouco e tente de novo.',
+  signup_disabled: 'A criação de contas está desligada no servidor.',
+};
+function errorMessage(code, status, json) {
+  if (MSG[code]) return MSG[code];
+  if (status === 401 || status === 403) return 'Acesso negado pelo servidor (' + status + ').';
+  const d = json && (json.msg || json.error_description || json.message);
+  return 'Erro do servidor (' + status + ')' + (d ? ': ' + d : '.');
+}
+async function call(path, opt) {
+  const { method = 'GET', body, auth = false, prefer, keepalive = false } = opt || {};
+  const c = cfg();
+  const headers = { apikey: c.anonKey, 'Content-Type': 'application/json' };
+  if (auth) {
+    await ensureFresh();
+    if (!session) throw new CloudError('Entre de novo na sua conta.', 'relogin');
+    headers.Authorization = 'Bearer ' + session.access_token;
+  }
+  if (prefer) headers.Prefer = prefer;
+  let res;
+  try { res = await fetch(c.url + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), keepalive }); }
+  catch { throw new CloudError('Sem conexão com o servidor.', 'offline'); }
+  const txt = await res.text();
+  let json = null;
+  try { json = txt ? JSON.parse(txt) : null; } catch { /* resposta sem JSON */ }
+  if (!res.ok) {
+    const code = (json && (json.error_code || json.code || json.error)) || String(res.status);
+    throw new CloudError(errorMessage(code, res.status, json), code, res.status);
+  }
+  return json;
+}
+
+// ---------- sessão ----------
+function setSession(j, user) {
+  const u = user || j.user;
+  session = {
+    access_token: j.access_token, refresh_token: j.refresh_token,
+    expires_at: +j.expires_at || Math.floor(Date.now() / 1000) + (+j.expires_in || 3600),
+    user: { id: u.id, email: u.email || '' },
+  };
+  Cloud.user = session.user;
+  writeMeta();
+}
+function dropSession(status, msg) {
+  session = null; Cloud.user = null; Cloud.conflict = null; pending = false;
+  writeMeta();
+  setStatus(status || 'off', msg);
+}
+function ensureFresh() {
+  if (!session || !session.expires_at || session.expires_at * 1000 - 60000 > Date.now()) return Promise.resolve();
+  if (!refreshing) {
+    refreshing = call('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: session.refresh_token } })
+      .then((j) => setSession(j))
+      .catch((e) => {
+        if (e.status >= 400 && e.status < 500) dropSession('relogin', 'Sua sessão expirou. Entre de novo; o save deste aparelho continua aqui.');
+        throw e;
+      })
+      .finally(() => { refreshing = null; });
+  }
+  return refreshing;
+}
+function redirectParam() {
+  return /^https?:$/.test(location.protocol) ? '?redirect_to=' + encodeURIComponent(location.origin + location.pathname) : '';
+}
+
+/** Entra na conta e vincula o save deste aparelho a ela. */
+async function signIn(email, password) {
+  const j = await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } });
+  setSession(j);
+  await linkNow();
+}
+/** Cria a conta. 'in' = já entrou; 'confirm' = precisa clicar no link do e-mail. */
+async function signUp(email, password) {
+  const j = await call('/auth/v1/signup' + redirectParam(), { method: 'POST', body: { email, password } });
+  if (j && j.access_token) { setSession(j); await linkNow(); return 'in'; }
+  return 'confirm';
+}
+/** Envia o e-mail de troca de senha. */
+async function sendPasswordReset(email) {
+  await call('/auth/v1/recover' + redirectParam(), { method: 'POST', body: { email } });
+}
+/** Define a nova senha (depois de abrir o link de recuperação). */
+async function setNewPassword(password) {
+  await call('/auth/v1/user', { method: 'PUT', auth: true, body: { password } });
+}
+/** Sai da conta. O save deste aparelho fica como está; antes, tenta enviar o que falta. */
+async function signOut() {
+  if (session && sync && sync.userId === uid() && sync.dirty && Cloud.status !== 'conflict') {
+    try { await syncNow(); } catch { /* sai mesmo assim */ }
+  }
+  const t = session && session.access_token;
+  dropSession('off');
+  if (t) fetch(cfg().url + '/auth/v1/logout', { method: 'POST', headers: { apikey: cfg().anonKey, Authorization: 'Bearer ' + t } }).catch(() => {});
+}
+/** "Apagar dados locais": esquece a conta neste aparelho (o save da nuvem não é apagado). */
+function forgetCloudLocal() {
+  try { localStorage.removeItem(CLOUD_KEY); localStorage.removeItem(BACKUP_KEY); } catch { /* ignora */ }
+}
+
+/** Links de confirmação e de nova senha voltam com a sessão no endereço (#access_token=…). */
+async function consumeAuthHash() {
+  const h = typeof location !== 'undefined' ? location.hash : '';
+  if (!/access_token=|error_description=/.test(h)) return null;
+  const p = new URLSearchParams(h.slice(1));
+  try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignora */ }
+  if (p.get('error_description')) { setStatus('error', 'O link do e-mail é inválido ou expirou. Peça outro.'); return 'error'; }
+  const tmp = { access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_at: p.get('expires_at'), expires_in: p.get('expires_in') };
+  session = { access_token: tmp.access_token, refresh_token: tmp.refresh_token, expires_at: 0, user: null };
+  try {
+    session.expires_at = Math.floor(Date.now() / 1000) + 3000; // provisório, só para a chamada abaixo
+    const u = await call('/auth/v1/user', { auth: true });
+    setSession(tmp, u);
+  } catch (e) { dropSession('error', e.message); return 'error'; }
+  return p.get('type') || 'signup';
+}
+
+// ---------- sincronização ----------
+function fetchCloud() {
+  return call('/rest/v1/saves?select=data,rev,updated_at&user_id=eq.' + uid(), { auth: true }).then((rows) => (rows && rows[0]) || null);
+}
+/** Grava o save local na nuvem sobre a revisão `baseRev` (0 = a conta ainda não tem save). false = alguém gravou antes. */
+async function upload(baseRev, keepalive) {
+  const g = gen, id = uid();
+  const data = JSON.parse(JSON.stringify(S));
+  let rows;
+  if (!baseRev) {
+    try { rows = await call('/rest/v1/saves?select=rev,updated_at', { method: 'POST', auth: true, prefer: 'return=representation', body: { user_id: id, data, rev: 1 }, keepalive }); }
+    catch (e) { if (e.status === 409) return false; throw e; }
+  } else {
+    rows = await call('/rest/v1/saves?select=rev,updated_at&user_id=eq.' + id + '&rev=eq.' + baseRev, { method: 'PATCH', auth: true, prefer: 'return=representation', body: { data, rev: baseRev + 1 }, keepalive });
+  }
+  if (!rows || !rows.length) return false;
+  sync = { userId: id, rev: rows[0].rev, dirty: gen !== g };
+  writeMeta();
+  Cloud.lastSync = Date.now();
+  return true;
+}
+function applyCloud(cloud) {
+  loadSave(cloud.data);
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
+  sync = { userId: uid(), rev: cloud.rev, dirty: false };
+  writeMeta();
+  Cloud.lastSync = Date.now();
+  if (hooks.onApplied) hooks.onApplied();
+}
+function handleError(e) {
+  if (e && e.code === 'offline') { retryAt = Date.now() + cfg().retryInterval * 1000; setStatus('offline', 'Sem internet: o progresso fica salvo aqui e sobe quando a conexão voltar.'); }
+  else if (session) { retryAt = Date.now() + cfg().retryInterval * 1000; setStatus('error', e && e.message ? e.message : 'Falha ao sincronizar.'); }
+}
+
+/** Compara com a nuvem e envia, baixa ou pede escolha. Baixar só acontece na tela de título. */
+async function syncNow() {
+  if (!cloudEnabled() || !session || busy) return;
+  busy = true;
+  setStatus('busy', 'Sincronizando…');
+  try {
+    for (let tries = 0; tries < 3; tries++) {
+      const cloud = await fetchCloud();
+      const d = decideSync({ local: S, cloud, sync, userId: uid() });
+      if (d === 'same' || d === 'none') {
+        sync = { userId: uid(), rev: cloud ? cloud.rev : 0, dirty: false };
+        writeMeta(); Cloud.lastSync = Date.now(); pending = false;
+        break;
+      }
+      if (d === 'upload') { if (await upload(cloud ? cloud.rev : 0)) break; continue; }
+      if (d === 'download') {
+        if (G.mode !== 'title') { pending = true; setStatus('synced', 'Há um save mais novo na nuvem: ele entra quando você voltar à tela inicial.'); return; }
+        pending = false; applyCloud(cloud); break;
+      }
+      Cloud.conflict = cloud;
+      setStatus('conflict', 'Este aparelho e a nuvem têm saves diferentes. Escolha qual manter.');
+      showConflict();
+      return;
+    }
+    retryAt = 0;
+    setStatus('synced', '');
+  } catch (e) { handleError(e); }
+  finally { busy = false; }
+}
+function linkNow() { conflictShown = false; Cloud.conflict = null; return syncNow(); }
+function showConflict() {
+  if (conflictShown || !Cloud.conflict || G.mode !== 'title' || !hooks.onConflict) return;
+  conflictShown = true;
+  hooks.onConflict(S, Cloud.conflict);
+}
+/** Escolha do jogador no conflito: 'local' (este aparelho vai para a nuvem) ou 'cloud'. */
+async function resolveConflict(choice) {
+  const cloud = Cloud.conflict;
+  if (!cloud || busy) return;
+  if (choice === 'cloud') {
+    if (hasChars(S)) addBackup('Save deste aparelho, trocado pelo da nuvem', S);
+    Cloud.conflict = null; conflictShown = false;
+    applyCloud(cloud);
+    setStatus('synced', '');
+    return;
+  }
+  if (hasChars(cloud.data)) addBackup('Save da nuvem, trocado pelo deste aparelho', cloud.data);
+  busy = true;
+  setStatus('busy', 'Enviando…');
+  try {
+    const ok = await upload(cloud.rev);
+    Cloud.conflict = null; conflictShown = false;
+    busy = false;
+    if (!ok) { await syncNow(); return; } // a nuvem mudou de novo nesse meio tempo: compara outra vez
+    setStatus('synced', '');
+  } catch (e) { busy = false; handleError(e); }
+}
+/** "Decidir depois": nada é enviado até a escolha (reaparece em "Sincronizar agora"). */
+function postponeConflict() { conflictShown = true; }
+/** Botão "Sincronizar agora". */
+function syncByUser() { conflictShown = false; retryAt = 0; if (Cloud.conflict) { showConflict(); return; } syncNow(); }
+
+// ---------- cópias de segurança locais ----------
+function listBackups() {
+  try { const a = JSON.parse(localStorage.getItem(BACKUP_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+function addBackup(why, data) {
+  const list = listBackups();
+  list.unshift({ at: Date.now(), why, data: JSON.parse(JSON.stringify(data)) });
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, MAX_BACKUPS))); } catch { /* ignora */ }
+}
+/** Troca o save atual por uma cópia de segurança (o atual vira cópia, nada se perde). */
+function restoreBackup(i) {
+  const list = listBackups(), b = list[i];
+  if (!b || G.mode !== 'title' || Cloud.conflict) return false;
+  list.splice(i, 1);
+  if (hasChars(S)) list.unshift({ at: Date.now(), why: 'Save trocado por uma cópia de segurança', data: JSON.parse(JSON.stringify(S)) });
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, MAX_BACKUPS))); } catch { /* ignora */ }
+  loadSave(b.data);
+  persistLocal(); // um save restaurado é escolha do jogador: segue para a nuvem como qualquer mudança
+  if (hooks.onApplied) hooks.onApplied();
+  return true;
+}
+function persistLocal() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
+  markDirty();
+}
+
+// ---------- ciclo ----------
+function markDirty() {
+  gen++;
+  if (sync && !sync.dirty) { sync.dirty = true; writeMeta(); }
+}
+/** Chamado a cada quadro: envia de tempos em tempos e, na tela de título, aplica o que ficou pendente. */
+function cloudTick() {
+  if (!session || !cloudEnabled() || busy) return;
+  if (Cloud.conflict) { showConflict(); return; }
+  if (Cloud.status === 'relogin') return;
+  const need = pending || !sync || sync.userId !== uid() || sync.dirty;
+  if (!need || Date.now() < retryAt) return;
+  const c = cfg();
+  // relógio de parede (não o da simulação): em aparelhos lentos o passo do quadro é limitado
+  const now = Date.now();
+  if (now - lastPush >= (G.mode === 'title' ? c.pushIntervalTitle : c.pushInterval) * 1000) { lastPush = now; syncNow(); }
+}
+/** Ao esconder/fechar a página: salva localmente e tenta um último envio. */
+function flushOnHide() {
+  if (!session || busy || Cloud.conflict || !sync || sync.userId !== uid()) return;
+  if (G.mode === 'play') { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ } gen++; sync.dirty = true; writeMeta(); }
+  if (!sync.dirty || !session.expires_at || session.expires_at * 1000 - 60000 < Date.now()) return;
+  const keepalive = JSON.stringify(S).length < KEEPALIVE_MAX;
+  busy = true;
+  upload(sync.rev, keepalive).catch(() => {}).finally(() => { busy = false; });
+}
+
+/**
+ * Liga a nuvem: lê a sessão guardada, trata links de e-mail e faz a primeira
+ * sincronização. hooks: onChange (status mudou), onConflict(local, cloud),
+ * onApplied (o save foi trocado). Devolve o tipo de link aberto ('recovery', …) ou null.
+ */
+async function initCloud(h) {
+  Object.assign(hooks, h || {});
+  SaveHooks.afterPersist = markDirty;
+  if (!cloudEnabled()) return null;
+  readMeta();
+  if (session) setStatus('busy', 'Sincronizando…');
+  window.addEventListener('pagehide', flushOnHide);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushOnHide(); });
+  let link = null;
+  try { link = await consumeAuthHash(); } catch { link = 'error'; }
+  if (session) await linkNow();
+  return link;
+}
+
+/** Estado interno para os testes automatizados (gancho de depuração). */
+function cloudDebug() { return { status: Cloud.status, busy, pending, lastPush, retryAt, sync, conflict: !!Cloud.conflict, user: Cloud.user }; }
+return { BACKUP_KEY, CLOUD_KEY, Cloud, cloudDebug, cloudEnabled, cloudTick, forgetCloudLocal, initCloud, listBackups, postponeConflict, resolveConflict, restoreBackup, sendPasswordReset, setNewPassword, signIn, signOut, signUp, syncByUser, syncNow };
 })();
 
 // ---- art/models.js ----
@@ -11064,7 +11513,7 @@ return { BIOMES, DUNGEON_ORDER, TOWER_ORDER, floorLevel, towerBiome };
 const { closeModal, confirmDescend, initDialogs, openNpc, showDeath } = (() => {
 // ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
 
-function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
+function modal(html) { $('#dialog').innerHTML = html; $('#modal').classList.remove('acct-on'); $('#modal').hidden = false; }
 function closeModal() { $('#modal').hidden = true; }
 const SELL_CATS = { all: 'Todos', jewel: 'Joias', potion: 'Poções' };
 const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');
@@ -14683,7 +15132,8 @@ function paneOpts() {
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
-  h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
+  h += '<p class="note">' + (Cloud.user ? 'Conectado à nuvem como <b>' + esc(Cloud.user.email) + '</b>: o progresso sobe sozinho a cada minuto. Apagar os dados locais não apaga o save da nuvem.' : 'Para guardar o progresso na nuvem, use o botão "Salvar na nuvem" na tela inicial.') + '</p>';
+  h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador' + (Cloud.user ? ' e na nuvem' : '') + '.</p>';
   return h;
 }
 return { paneChar, paneLoot, paneOpts, paneSkills, statLabel };
@@ -15844,7 +16294,7 @@ function installDebugHook(loopStats) {
     G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
-    worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster,
+    worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
   };
 }
 return { installDebugHook };
@@ -15971,7 +16421,7 @@ function initTitle() {
   $('#tNext').addEventListener('click', () => titleStep(1));
   $('#tBack').addEventListener('click', () => { UI.titleMode = 'select'; $('#createErr').textContent = ''; renderTitle(); });
   window.addEventListener('keydown', (e) => {
-    if (G.mode !== 'title' || $('#title').hidden) return;
+    if (G.mode !== 'title' || $('#title').hidden || !$('#modal').hidden) return;
     if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
     if (UI.titleMode === 'create') { if (e.key === 'Escape' && S.chars.length) { UI.titleMode = 'select'; renderTitle(); } return; }
     if (e.key === 'ArrowLeft') titleStep(-1);
@@ -16411,6 +16861,181 @@ function updateTitleScene(dt) {
 return { updateTitleScene };
 })();
 
+// ---- ui/account.js ----
+const { initAccount, openAccount, refreshAccountUi, showConflictDialog } = (() => {
+// ---------- conta e save na nuvem (tela de título) ----------
+// Botão "Nuvem" no canto da tela de título: entrar, criar conta, trocar senha,
+// escolher qual save manter quando este aparelho e a nuvem divergem, e
+// restaurar cópias de segurança. Usa o mesmo modal dos NPCs (#modal/#dialog).
+
+// mode: login | signup | reset | newpass | account | conflict
+const A = { mode: 'login', email: '', err: '', info: '', busy: false, local: null, cloud: null };
+
+const isOpen = () => !$('#modal').hidden && !!$('#dialog .acct');
+function when(t) {
+  const d = new Date(t);
+  return Number.isFinite(d.getTime()) ? d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+}
+function statusLine() {
+  switch (Cloud.status) {
+    case 'busy': return 'Sincronizando…';
+    case 'synced': return Cloud.msg || ('Salvo na nuvem' + (Cloud.lastSync ? ' às ' + new Date(Cloud.lastSync).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '') + '.');
+    default: return Cloud.msg || '';
+  }
+}
+function charList(save) {
+  const list = saveSummary(save);
+  if (!list.length) return '<p class="note">Nenhum personagem.</p>';
+  return '<ul class="acct-chars">' + list.map((c) => {
+    const C = R.CLASSES[c.cls];
+    const cls = C ? (C.tiers[c.tier] || C.tiers[0]) : c.cls;
+    return '<li><b>' + esc(c.name) + '</b> <span>' + esc(cls) + ' · Nv ' + c.level + (c.resets ? ' · ' + c.resets + ' reset' + (c.resets > 1 ? 's' : '') : '') + '</span></li>';
+  }).join('') + '</ul>';
+}
+const field = (id, type, label, auto, value) => '<label class="acct-f"><span>' + label + '</span><input class="fld" id="' + id + '" type="' + type + '" autocomplete="' + auto + '"' + (value ? ' value="' + esc(value) + '"' : '') + ' required></label>';
+const msgs = () => (A.err ? '<p class="acct-err" role="alert">' + esc(A.err) + '</p>' : '') + (A.info ? '<p class="acct-info">' + esc(A.info) + '</p>' : '');
+const closeBtn = '<button class="btn sm acct-x" data-acct="close" aria-label="Fechar">×</button>';
+
+function view() {
+  if (!cloudEnabled()) {
+    return '<h3>Salvar na nuvem</h3><p>O salvamento na nuvem ainda não foi configurado nesta versão do jogo. Seu progresso continua salvo neste navegador.</p>' +
+      '<div class="row" style="justify-content:flex-end"><button class="btn" data-acct="close">Fechar</button></div>';
+  }
+  const dis = A.busy ? ' disabled' : '';
+  switch (A.mode) {
+    case 'conflict': {
+      const c = A.cloud || {};
+      return '<h3>Qual save manter?</h3><p>Este aparelho e sua conta têm personagens diferentes. O save que você não escolher fica guardado como cópia de segurança neste aparelho, e dá para voltar a ele depois.</p>' +
+        '<div class="acct-cmp"><div class="card"><h4>Neste aparelho</h4>' + charList(A.local) + '</div>' +
+        '<div class="card"><h4>Na nuvem</h4>' + charList(c.data) + (c.updated_at ? '<p class="note">Enviado em ' + when(c.updated_at) + '</p>' : '') + '</div></div>' + msgs() +
+        '<div class="row acct-actions"><button class="btn" data-acct="later"' + dis + '>Decidir depois</button><button class="btn" data-acct="keepCloud"' + dis + '>Usar os da nuvem</button><button class="btn gold" data-acct="keepLocal"' + dis + '>Manter os deste aparelho</button></div>';
+    }
+    case 'account': {
+      const bk = listBackups();
+      let h = closeBtn + '<h3>Sua conta</h3><p class="role">' + esc(Cloud.user ? Cloud.user.email : '') + '</p>' +
+        '<p class="acct-st acct-' + Cloud.status + '">' + esc(statusLine()) + '</p>' + msgs() +
+        '<div class="row"><button class="btn gold" data-acct="sync"' + dis + '>Sincronizar agora</button><button class="btn" data-acct="logout"' + dis + '>Sair da conta</button></div>' +
+        '<p class="note">O jogo salva neste aparelho a cada 15 s e envia para a nuvem a cada minuto de partida e ao voltar à tela inicial. Sem internet, tudo continua salvo aqui e sobe depois.</p>';
+      if (bk.length && !Cloud.conflict) {
+        h += '<h4 class="acct-h">Cópias de segurança neste aparelho</h4><div class="acct-bk">' + bk.map((b, i) =>
+          '<div class="dg"><div><b>' + esc(when(b.at)) + '</b><div class="s">' + esc(b.why) + ': ' + esc(saveSummary(b.data).map((c) => c.name + ' Nv ' + c.level).join(', ') || 'sem personagens') + '</div></div>' +
+          '<button class="btn sm" data-acct="restore" data-i="' + i + '"' + dis + '>Restaurar</button></div>').join('') + '</div>' +
+          '<p class="note">Restaurar troca o save atual pela cópia; o atual vira uma nova cópia.</p>';
+      }
+      return h;
+    }
+    case 'reset':
+      return closeBtn + '<h3>Trocar senha</h3><form class="acct-form" data-form="reset">' + field('acctEmail', 'email', 'E-mail da conta', 'email', A.email) + msgs() +
+        '<div class="row acct-actions"><button type="button" class="btn" data-acct="mode" data-m="login">Voltar</button><button class="btn gold"' + dis + '>Enviar link</button></div></form>';
+    case 'newpass':
+      return closeBtn + '<h3>Nova senha</h3><p class="role">' + esc(Cloud.user ? Cloud.user.email : '') + '</p><form class="acct-form" data-form="newpass">' +
+        field('acctPass', 'password', 'Nova senha (mín. 6)', 'new-password') + field('acctPass2', 'password', 'Repita a senha', 'new-password') + msgs() +
+        '<div class="row acct-actions"><button class="btn gold"' + dis + '>Salvar nova senha</button></div></form>';
+    default: {
+      const up = A.mode === 'signup';
+      return closeBtn + '<h3>Salvar na nuvem</h3><p>Guarde seus personagens numa conta e jogue em qualquer aparelho. Os personagens deste navegador são vinculados à conta; nada é apagado.</p>' +
+        '<div class="acct-tabs" role="tablist"><button type="button" role="tab" class="' + (up ? '' : 'on') + '" data-acct="mode" data-m="login">Entrar</button><button type="button" role="tab" class="' + (up ? 'on' : '') + '" data-acct="mode" data-m="signup">Criar conta</button></div>' +
+        '<form class="acct-form" data-form="' + A.mode + '">' + field('acctEmail', 'email', 'E-mail', 'email', A.email) +
+        field('acctPass', 'password', up ? 'Senha (mín. 6)' : 'Senha', up ? 'new-password' : 'current-password') +
+        (up ? field('acctPass2', 'password', 'Repita a senha', 'new-password') : '') + msgs() +
+        '<div class="row acct-actions">' + (up ? '' : '<button type="button" class="t-link" data-acct="mode" data-m="reset">Esqueci minha senha</button>') +
+        '<button class="btn gold"' + dis + '>' + (up ? 'Criar conta' : 'Entrar') + '</button></div></form>';
+    }
+  }
+}
+function render(focus) {
+  $('#dialog').innerHTML = '<div class="acct">' + view() + '</div>';
+  $('#modal').classList.add('acct-on');
+  $('#modal').hidden = false;
+  if (focus) { const f = $('#dialog input'); if (f) f.focus(); }
+}
+/** Abre a janela da conta (no modo certo para o estado atual). */
+function openAccount(mode) {
+  A.err = ''; A.info = '';
+  A.mode = mode || (Cloud.conflict ? 'conflict' : Cloud.user ? 'account' : 'login');
+  if (A.mode === 'conflict') { A.local = JSON.parse(JSON.stringify(S)); A.cloud = Cloud.conflict; }
+  render(true);
+}
+
+async function run(fn, after) {
+  A.busy = true; A.err = ''; A.info = ''; render();
+  try { await fn(); A.busy = false; after(); }
+  catch (e) { A.busy = false; A.err = (e && e.message) || 'Falhou.'; render(true); }
+}
+function afterLogin() {
+  refreshAccountUi();
+  if (Cloud.conflict) { openAccount('conflict'); return; } // os dois lados têm personagens: o jogador escolhe
+  A.mode = 'account'; A.info = 'Pronto! Seus personagens estão vinculados a esta conta.';
+  render();
+}
+function onSubmit(e) {
+  const f = e.target.closest('[data-form]');
+  if (!f) return;
+  e.preventDefault();
+  if (A.busy) return;
+  const email = ($('#acctEmail') || {}).value, pass = ($('#acctPass') || {}).value, pass2 = ($('#acctPass2') || {}).value;
+  if (email != null) A.email = email.trim();
+  const bad = (m) => { A.err = m; A.info = ''; render(true); };
+  if (email != null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(A.email)) return bad('Digite um e-mail válido.');
+  if ((f.dataset.form === 'signup' || f.dataset.form === 'newpass') && (pass || '').length < 6) return bad('A senha precisa ter ao menos 6 caracteres.');
+  if (pass2 != null && pass !== pass2) return bad('As senhas não são iguais.');
+  switch (f.dataset.form) {
+    case 'login': run(() => signIn(A.email, pass), afterLogin); break;
+    case 'signup': {
+      let r;
+      run(async () => { r = await signUp(A.email, pass); }, () => {
+        if (r === 'in') { afterLogin(); return; }
+        A.mode = 'login'; A.info = 'Enviamos um link de confirmação para ' + A.email + '. Abra o link neste aparelho e depois entre com sua senha.'; render();
+      });
+      break;
+    }
+    case 'reset': run(() => sendPasswordReset(A.email), () => { A.mode = 'login'; A.info = 'Se houver uma conta com esse e-mail, enviamos um link para criar uma nova senha.'; render(); }); break;
+    case 'newpass': run(() => setNewPassword(pass), () => { A.mode = 'account'; A.info = 'Senha alterada.'; render(); }); break;
+  }
+}
+function onClick(e) {
+  const b = e.target.closest('[data-acct]');
+  if (!b || b.disabled) return;
+  switch (b.dataset.acct) {
+    case 'close': closeModal(); break;
+    case 'mode': { const em = $('#acctEmail'); if (em) A.email = em.value.trim(); A.mode = b.dataset.m; A.err = ''; A.info = ''; render(true); break; }
+    case 'sync': A.err = ''; A.info = ''; syncByUser(); render(); break;
+    case 'logout': run(() => signOut(), () => { refreshAccountUi(); A.mode = 'login'; A.info = 'Você saiu da conta. Os personagens continuam salvos neste aparelho.'; render(); }); break;
+    case 'restore': if (restoreBackup(+b.dataset.i)) { A.info = 'Cópia restaurada.'; render(); } break;
+    case 'later': postponeConflict(); closeModal(); refreshAccountUi(); break;
+    case 'keepLocal': run(() => resolveConflict('local'), () => { refreshAccountUi(); if (Cloud.conflict) { openAccount('conflict'); return; } A.mode = 'account'; A.info = 'Os personagens deste aparelho foram enviados para a nuvem.'; render(); }); break;
+    case 'keepCloud': run(() => resolveConflict('cloud'), () => { refreshAccountUi(); A.mode = 'account'; A.info = 'Os personagens da nuvem foram carregados.'; render(); }); break;
+  }
+}
+
+/** Atualiza o botão da nuvem e o rodapé da tela de título (e a janela, se aberta na conta). */
+function refreshAccountUi() {
+  const btn = $('#tAcct'), foot = $('#tFootSave');
+  if (btn) {
+    const on = cloudEnabled() && Cloud.user;
+    const label = !on ? 'Salvar na nuvem' : ({ busy: 'Sincronizando…', synced: 'Salvo na nuvem', offline: 'Nuvem: offline', conflict: 'Escolha qual save manter', relogin: 'Entrar de novo', error: 'Erro na nuvem' }[Cloud.status] || 'Conta');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.1 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>' + esc(label) + '</span>';
+    btn.className = 't-acct' + (on ? ' on st-' + Cloud.status : '');
+  }
+  if (foot) foot.textContent = cloudEnabled() && Cloud.user ? 'Progresso salvo neste navegador e na nuvem (' + Cloud.user.email + ')' : 'Jogo offline · progresso salvo neste navegador';
+  if (isOpen() && A.mode === 'account' && !A.busy) render();
+}
+/** Chamado pela nuvem quando os dois saves divergem (só na tela de título). */
+function showConflictDialog() {
+  if (G.mode !== 'title') return;
+  openAccount('conflict');
+}
+
+function initAccount() {
+  $('#tAcct').addEventListener('click', () => openAccount());
+  $('#dialog').addEventListener('click', onClick);
+  $('#dialog').addEventListener('submit', onSubmit);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen() && G.mode === 'title') { if (A.mode === 'conflict') postponeConflict(); closeModal(); } });
+  refreshAccountUi();
+}
+return { initAccount, openAccount, refreshAccountUi, showConflictDialog };
+})();
+
 // ---- ui/paneActions.js ----
 const { initPaneActions } = (() => {
 // ---------- ações dos painéis (cliques delegados por data-act) ----------
@@ -16462,7 +17087,7 @@ function paneAction(e) {
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
-    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } location.reload(); return;
+    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } forgetCloudLocal(); location.reload(); return;
   }
   persist();
   renderPane();
@@ -16505,16 +17130,31 @@ function frame(dt) {
   updateRings(fxDt);
   updateFx(fxDt);
   updateCombatFx(fxDt);
+  cloudTick();
   renderFrame();
 }
 
-function boot() {
+function applySettings() {
+  applyCharSetting(S.settings);
   applyFeelSettings(S.settings);
   setBloom(S.settings.bloom);
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
   Music.setVolume(MUSIC_LEVELS[musicLevel(S.settings)].v);
+}
+
+/** O save foi trocado pelo da nuvem (ou por uma cópia de segurança): redesenha a tela de título. */
+function onSaveReplaced() {
+  applySettings();
+  UI.titleIdx = null; UI.titleMode = 'select'; UI.confirmDel = -1;
+  titlePreview(null);
+  if (G.mode === 'title') renderTitle();
+  refreshAccountUi();
+}
+
+function boot() {
+  applySettings();
   Music.play('town'); // tela de título: a cidade ao fundo
   // o navegador só libera o áudio depois de um gesto; a música da tela de título começa no primeiro
   for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => Sfx.init(), { once: true, capture: true });
@@ -16527,6 +17167,7 @@ function boot() {
   initDragDrop();
   initTitle();
   initPause(returnToTitle);
+  initAccount();
   buildTitleBackdrop();
   camTarget.set(23 * TILE, 0, 23 * TILE);
   renderTitle();
@@ -16534,6 +17175,15 @@ function boot() {
   installDebugHook(loopStats);
   startLoop(frame, reportError);
   window.__FORJA_BOOTED = true;
+  // save na nuvem: nunca atrasa nem impede o jogo (sem chave ou sem internet, segue só local)
+  initCloud({ onChange: refreshAccountUi, onConflict: showConflictDialog, onApplied: onSaveReplaced })
+    .then((link) => {
+      refreshAccountUi();
+      if (link === 'recovery') openAccount('newpass');
+      else if (link === 'error') openAccount();
+      else if (link && !Cloud.conflict) openAccount('account');
+    })
+    .catch(() => {});
 }
 
 // os personagens animados vêm embutidos em base64; se não carregarem, o jogo usa os modelos simples

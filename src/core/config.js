@@ -90,6 +90,16 @@ export const CONFIG = {
     maxVoicesPerFrame: 6,   // sons iniciados por quadro (evita estouro em AoE)
   },
   bag: { size: 48 },
+  // Save na nuvem (Supabase). Só a chave PÚBLICA (anon/publishable) pode ficar aqui:
+  // quem protege os dados é o Row Level Security da tabela `saves`
+  // (supabase/migrations/). Chave vazia = nuvem desligada, o jogo segue só local.
+  cloud: {
+    url: 'https://vsntbdwlxngqcmpcibub.supabase.co',
+    anonKey: '',            // TODO: colar a chave "anon public" (Project Settings → API)
+    pushInterval: 60,       // s entre envios durante a partida (o save local continua a cada 15 s)
+    pushIntervalTitle: 4,   // s na tela de título (logo depois de voltar da partida)
+    retryInterval: 90,      // s até tentar de novo após falha de rede
+  },
 };
 
 /** Preferências do jogador que afetam CONFIG (aplicadas ao carregar o save e ao mudar Opções). */

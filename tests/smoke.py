@@ -33,7 +33,7 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 url = 'http://127.0.0.1:%d/%s' % (srv.server_address[1], PAGE)
 
 with sync_playwright() as p:
-    b = p.chromium.launch(args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+    b = p.chromium.launch(executable_path=os.environ.get('CHROMIUM_PATH') or None, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
     pg = b.new_page(viewport={'width': 1280, 'height': 800})
     errors, external = [], []
     pg.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))

@@ -5,7 +5,8 @@
 import { applyCharSetting, loadGltfModels } from './art/gltfModels.js';
 import { applyFeelSettings } from './core/config.js';
 import { loopStats, reportError, startLoop } from './core/loop.js';
-import { G, loadSave, S } from './core/state.js';
+import { Cloud, cloudTick, initCloud } from './core/cloud.js';
+import { G, loadSave, S, UI } from './core/state.js';
 import { TILE } from './core/util.js';
 import { installDebugHook } from './debug.js';
 import { Sfx } from './engine/audio.js';
@@ -18,13 +19,14 @@ import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
 import { updatePlayScene } from './scenes/playScene.js';
 import { updateTitleScene } from './scenes/titleScene.js';
+import { initAccount, openAccount, refreshAccountUi, showConflictDialog } from './ui/account.js';
 import { initCursor } from './ui/cursor.js';
 import { initDragDrop } from './ui/dragdrop.js';
 import { initDrawer } from './ui/drawer.js';
 import { initDialogs } from './ui/npcDialogs.js';
 import { initPaneActions } from './ui/paneActions.js';
 import { initPause } from './ui/pause.js';
-import { initTitle, renderTitle } from './ui/title.js';
+import { initTitle, renderTitle, titlePreview } from './ui/title.js';
 
 function frame(dt) {
   // efeitos seguem o tempo da simulação: congelam na pausa e desaceleram na micro-pausa
@@ -36,16 +38,31 @@ function frame(dt) {
   updateRings(fxDt);
   updateFx(fxDt);
   updateCombatFx(fxDt);
+  cloudTick();
   renderFrame();
 }
 
-function boot() {
+function applySettings() {
+  applyCharSetting(S.settings);
   applyFeelSettings(S.settings);
   setBloom(S.settings.bloom);
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
   Music.setVolume(MUSIC_LEVELS[musicLevel(S.settings)].v);
+}
+
+/** O save foi trocado pelo da nuvem (ou por uma cópia de segurança): redesenha a tela de título. */
+function onSaveReplaced() {
+  applySettings();
+  UI.titleIdx = null; UI.titleMode = 'select'; UI.confirmDel = -1;
+  titlePreview(null);
+  if (G.mode === 'title') renderTitle();
+  refreshAccountUi();
+}
+
+function boot() {
+  applySettings();
   Music.play('town'); // tela de título: a cidade ao fundo
   // o navegador só libera o áudio depois de um gesto; a música da tela de título começa no primeiro
   for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => Sfx.init(), { once: true, capture: true });
@@ -58,6 +75,7 @@ function boot() {
   initDragDrop();
   initTitle();
   initPause(returnToTitle);
+  initAccount();
   buildTitleBackdrop();
   camTarget.set(23 * TILE, 0, 23 * TILE);
   renderTitle();
@@ -65,6 +83,15 @@ function boot() {
   installDebugHook(loopStats);
   startLoop(frame, reportError);
   window.__FORJA_BOOTED = true;
+  // save na nuvem: nunca atrasa nem impede o jogo (sem chave ou sem internet, segue só local)
+  initCloud({ onChange: refreshAccountUi, onConflict: showConflictDialog, onApplied: onSaveReplaced })
+    .then((link) => {
+      refreshAccountUi();
+      if (link === 'recovery') openAccount('newpass');
+      else if (link === 'error') openAccount();
+      else if (link && !Cloud.conflict) openAccount('account');
+    })
+    .catch(() => {});
 }
 
 // os personagens animados vêm embutidos em base64; se não carregarem, o jogo usa os modelos simples

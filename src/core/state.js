@@ -17,16 +17,16 @@ export const SAVE_KEY = 'forjadeira.save.v1';
 function defaultSave() {
   return { chars: [], active: -1, settings: { quality: 'media', sound: true, labels: true } };
 }
-function readSave() {
+function readSave(obj) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) { const s = Object.assign(defaultSave(), JSON.parse(raw)); migrateOffline(s); migrateGold(s); return s; }
+    if (obj === undefined) { const raw = localStorage.getItem(SAVE_KEY); obj = raw ? JSON.parse(raw) : null; }
+    if (obj && typeof obj === 'object') { const s = Object.assign(defaultSave(), JSON.parse(JSON.stringify(obj))); migrateOffline(s); migrateGold(s); return s; }
   } catch { /* armazenamento indisponível ou save corrompido: segue em memória */ }
   return defaultSave();
 }
-/** Carrega o save do navegador para dentro de `S`. */
-export function loadSave() {
-  const data = readSave();
+/** Carrega o save do navegador para dentro de `S` (ou, se `obj` vier, esse save; ex.: o baixado da nuvem). */
+export function loadSave(obj) {
+  const data = readSave(obj);
   if (!Array.isArray(data.chars)) data.chars = [];
   data.chars = data.chars.filter((c) => c && typeof c === 'object' && typeof c.name === 'string');
   if (!data.settings || typeof data.settings !== 'object') data.settings = defaultSave().settings;
@@ -54,8 +54,11 @@ function migrateGold(s) {
     (ch.bag || []).forEach(opt); Object.values(ch.equip || {}).forEach(opt);
   });
 }
+/** Ganchos do save: a nuvem se registra aqui para saber quando algo foi salvo. */
+export const SaveHooks = { afterPersist: null };
 export function persist() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
+  if (SaveHooks.afterPersist) SaveHooks.afterPersist();
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */

@@ -23,6 +23,10 @@ o chefe no salão central de cada andar tem 20% de chance de deixar Gold e Jewel
 **Offline:** baixe e abra `dist/forja-deira.html` no navegador. É um arquivo único: não precisa de internet,
 servidor nem instalação. O progresso fica salvo no próprio navegador (`localStorage`).
 
+**Save na nuvem (opcional):** o botão *Salvar na nuvem* da tela inicial cria uma conta (e-mail e senha,
+via Supabase) e guarda os personagens na nuvem, vinculando o save que já existe no navegador.
+Veja [docs/NUVEM.md](docs/NUVEM.md) para como funciona e como configurar o Supabase.
+
 Controles: clique ou WASD move · clique ataca · 1–6 e botão direito lançam
 habilidades · Q/E poções · Espaço coleta · T portal · C/I/K/L/O painéis · Esc pausa ·
 Alt mostra todos os itens · botão do meio (ou Ctrl + arrastar) gira a câmera.

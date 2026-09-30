@@ -1,6 +1,7 @@
 // ---------- gancho de depuração (usado pelos testes automatizados de fumaça) ----------
 import { gltfStats, setGltfEnabled } from './art/gltfModels.js';
 import { animateModel, buildModel } from './art/models.js';
+import { cloudDebug } from './core/cloud.js';
 import { CONFIG } from './core/config.js';
 import { G, S } from './core/state.js';
 import { R } from './core/util.js';
@@ -25,6 +26,6 @@ export function installDebugHook(loopStats) {
     G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
-    worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster,
+    worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
   };
 }
