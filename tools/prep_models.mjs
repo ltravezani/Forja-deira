@@ -41,7 +41,7 @@ async function save(doc, name) {
 }
 
 // personagens: só malha, esqueleto e textura
-const CHARS = [[advC, 'Knight'], [advC, 'Mage'], [advC, 'Rogue_Hooded'], [advC, 'Barbarian'],
+const CHARS = [[advC, 'Knight'], [advC, 'Mage'], [advC, 'Rogue_Hooded'], [advC, 'Rogue'], [advC, 'Barbarian'],
   [skeC, 'Skeleton_Warrior'], [skeC, 'Skeleton_Rogue']];
 for (const [src, name] of CHARS) {
   const doc = await io.read(src(name));

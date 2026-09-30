@@ -14,12 +14,13 @@ import { glowMat } from './materials.js';
 import { stylize } from './stylize.js';
 
 /** Personagem de cada chave `gltf` usada em data.js, player.js e townlife.js. */
-const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
+const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', rogueFem: 'Rogue', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
 /** Arma na mão direita: nó do próprio personagem ou arquivo avulso (props). */
 const WEAPON = {
   knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword' },
   mage: { staff: '2H_Staff', sword: '1H_Wand' },
   rogue: { bow: '2H_Crossbow', sword: 'Knife' },
+  rogueFem: { bow: '2H_Crossbow', sword: 'Knife' },
   barbarian: { club: '1H_Axe', sword: '1H_Axe' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
