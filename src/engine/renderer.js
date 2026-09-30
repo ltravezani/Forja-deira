@@ -104,7 +104,7 @@ export function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { flash: 0, flashFrames: 0, rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
+const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -113,7 +113,7 @@ const postMat = new THREE.ShaderMaterial({
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
-    uFlash: { value: 0 }, uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
+    uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
     uContrast: { value: 1 }, uLift: { value: new THREE.Color(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Color(1, 1, 1) },
     uCamWorld: { value: new THREE.Matrix4() }, uTime: { value: 0 },
@@ -127,7 +127,7 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
     uniform float uContrast; uniform vec3 uLift; uniform vec3 uGamma; uniform vec3 uGain;
     uniform mat4 uCamWorld; uniform float uTime; uniform vec3 uHFog; uniform vec3 uHFogP;
-    uniform float uFlash; uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
+    uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
     // posição em espaço de visão reconstruída da profundidade
@@ -176,7 +176,6 @@ const postMat = new THREE.ShaderMaterial({
       c.rgb *= pow(max(lum, 1e-4) / 0.18, uContrast - 1.0);
       c.rgb = pow(c.rgb, 1.0 / uGamma) * uGain + uLift * (1.0 - smoothstep(0.0, 0.35, lum));
       // quadro de impacto (crítico): clarão branco quente de 1–2 quadros, mais forte no centro
-      c.rgb = mix(c.rgb, vec3(1.6, 1.5, 1.35), uFlash * 0.28 * (1.0 - 0.5 * length(vUv - 0.5)));
       // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
       vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
       c.rgb *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q) * 1.25);
@@ -288,8 +287,6 @@ export function renderFrame() {
   U.uProjInv.value.copy(camera.projectionMatrixInverse);
   U.uCamWorld.value.copy(camera.matrixWorld);
   U.uTime.value = performance.now() / 1000;
-  U.uFlash.value = post.flashFrames > 0 ? post.flash : 0;
-  if (post.flashFrames > 0) post.flashFrames--;
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
@@ -305,8 +302,6 @@ function updateBloom() {
 export function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
 /** Estado efetivo do brilho (Opções mostra o que está valendo). */
 export function bloomOn() { return post.bloom; }
-/** Quadro de impacto: clarão branco por 2 quadros (quem chama respeita a opção de pausa de impacto). */
-export function impactFlash(k) { post.flash = Math.max(post.flashFrames > 0 ? post.flash : 0, Math.min(1, k)); post.flashFrames = 2; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 export function setOutline(on) { post.outline = !!on; }
 /**

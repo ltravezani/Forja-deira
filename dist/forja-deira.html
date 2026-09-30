@@ -6795,22 +6795,22 @@ return { GEO, part, pivot };
 // ---- art/stylize.js ----
 const { STYLE_U, setShadowTint, stylize, toonGradient, toonMaterial } = (() => {
 // =============================================================================
-// Estilo cartoon unificado: todo material sólido do jogo (heróis, NPCs,
-// monstros, chão, paredes e adereços) passa por aqui, para que o mundo e os
-// personagens tenham a mesma luz em faixas, o mesmo brilho de borda e o mesmo
-// reflexo "pintado" nos metais. O contorno preto vem de um passe de tela
+// Estilo unificado: todo material sólido do jogo (heróis, NPCs, monstros,
+// chão, paredes e adereços) passa por aqui, para que o mundo e os
+// personagens tenham a mesma rampa de luz suave, o mesmo brilho de borda e o
+// mesmo reflexo nos metais. O contorno preto vem de um passe de tela
 // (engine/renderer.js), então vale igualmente para tudo que grava profundidade.
 // =============================================================================
 
 let _grad = null;
-/** Rampa de luz em faixas (sombra, meio-tom, luz, realce), filtro "nearest". */
+/** Rampa de luz (sombra → realce) com filtro linear: sombreado suave, sem faixas duras. */
 function toonGradient() {
   if (_grad) return _grad;
   const v = [78, 128, 180, 222, 244];
   const data = new Uint8Array(v.length * 4);
   v.forEach((g, i) => data.set([g, g, g, 255], i * 4));
   _grad = new THREE.DataTexture(data, v.length, 1, THREE.RGBAFormat);
-  _grad.minFilter = _grad.magFilter = THREE.NearestFilter;
+  _grad.minFilter = _grad.magFilter = THREE.LinearFilter;
   _grad.generateMipmaps = false;
   _grad.needsUpdate = true;
   return _grad;
@@ -6836,7 +6836,7 @@ const RIM_CHUNK = `
   #if NUM_DIR_LIGHTS > 0
   {
     // quanto o fragmento recebe do sol: luz difusa direta ÷ (cor × luz do sol).
-    // Já inclui a sombra projetada e a faixa do toon; luzes pontuais somam e "acendem" a área.
+    // Já inclui a sombra projetada e a rampa de luz; luzes pontuais somam e "acendem" a área.
     vec3 sRef = diffuseColor.rgb * RECIPROCAL_PI * directionalLights[ 0 ].color;
     float sLit = dot( reflectedLight.directDiffuse, vec3( 1.0 ) ) / max( dot( sRef, vec3( 1.0 ) ), 1e-4 );
     float sShade = ( 1.0 - smoothstep( 0.12, 0.62, sLit ) ) * uShadowStrength;
@@ -6848,13 +6848,13 @@ const RIM_CHUNK = `
   {
     vec3 sV = normalize( vViewPosition );
     float sNV = 1.0 - clamp( dot( normal, sV ), 0.0, 1.0 );
-    // borda iluminada: faixa dura, como em animação desenhada
-    float sRim = smoothstep( 0.62, 0.7, sNV ) * uRim;
+    // borda iluminada suave (sem recorte duro)
+    float sRim = smoothstep( 0.45, 1.0, sNV ) * uRim * 0.8;
     outgoingLight += diffuseColor.rgb * uRimColor * sRim;
     #if NUM_DIR_LIGHTS > 0
-      // reflexo pintado (metais): mancha de luz recortada em vez de especular físico
+      // reflexo dos metais: realce suave em volta do ponto de luz
       vec3 sH = normalize( directionalLights[ 0 ].direction + sV );
-      float sSpec = smoothstep( 0.972, 0.98, dot( normal, sH ) ) * uSpec;
+      float sSpec = pow( smoothstep( 0.9, 1.0, dot( normal, sH ) ), 2.0 ) * uSpec * 0.6;
       outgoingLight += directionalLights[ 0 ].color * sSpec * ( 0.06 + diffuseColor.rgb * 0.5 );
     #endif
   }
@@ -8665,7 +8665,7 @@ return { findPath, gy, lineClear, walkable, walkableR };
 })();
 
 // ---- engine/renderer.js ----
-const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
+const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
 // ---------- renderer, cena, luzes e câmera ----------
 
 const canvas = $('#view');
@@ -8769,7 +8769,7 @@ function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { flash: 0, flashFrames: 0, rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
+const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -8778,7 +8778,7 @@ const postMat = new THREE.ShaderMaterial({
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
-    uFlash: { value: 0 }, uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
+    uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
     uContrast: { value: 1 }, uLift: { value: new THREE.Color(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Color(1, 1, 1) },
     uCamWorld: { value: new THREE.Matrix4() }, uTime: { value: 0 },
@@ -8792,7 +8792,7 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
     uniform float uContrast; uniform vec3 uLift; uniform vec3 uGamma; uniform vec3 uGain;
     uniform mat4 uCamWorld; uniform float uTime; uniform vec3 uHFog; uniform vec3 uHFogP;
-    uniform float uFlash; uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
+    uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
     // posição em espaço de visão reconstruída da profundidade
@@ -8841,7 +8841,6 @@ const postMat = new THREE.ShaderMaterial({
       c.rgb *= pow(max(lum, 1e-4) / 0.18, uContrast - 1.0);
       c.rgb = pow(c.rgb, 1.0 / uGamma) * uGain + uLift * (1.0 - smoothstep(0.0, 0.35, lum));
       // quadro de impacto (crítico): clarão branco quente de 1–2 quadros, mais forte no centro
-      c.rgb = mix(c.rgb, vec3(1.6, 1.5, 1.35), uFlash * 0.28 * (1.0 - 0.5 * length(vUv - 0.5)));
       // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
       vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
       c.rgb *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q) * 1.25);
@@ -8953,8 +8952,6 @@ function renderFrame() {
   U.uProjInv.value.copy(camera.projectionMatrixInverse);
   U.uCamWorld.value.copy(camera.matrixWorld);
   U.uTime.value = performance.now() / 1000;
-  U.uFlash.value = post.flashFrames > 0 ? post.flash : 0;
-  if (post.flashFrames > 0) post.flashFrames--;
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
@@ -8970,8 +8967,6 @@ function updateBloom() {
 function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
 /** Estado efetivo do brilho (Opções mostra o que está valendo). */
 function bloomOn() { return post.bloom; }
-/** Quadro de impacto: clarão branco por 2 quadros (quem chama respeita a opção de pausa de impacto). */
-function impactFlash(k) { post.flash = Math.max(post.flashFrames > 0 ? post.flash : 0, Math.min(1, k)); post.flashFrames = 2; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 function setOutline(on) { post.outline = !!on; }
 /**
@@ -8995,7 +8990,7 @@ function setHeightFog(f) {
   U.uHFog.value.setHex(f[0]);
   U.uHFogP.value.set(0, f[1], f[2] * CONFIG.style.heightFog);
 }
-return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world };
+return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world };
 })();
 
 // ---- engine/audio.js ----
@@ -16023,10 +16018,7 @@ function hitMonster(m, mult, skillId, opts) {
   const dd = Math.hypot(fx - m.x, fz - m.z) || 1, off = Math.min(m.radius, dd * 0.5);
   const big = r.type !== 'normal';
   impactStar(m.x + (fx - m.x) / dd * off, h * 0.6, m.z + (fz - m.z) / dd * off, r.type === 'exc' ? 0x7affa0 : big ? 0xffd060 : 0xfff0d0, big ? 1.9 : 1.1);
-  if (big) {
-    shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
-    if (CONFIG.feel.hitStop > 0) impactFlash(r.type === 'exc' ? 1 : 0.7);
-  }
+  if (big) shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
   Sfx.hit();
   if (m.hp <= 0) killMonster(m);
   return r.dmg;
