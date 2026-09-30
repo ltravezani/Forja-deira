@@ -24,7 +24,7 @@ export function paneChar() {
   h += '<h4>Combate</h4><dl class="kv">' +
     '<dt>Combat Points</dt><dd class="cpv">' + fmt(G.cp || 0) + '</dd>' +
     '<dt>HP / MP / AG</dt><dd>' + fmt(st.maxHp) + ' / ' + fmt(st.maxMp) + ' / ' + fmt(st.maxAg) + '</dd>' +
-    '<dt>' + (ch.cls === 'dw' ? 'Dano mágico' : 'Dano') + '</dt><dd>' + fmt(st.minDmg) + ' ~ ' + fmt(st.maxDmg) + '</dd>' +
+    '<dt>' + (ch.cls === 'dw' || C.magic ? 'Dano mágico' : 'Dano') + '</dt><dd>' + fmt(st.minDmg) + ' ~ ' + fmt(st.maxDmg) + '</dd>' +
     '<dt>Defesa</dt><dd>' + fmt(st.def) + '</dd>' +
     '<dt>Velocidade de ataque</dt><dd>' + st.atkSpeed + ' (' + st.attackInterval.toFixed(2) + 's)</dd>' +
     '<dt>Crítico / Excelente</dt><dd>' + st.critPct + '% / ' + st.excPct + '%</dd>' +

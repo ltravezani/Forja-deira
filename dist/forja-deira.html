@@ -5510,13 +5510,68 @@ if (document.currentScript) document.currentScript.remove();
       color: '#4fc27a',
       blurb: 'Dano contínuo à distância, cura e invocação. Agilidade é tudo.',
     },
+    // gear: de qual classe vêm os itens que ela usa (arma e armaduras); sem gear, os da própria classe
+    de: {
+      id: 'de', tiers: ['Dark Elf', 'Bloody Elf', 'Shadowblade'],
+      role: 'Lâminas duplas e fúria', weapon: 'sword', mainStat: 'str', dual: true,
+      gear: { weapon: 'dk', armor: 'elf' },
+      base: { str: 24, agi: 26, vit: 20, ene: 12 }, ppl: 5,
+      konst: { maxHp: 40, maxMp: 8 },
+      rel: [
+        ['maxHp', 1.5, 'level'], ['maxHp', 2.5, 'vit'],
+        ['maxMp', 1, 'level'], ['maxMp', 1, 'ene'],
+        ['maxAg', 0.6, 'ene'], ['maxAg', 0.3, 'vit'], ['maxAg', 0.3, 'agi'], ['maxAg', 0.15, 'str'],
+        ['def', 1 / 5, 'agi'], ['atkSpeed', 1 / 12, 'agi'],
+        ['minDmg', 1 / 8, 'str'], ['minDmg', 1 / 12, 'agi'],
+        ['maxDmg', 1 / 5, 'str'], ['maxDmg', 1 / 8, 'agi'],
+        ['skillMul', 0.001, 'ene'],
+      ],
+      auto: { str: 0.4, agi: 0.3, vit: 0.25, ene: 0.05 },
+      color: '#c23a6a',
+      blurb: 'Duas espadas, golpes em área e fúria. Força gera dano, Agilidade dá velocidade. Usa as espadas do Dark Knight e as armaduras da Fairy Elf.',
+    },
+    nc: {
+      id: 'nc', tiers: ['Necromancer', 'Death Knight', 'Bloody Knight'],
+      role: 'Roubo de vida e mortos-vivos', weapon: 'staff', mainStat: 'ene', dual: true, magic: true,
+      gear: { weapon: 'dw', armor: 'dw' },
+      base: { str: 20, agi: 16, vit: 22, ene: 26 }, ppl: 5,
+      // roubo de vida próprio da classe (soma com itens e árvore)
+      konst: { maxHp: 55, maxMp: 16, minWiz: 3, maxWiz: 5 },
+      passive: { lifeSteal: 2 },
+      rel: [
+        ['maxHp', 1.5, 'level'], ['maxHp', 2.5, 'vit'],
+        ['maxMp', 1.5, 'level'], ['maxMp', 1.5, 'ene'],
+        ['maxAg', 0.3, 'ene'], ['maxAg', 0.3, 'vit'], ['maxAg', 0.3, 'agi'], ['maxAg', 0.2, 'str'],
+        ['def', 1 / 4, 'agi'], ['atkSpeed', 1 / 20, 'agi'],
+        ['minDmg', 1 / 8, 'str'], ['maxDmg', 1 / 4, 'str'],
+        ['minWiz', 1 / 10, 'ene'], ['maxWiz', 1 / 4.5, 'ene'],
+      ],
+      auto: { str: 0.05, agi: 0.15, vit: 0.3, ene: 0.5 },
+      color: '#8a4ad0',
+      blurb: 'Drena a vida dos inimigos e ergue os mortos. Energia gera dano mágico. Usa os cajados e armaduras do Dark Wizard.',
+    },
   };
+  /** Classe dos itens que `cls` equipa no slot (a própria, ou a indicada em gear). */
+  function gearCls(cls, slot) {
+    const g = CLASSES[cls] && CLASSES[cls].gear;
+    return g ? (slot === 'weapon' ? g.weapon : g.armor) : cls;
+  }
+  /** Esta classe pode equipar o item? (anéis, colares e asas servem a todas) */
+  function canUse(cls, it) {
+    return !!(it && it.slot && (!it.cls || gearCls(cls, it.slot) === it.cls));
+  }
+  /** Nomes das classes que usam o item (para a descrição). */
+  function itemUsers(it) {
+    return Object.keys(CLASSES).filter((c) => canUse(c, it)).map((c) => CLASSES[c].tiers[0]);
+  }
 
-  /** Elenco completo planejado. Apenas 3 jogáveis no MVP (Fase 1). */
+  /** Elenco completo planejado. Só as classes com entrada em CLASSES são jogáveis. */
   const ROSTER = [
     { id: 'dk', name: 'Dark Knight', phase: 1 },
     { id: 'dw', name: 'Dark Wizard', phase: 1 },
     { id: 'elf', name: 'Fairy Elf', phase: 1 },
+    { id: 'de', name: 'Dark Elf', phase: 1 },
+    { id: 'nc', name: 'Necromancer', phase: 1 },
     { id: 'sum', name: 'Summoner', phase: 2, role: 'Maldições e invocações' },
     { id: 'mg', name: 'Magic Gladiator', phase: 2, role: 'Híbrido espada + magia' },
     { id: 'dl', name: 'Dark Lord', phase: 2, role: 'Comando, corvo e montaria' },
@@ -5562,6 +5617,20 @@ if (document.currentScript) document.currentScript.remove();
     aura: { cls: 'elf', name: 'Aura Élfica', lvl: 60, tier: 0, mp: 30, ag: 10, cd: 20, kind: 'buff', buff: { dmgPct: 15, defPct: 20 }, dur: 30, desc: '+15% dano e +20% defesa por 30s.' },
     spirit: { cls: 'elf', name: 'Espírito da Floresta', lvl: 150, tier: 1, mp: 60, ag: 20, cd: 25, kind: 'summon', dur: 30, desc: 'Invoca um guardião por 30s.' },
     rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 400, tier: 2, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
+    // Dark Elf: lâminas duplas, área e fúria
+    bladedance: { cls: 'de', name: 'Dança das Lâminas', lvl: 1, tier: 0, mp: 6, ag: 6, cd: 0.5, kind: 'spin', mult: 1.35, radius: 3.6, color: 0xff4a7a, desc: 'Gira as duas espadas e corta todos ao redor.' },
+    bladefan: { cls: 'de', name: 'Leque de Lâminas', lvl: 25, tier: 0, mp: 12, ag: 8, cd: 1, kind: 'bladefan', mult: 1.25, blades: 5, range: 11, color: 0xff5a8a, desc: 'Arremessa lâminas sombrias em leque que atravessam os inimigos.' },
+    fury: { cls: 'de', name: 'Fúria Sombria', lvl: 50, tier: 0, mp: 30, ag: 20, cd: 22, kind: 'buff', buff: { dmgPct: 25, atkSpeed: 25 }, dur: 30, color: 0xff2a4a, desc: '+25% dano e +25 de velocidade de ataque por 30s.' },
+    shadowstep: { cls: 'de', name: 'Passo Sombrio', lvl: 80, tier: 0, mp: 16, ag: 12, cd: 1.6, kind: 'dash', mult: 2.1, range: 8, radius: 3, color: 0xc84aff, desc: 'Avança pelas sombras cortando o caminho e explode em lâminas no fim.' },
+    bloodstorm: { cls: 'de', name: 'Tempestade Sangrenta', lvl: 150, tier: 1, mp: 30, ag: 18, cd: 3, kind: 'whirl', mult: 1.05, hits: 5, radius: 5, color: 0xff2a4a, desc: 'Redemoinho de lâminas: 5 cortes seguidos em área enquanto você anda.' },
+    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 400, tier: 2, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
+    // Necromancer: roubo de vida, dano e necromancia
+    drain: { cls: 'nc', name: 'Toque Vampírico', lvl: 1, tier: 0, mp: 4, ag: 1, cd: 0.36, kind: 'drain', mult: 1.1, drain: 30, range: 14, color: 0xff3a5a, desc: 'Projétil de sangue: cura 30% do dano causado.' },
+    bonespear: { cls: 'nc', name: 'Lança de Ossos', lvl: 20, tier: 0, mp: 10, ag: 5, cd: 0.9, kind: 'pierce', mult: 1.9, range: 18, color: 0xe8e0c8, desc: 'Lança de osso que atravessa todos os inimigos.' },
+    raise: { cls: 'nc', name: 'Erguer Esqueleto', lvl: 40, tier: 0, mp: 35, ag: 10, cd: 12, kind: 'summon', ally: 'skeleton', count: 2, dur: 30, color: 0x7affb0, desc: 'Ergue 2 esqueletos guerreiros por 30s.' },
+    bloodpact: { cls: 'nc', name: 'Pacto de Sangue', lvl: 70, tier: 0, mp: 40, ag: 15, cd: 22, kind: 'buff', buff: { lifeSteal: 6, dmgPct: 12 }, dur: 30, color: 0xff2a3a, desc: '+6% de roubo de vida e +12% dano por 30s.' },
+    soulburst: { cls: 'nc', name: 'Explosão de Almas', lvl: 150, tier: 1, mp: 40, ag: 14, cd: 2.4, kind: 'drainnova', mult: 2.9, radius: 7, drain: 15, color: 0x7affb0, desc: 'Onda de almas ao redor; cura 15% do dano causado.' },
+    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 400, tier: 2, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
   };
   const skillsFor = (cls) => Object.keys(SKILLS).filter((k) => SKILLS[k].cls === cls);
 
@@ -5583,6 +5652,16 @@ if (document.currentScript) document.currentScript.remove();
       { name: 'Caçadora', nodes: [['dmgPct', 3, 'Mira'], ['skill:triple', 8, 'Leque Mortal'], ['critPct', 1, 'Ponto Fraco'], ['skill:rain', 8, 'Tempestade']] },
       { name: 'Guardiã', nodes: [['hpPct', 4, 'Casca de Carvalho'], ['defPct', 3, 'Folhagem'], ['healPct', 8, 'Toque Vital'], ['lifeSteal', 0.5, 'Seiva']] },
       { name: 'Vento', nodes: [['atkSpeedPct', 2, 'Corda Tensa'], ['moveSpeedPct', 2, 'Passo Leve'], ['skill:pierce', 8, 'Flecha do Vento'], ['mfPct', 4, 'Olho da Fortuna']] },
+    ],
+    de: [
+      { name: 'Carnificina', nodes: [['dmgPct', 3, 'Fio Duplo'], ['skill:bladedance', 8, 'Dança Voraz'], ['critPct', 1, 'Corte Certeiro'], ['skill:eclipse', 8, 'Noite Eterna']] },
+      { name: 'Sombra', nodes: [['moveSpeedPct', 2, 'Pés de Sombra'], ['skill:shadowstep', 8, 'Rastro Negro'], ['defPct', 3, 'Couro Élfico'], ['hpPct', 4, 'Resistência']] },
+      { name: 'Fúria', nodes: [['atkSpeedPct', 2, 'Frenesi'], ['skill:bloodstorm', 8, 'Olho da Tempestade'], ['lifeSteal', 0.5, 'Sede'], ['skill:bladefan', 8, 'Leque Mortal']] },
+    ],
+    nc: [
+      { name: 'Sangue', nodes: [['lifeSteal', 0.5, 'Presas'], ['skill:drain', 8, 'Sanguessuga'], ['hpPct', 4, 'Coração Frio'], ['skill:soulburst', 8, 'Colheita']] },
+      { name: 'Ossos', nodes: [['dmgPct', 3, 'Medula'], ['skill:bonespear', 8, 'Lança Serrilhada'], ['critPct', 1, 'Fratura'], ['defPct', 3, 'Couraça de Ossos']] },
+      { name: 'Túmulo', nodes: [['cdPct', -2, 'Ritual Rápido'], ['costPct', -3, 'Pacto Barato'], ['mpPct', 4, 'Poço Sombrio'], ['skill:army', 8, 'Legião']] },
     ],
   };
   const treeNodeId = (cls, b, n) => cls + '.' + b + '.' + n;
@@ -5801,7 +5880,7 @@ if (document.currentScript) document.currentScript.remove();
     }
     const ord = RARITY[rarity].order;
     const it = { uid: hex(hash32(seed, 'uid')) + hex(seed).slice(2), slot, cls: slot === 'ring' || slot === 'pendant' || slot === 'wings' ? null : cls, tier, rarity, plus: 0, luck: false, skill: false, addOpt: 0, exc: [], anc: null, legend: null, seed: hex(seed) };
-    if (slot === 'weapon' || slot === 'armor' || slot === 'helm' || slot === 'gloves' || slot === 'boots') it.cls = cls;
+    if (slot === 'weapon' || slot === 'armor' || slot === 'helm' || slot === 'gloves' || slot === 'boots') it.cls = gearCls(cls, slot);
     // +nível inicial
     const pr = rnd();
     it.plus = pr < 0.55 ? 0 : pr < 0.8 ? 1 : pr < 0.93 ? 2 : pr < 0.985 ? 3 : 4;
@@ -5967,6 +6046,8 @@ if (document.currentScript) document.currentScript.remove();
       const st = itemStats(it);
       for (const k in st) add(k, st[k]);
     }
+    // passivo da classe
+    if (C.passive) for (const k in C.passive) add(k, C.passive[k]);
     // árvore
     TREES[ch.cls].forEach((br, bi) => br.nodes.forEach((n, ni) => {
       const r = (ch.tree || {})[treeNodeId(ch.cls, bi, ni)] || 0;
@@ -6013,7 +6094,7 @@ if (document.currentScript) document.currentScript.remove();
       skillMul: 1 + d.skillMul,
     };
     for (const k in b) if (k.indexOf('skillBoost:') === 0) out.boosts[k.slice(11)] = b[k];
-    if (C.id === 'dw') {
+    if (C.id === 'dw' || C.magic) {
       const rise = 1 + (b.wizRise || 0) / 100;
       out.minDmg = Math.floor((d.minWiz + (b.wizMin || 0)) * rise);
       out.maxDmg = Math.floor((d.maxWiz + (b.wizMax || 0)) * rise);
@@ -6129,7 +6210,7 @@ if (document.currentScript) document.currentScript.remove();
   return {
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
-    CLASSES, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
+    CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
@@ -6978,15 +7059,26 @@ const { animateGltf, applyCharSetting, buildGltfHumanoid, deathTime, gltfEnabled
 const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', rogueFem: 'Rogue', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
 /** Arma na mão direita: nó do próprio personagem ou arquivo avulso (props). */
 const WEAPON = {
-  knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword' },
-  mage: { staff: '2H_Staff', sword: '1H_Wand' },
-  rogue: { bow: '2H_Crossbow', sword: 'Knife' },
-  rogueFem: { bow: '2H_Crossbow', sword: 'Knife' },
+  knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword', rod: 'Mage:2H_Staff' },
+  mage: { staff: '2H_Staff', sword: '1H_Wand', rod: '2H_Staff' },
+  rogue: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
+  rogueFem: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
   barbarian: { club: '1H_Axe', sword: '1H_Axe' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
 };
 const SHIELD = { knight: 'Badge_Shield', skeleton: 'Skeleton_Shield_Small_A' };
+/**
+ * Segunda arma na mão esquerda (visual `offhand`: Dark Elf e Necromancer). "Modelo:Nó"
+ * pega a peça de outro personagem (todos têm o mesmo encaixe de mão); sem entrada aqui,
+ * a arma da mão direita é copiada para a esquerda.
+ */
+const OFFHAND = {
+  knight: { sword: '1H_Sword_Offhand' },
+  rogue: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
+  rogueFem: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
+  barbarian: { club: '1H_Axe_Offhand', sword: '1H_Axe_Offhand' },
+};
 /** Clipes: locomoção, golpes (alternados), disparo, magia e queda. */
 const CLIP = { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', chop: '1H_Melee_Attack_Chop', slice: '1H_Melee_Attack_Slice_Diagonal', shoot: '2H_Ranged_Shoot', spell: 'Spellcast_Shoot', cast: 'Spellcast_Raise', death: 'Death_A' };
 /** Altura do modelo procedural (unidades do corpo); o glTF é escalado para ela, um pouco menor (cabeça e ombros largos pesam mais na tela). */
@@ -7053,13 +7145,15 @@ function tint(hex, k) {
  * textura antes de tingir: com ele um manto roxo vira vermelho de verdade (só
  * multiplicar escureceria para marrom).
  */
-function ownMat(map, color, emissive, ei, mats, desat) {
+function ownMat(map, color, emissive, ei, mats, desat, hood) {
   const m = new THREE.MeshToonMaterial({ map, color });
-  const U = { uDesat: { value: desat || 0 } };
+  const U = { uDesat: { value: desat || 0 }, uHood: { value: new THREE.Color(hood == null ? 0 : hood) }, uHoodOn: { value: hood == null ? 0 : 1 } };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uDesat = U.uDesat;
+    sh.uniforms.uHood = U.uHood;
+    sh.uniforms.uHoodOn = U.uHoodOn;
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uDesat;')
+      .replace('#include <common>', '#include <common>\nuniform float uDesat;\nuniform vec3 uHood;\nuniform float uHoodOn;')
       .replace('#include <map_fragment>', DESAT_MAP);
   };
   stylize(m, { rim: 0.3 });
@@ -7072,6 +7166,9 @@ function ownMat(map, color, emissive, ei, mats, desat) {
 const DESAT_MAP = `#ifdef USE_MAP
     vec4 sampledDiffuseColor = texture2D( map, vMapUv );
     float mapLum = dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+    // capuz: os texels verdes da cabeça viram a cor pedida (o rosto continua com a pele)
+    float greenish = sampledDiffuseColor.g - max( sampledDiffuseColor.r, sampledDiffuseColor.b );
+    if ( uHoodOn > 0.5 && greenish > 0.03 ) sampledDiffuseColor.rgb = uHood * ( 0.6 + mapLum * 1.6 );
     sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, vec3( mapLum * 1.35 ), uDesat );
     diffuseColor *= sampledDiffuseColor;
   #endif`;
@@ -7140,7 +7237,7 @@ function buildGltfHumanoid(o, cartoon) {
   const k = o.tintK != null ? o.tintK : 0.42, sk = o.skinK != null ? o.skinK : skel ? 0.25 : 0.12;
   const M = {
     body: ownMat(map, tint(o.armor || o.cloth, k), 0, 0, mats, k * 0.9),
-    skin: ownMat(map, tint(o.skin, sk), 0, 0, mats, sk * 0.9),
+    skin: ownMat(map, tint(o.skin, sk), 0, 0, mats, sk * 0.9, o.hoodColor),
     cape: ownMat(map, tint(o.capeColor || o.cloth, 0.55), 0, 0, mats, 0.5),
     weapon: ownMat(map, tint(o.weaponColor, 0.35), o.weaponGlow || 0, o.weaponGlow ? 0.45 : 0, mats),
   };
@@ -7149,8 +7246,9 @@ function buildGltfHumanoid(o, cartoon) {
   const showHat = key === 'knight' ? o.head === 'helm' : key === 'mage' ? o.head === 'hood' : key === 'barbarian' ? !!o.horns : !o.crown;
   const showCape = skel || !!(o.cape || o.bulky || o.crown || o.robe);
   const wantW = WEAPON[key] && WEAPON[key][o.weapon], wantS = o.shield && SHIELD[key];
+  const wantO = o.offhand && OFFHAND[key] ? OFFHAND[key][o.weapon] : null;
   const drop = [];
-  let weapon = null;
+  let weapon = null, offhand = null;
   scene.traverse((c) => {
     if (!c.isMesh) return;
     c.castShadow = true; c.receiveShadow = true;
@@ -7159,6 +7257,7 @@ function buildGltfHumanoid(o, cartoon) {
       const role = roleOf(c.name, key);
       if (c.name === wantW) { c.material = M.weapon; weapon = c; }
       else if (c.name === wantS) c.material = M.weapon;
+      else if (c.name === wantO) { c.material = M.weapon; offhand = c; }
       else if (role === 'hat' && showHat) c.material = M.hat;
       else if (role === 'cape' && showCape) c.material = M.cape;
       else drop.push(c);
@@ -7174,7 +7273,9 @@ function buildGltfHumanoid(o, cartoon) {
   // armas avulsas (pacote de esqueletos) vão para os encaixes das mãos
   const hand = (side) => find(scene, 'handslot' + side);
   const prop = (name, side) => {
-    const P = LIB.props[name];
+    // "Modelo:Nó" = peça emprestada de outro personagem (mantém a pose relativa ao encaixe)
+    const [from, node] = name.indexOf(':') > 0 ? name.split(':') : [null, name];
+    const P = from ? LIB.chars[from] && find(LIB.chars[from], node) : LIB.props[name];
     if (!P) return null;
     const g = P.clone();
     g.traverse((c) => { if (c.isMesh) { c.material = M.weapon; c.castShadow = true; } });
@@ -7184,10 +7285,14 @@ function buildGltfHumanoid(o, cartoon) {
   };
   if (wantW && !weapon) weapon = prop(wantW, 'r');
   if (wantS && !find(scene, wantS)) prop(wantS, 'l');
+  if (o.offhand && !offhand) {
+    if (wantO) offhand = prop(wantO, 'l');
+    else if (weapon && hand('l')) { offhand = weapon.clone(); hand('l').add(offhand); }
+  }
   // orbe no topo do cajado (o jogador anima o tamanho dele)
-  if (weapon && o.weapon === 'staff') {
+  const addOrb = (w) => {
     const b = new THREE.Box3();
-    weapon.traverse((c) => { if (c.isMesh) { c.geometry.computeBoundingBox(); b.union(c.geometry.boundingBox); } });
+    w.traverse((c) => { if (c.isMesh) { c.geometry.computeBoundingBox(); b.union(c.geometry.boundingBox); } });
     const orb = new THREE.Group();
     orb.userData.orb = true;
     orb.position.set((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2);
@@ -7195,8 +7300,12 @@ function buildGltfHumanoid(o, cartoon) {
     s.scale.setScalar((b.max.y - b.min.y) * 0.3);
     orb.add(s);
     orb.scale.setScalar(0.3);
-    weapon.add(orb);
-  }
+    w.add(orb);
+  };
+  // rod: cajado de verdade em qualquer modelo (Necromancer e suas evoluções de armadura)
+  const orbs = o.weapon === 'staff' || o.weapon === 'rod';
+  if (weapon && orbs) addOrb(weapon);
+  if (offhand && orbs) addOrb(offhand);
   const mixer = new THREE.AnimationMixer(scene);
   const acts = {};
   for (const [id, name] of Object.entries(CLIP)) {
@@ -7211,9 +7320,9 @@ function buildGltfHumanoid(o, cartoon) {
   const m = {
     root, scene, kind: 'gltf', mixer, acts, mats,
     body: scene, torso: anchor(find(scene, 'chest'), scene), head: anchor(find(scene, 'head'), scene),
-    weapon, cape: null, armorMat: M.body, trimMat: M.body, height: BODY_H * S,
+    weapon, offhand, cape: null, armorMat: M.body, trimMat: M.body, height: BODY_H * S,
     anim: { cur: null, over: null, prev: 0, dead: false, lastT: null, flip: false },
-    atk: o.weapon === 'bow' ? 'shoot' : key === 'mage' && o.weapon === 'staff' ? 'spell' : 'melee',
+    atk: o.weapon === 'bow' ? 'shoot' : o.weapon === 'rod' || (key === 'mage' && o.weapon === 'staff') ? 'spell' : 'melee',
   };
   // idle começa num ponto aleatório: um grupo de monstros não respira em uníssono
   play(m, acts.idle, 0);
@@ -7855,7 +7964,7 @@ const D = (kind) => texDetail(kind);
 const CARTOON = { humanoid: 1.2, spider: 1.1, beast: 1.15, floater: 1.12, bat: 1.15, golem: 1.08 };
 
 function buildWeapon(hand, arms, o, M) {
-  const wk = o.weapon || 'none';
+  const wk = o.weapon === 'blade' ? 'sword' : o.weapon === 'rod' ? 'staff' : o.weapon || 'none';
   const wc = o.weaponColor || 0xb8c0cc, wg = o.weaponGlow || 0;
   const steel = toon(wc, wg, wg ? 0.7 : 0, { metal: 0.85, rough: 0.32, env: 1.1 });
   const leather = toon(0x3a2418, 0, 0, { rough: 0.9, map: D('leather') });
@@ -8131,9 +8240,15 @@ function buildHumanoid(o) {
   const hand = pivot(arms[1], 0, -0.7, 0.05);
   const weapon = buildWeapon(hand, arms, o, mats);
   if (weapon && o.weapon !== 'bow') weapon.scale.set(1.4, 1.12, 1.4); // armas robustas
+  // segunda arma na mão esquerda (só visual: Dark Elf e Necromancer)
+  let offhand = null;
+  if (o.offhand && o.weapon !== 'bow') {
+    offhand = buildWeapon(pivot(arms[0], 0, -0.7, 0.05), arms, Object.assign({}, o, { shield: false }), mats);
+    if (offhand) offhand.scale.set(1.4, 1.12, 1.4);
+  }
   const S = (o.scale || 1) * CARTOON.humanoid;
   root.scale.setScalar(S);
-  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
+  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, offhand, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
 /** Humanoide com esqueleto e clipes (art/gltfModels.js) mais os enfeites procedurais que o modelo não tem. */
@@ -10077,9 +10192,16 @@ return { clearLog, log, setZoneText, toast };
 const { clearAllies, petSellable, sendPetToSell, spawnAlly, updateAllies } = (() => {
 // ---------- aliados (pet e invocações) ----------
 
+/** Mortos-vivos erguidos pelo Necromancer: visual e força do golpe (fração do dano do herói). */
+const UNDEAD = {
+  skeleton: { k: 0.55, o: { gltf: 'skeleton', skin: 0xd8e8d0, cloth: 0x2a3a30, armor: 0x3a4a40, head: 'skull', eye: 0x7affb0, weapon: 'sword', weaponGlow: 0x7affb0, thin: true, scale: 0.95 } },
+  deathknight: { k: 1.1, o: { gltf: 'skeleton', tintK: 0.6, skin: 0xe8d8d0, cloth: 0x5a0a14, armor: 0x2a1a22, trim: 0xff3a5a, trimGlow: true, head: 'skull', eye: 0xff3a5a, weapon: 'sword', weaponGlow: 0xff3a5a, shield: true, crown: false, scale: 1.2 } },
+};
 function spawnAlly(kind, x, z, dur) {
+  const U = UNDEAD[kind];
   const model = kind === 'pet'
     ? buildBeast({ fur: 0xe8883a, dark: 0x3a2a22, eye: 0x1a1a1a, tailColor: 0xfff0e0, bushy: true, scale: 0.62 })
+    : U ? buildHumanoid(U.o)
     : buildBeast({ fur: 0x5ae08a, dark: 0x2a6a4a, eye: 0xffffff, flame: false, scale: 1.1 });
   if (kind === 'spirit') model.mats.forEach((m) => { m.userData.baseEmissive = new THREE.Color(0x2aa05a); m.userData.baseEI = 0.5; m.emissive.copy(m.userData.baseEmissive); m.emissiveIntensity = 0.5; m.transparent = true; m.opacity = 0.85; });
   model.root.position.set(x, gy(x, z), z);
@@ -10112,7 +10234,7 @@ function updateAllies(dt) {
   const p = G.player;
   for (let i = G.allies.length - 1; i >= 0; i--) {
     const a = G.allies[i];
-    if (a.until < G.time) { emit(a.x, 0.6, a.z, { n: 30, color: 0x8affb0, speed: 3, life: 0.6, size: 1 }); removeAlly(a); G.allies.splice(i, 1); continue; }
+    if (a.until < G.time) { emit(a.x, 0.6, a.z, { n: 30, color: UNDEAD[a.kind] ? 0xd8e8d0 : 0x8affb0, speed: 3, life: 0.6, size: 1 }); removeAlly(a); G.allies.splice(i, 1); continue; }
     if (a.kind === 'pet' && a.away) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
@@ -10136,7 +10258,8 @@ function updateAllies(dt) {
         a.atkCd = 1;
         a.attackAnim = 0.001;
         face(a, a.target.x, a.target.z);
-        const k = a.kind === 'pet' ? 0.3 : 0.9;
+        const k = a.kind === 'pet' ? 0.3 : UNDEAD[a.kind] ? UNDEAD[a.kind].k : 0.9;
+        if (UNDEAD[a.kind]) slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), a.kind === 'deathknight' ? 0xff5a7a : 0xb0ffd0, { radius: 1.5, dur: 0.15 });
         if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
         hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
       }
@@ -10488,7 +10611,7 @@ function releaseMesh(pr) {
   meshPool[pr.arrow ? 'arrow' : 'orb'].push(pr.mesh);
 }
 
-/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?, spiral?} */
+/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, drain?, dmg?, src?, y?, spiral?} */
 function spawnProjectile(o) {
   const mesh = takeMesh(o.arrow ? 'arrow' : 'orb');
   if (o.arrow) {
@@ -10535,7 +10658,7 @@ function hitMonsters(pr) {
     const hr = PROJ_RADIUS + m.radius;
     if ((m.x - pr.x) ** 2 + (m.z - pr.z) ** 2 >= hr * hr) continue;
     pr.hit.add(m.id);
-    hitMonster(m, pr.mult, pr.skill, { slow: pr.slow });
+    hitMonster(m, pr.mult, pr.skill, { slow: pr.slow, drain: pr.drain });
     if (!pr.pierce) return true;
   }
   return false;
@@ -10955,9 +11078,9 @@ function autoTargetPoint(range, fx, fz) {
   if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
 }
-const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0 };
+const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff3a6a, nc: 0xb04aff };
 /** Habilidades que seguram o herói no lugar; as demais deixam andar devagar enquanto saem. */
-const HEAVY = { dash: 1, quake: 1, nuke: 1, blink: 1 };
+const HEAVY = { dash: 1, quake: 1, nuke: 1, blink: 1, eclipse: 1 };
 /** Faíscas na mão/arma do herói no instante do lançamento. */
 function castGlow(p, dx, dz, color, n) {
   emit(p.x + dx * 0.7, 1.3, p.z + dz * 0.7, { n: n || 10, color, speed: 2.5, life: 0.25, size: 0.9, grav: 0 });
@@ -10965,6 +11088,14 @@ function castGlow(p, dx, dz, color, n) {
 /** Recuo ou avanço curto do herói (ver updateShove em player.js). */
 function shove(p, dx, dz, dist, dur) {
   if (dist > 0.01) p.shove = { dx, dz, dist, t: 0, dur };
+}
+/** Aparição de um aliado: luz verde (espírito) ou chão que se abre (mortos-vivos). */
+function raiseFx(x, z, c, grave) {
+  emit(x, 0.5, z, { n: grave ? 30 : 50, color: c, speed: 3, up: 2, life: 0.8, size: 1.2 });
+  if (grave) { emit(x, 0.2, z, { n: 20, color: 0x3a2a24, speed: 4, up: 1.2, life: 0.6, size: 1 }); cracks(x, z, 1.4, 6, c, 0.8); }
+  pillar(x, z, 1, 6, c, 0.9, { grow: 0.6 });
+  spawnRing(x, z, 0.3, 2.4, c, 0.6);
+  flash(x, 1.5, z, c, 40, 0.5);
 }
 /**
  * Efeito de cada tipo de habilidade (campo `kind` em rules.js → SKILLS).
@@ -10977,9 +11108,12 @@ const EFFECTS = {
     p.attackAnim = 0.001;
     p.spin = { t: 0, dur: 0.3 };
     slash(p.x, p.z, p.rot, sk.radius * 0.95, 0xffe8c8, { wide: true, sweep: Math.PI * 2, dur: 0.3, y: 1 });
-    slash(p.x, p.z, p.rot + 1.2, sk.radius * 0.72, 0xff8a4a, { wide: true, sweep: Math.PI * 2, dur: 0.34, y: 0.65, op: 0.6 });
-    spawnRing(p.x, p.z, 0.5, sk.radius, 0xffe0c0, 0.3);
-    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: 0xffc080, speed: 3, dir: [-Math.sin(a), 0.2, Math.cos(a)], life: 0.3, size: 1, grav: 0 }); }
+    const c = sk.color || 0xff8a4a;
+    slash(p.x, p.z, p.rot + 1.2, sk.radius * 0.72, c, { wide: true, sweep: Math.PI * 2, dur: 0.34, y: 0.65, op: 0.6 });
+    // lâminas duplas: um segundo anel de corte, na altura da outra mão
+    if (G.ch.cls === 'de') slash(p.x, p.z, p.rot - 1.2, sk.radius * 0.86, 0xffd0e0, { wide: true, sweep: Math.PI * 2, dur: 0.3, y: 1.3, op: 0.7 });
+    spawnRing(p.x, p.z, 0.5, sk.radius, sk.color ? c : 0xffe0c0, 0.3);
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: sk.color || 0xffc080, speed: 3, dir: [-Math.sin(a), 0.2, Math.cos(a)], life: 0.3, size: 1, grav: 0 }); }
     monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.4 }));
     Sfx.swing(); shake(0.2);
     return true;
@@ -10990,17 +11124,25 @@ const EFFECTS = {
     let ex = p.x, ez = p.z;
     for (let i = 1; i <= steps; i++) { const nx = p.x + dx * i * 0.3, nz = p.z + dz * i * 0.3; if (!walkableR(G.L, nx, nz, 0.4)) break; ex = nx; ez = nz; if ((nx - tx) ** 2 + (nz - tz) ** 2 < 0.2) break; }
     emit(p.x, 0.2, p.z, { n: 14, color: 0xc8a070, speed: 3, up: 0.4, life: 0.45, size: 1.1, spread: 0.6 });
-    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.2, hit: new Set(), mult, id, color: 0xffb070, onEnd: () => {
-      slash(p.x, p.z, p.rot, 2.8, 0xffe0b0, { sweep: 0.5, dur: 0.2 });
-      emit(p.x + dx * 1.2, 1.1, p.z + dz * 1.2, { n: 16, color: 0xffd0a0, speed: 6, dir: [dx, 0.1, dz], life: 0.3, size: 0.9, grav: 0 });
-      flash(p.x + dx, 1.2, p.z + dz, 0xffa050, 30, 0.22);
+    const c = sk.color || 0xffb070;
+    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.2, hit: new Set(), mult, id, color: c, onEnd: () => {
+      slash(p.x, p.z, p.rot, 2.8, sk.color ? 0xffd0f0 : 0xffe0b0, { sweep: 0.5, dur: 0.2 });
+      emit(p.x + dx * 1.2, 1.1, p.z + dz * 1.2, { n: 16, color: sk.color || 0xffd0a0, speed: 6, dir: [dx, 0.1, dz], life: 0.3, size: 0.9, grav: 0 });
+      flash(p.x + dx, 1.2, p.z + dz, sk.color || 0xffa050, 30, 0.22);
+      // Passo Sombrio: explode em lâminas onde termina
+      if (sk.radius) {
+        slash(p.x, p.z, p.rot, sk.radius, c, { wide: true, sweep: Math.PI * 2, dur: 0.28, y: 0.9 });
+        spawnRing(p.x, p.z, 0.4, sk.radius, c, 0.35);
+        monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult * 0.6, id, { kb: 0.6 }));
+      }
     } };
     p.attackAnim = 0.001;
     Sfx.swing();
     return true;
   },
   buff(ctx) {
-    const { p, sk, id, col } = ctx;
+    const { p, sk, id } = ctx;
+    const col = sk.color || ctx.col;
     G.buffs = G.buffs.filter((b) => b.id !== id);
     G.buffs.push({ id, name: sk.name, until: G.time + sk.dur, stats: sk.buff });
     recalc();
@@ -11164,12 +11306,13 @@ const EFFECTS = {
   },
   pierce(ctx) {
     const { p, sk, id, dx, dz, mult } = ctx;
-    p.attackAnim = 0.001;
-    castGlow(p, dx, dz, 0x8affb0, 16);
+    const c = sk.color || 0x8affb0;
+    if (sk.color) p.castAnim = 0.001; else p.attackAnim = 0.001;
+    castGlow(p, dx, dz, c, 16);
     shove(p, -dx, -dz, 0.55, 0.16);
-    spawnRing(p.x + dx, p.z + dz, 0.3, 1.6, 0x8affb0, 0.25);
-    flash(p.x + dx, 1.3, p.z + dz, 0x8affb0, 25, 0.2);
-    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: 0x8affb0, size: 0.45, pierce: true, big: true, spiral: 0xd8ffe0 });
+    spawnRing(p.x + dx, p.z + dz, 0.3, 1.6, c, 0.25);
+    flash(p.x + dx, 1.3, p.z + dz, c, 25, 0.2);
+    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: c, size: 0.45, pierce: true, big: true, spiral: sk.color ? 0x9a4aff : 0xd8ffe0 });
     Sfx.tone(900, 0.12, 'sawtooth', 0.03, 0.5);
     return true;
   },
@@ -11188,13 +11331,113 @@ const EFFECTS = {
   },
   summon(ctx) {
     const { p, sk, dx, dz } = ctx;
-    const sx = p.x + dx * 1.5, sz = p.z + dz * 1.5;
-    spawnAlly('spirit', sx, sz, sk.dur);
+    const c = sk.color || 0x8affb0, n = sk.count || 1;
+    for (let i = 0; i < n; i++) {
+      // vários aliados saem lado a lado, à frente do herói
+      const off = (i - (n - 1) / 2) * 1.4;
+      const sx = p.x + dx * 1.5 + dz * off, sz = p.z + dz * 1.5 - dx * off;
+      raiseFx(sx, sz, c, !!sk.ally);
+      spawnAlly(sk.ally || 'spirit', sx, sz, sk.dur);
+    }
     p.castAnim = 0.001;
-    emit(sx, 0.5, sz, { n: 50, color: 0x8affb0, speed: 3, up: 2, life: 0.8, size: 1.2 });
-    pillar(sx, sz, 1, 6, 0x8affb0, 0.9, { grow: 0.6 });
-    spawnRing(sx, sz, 0.3, 2.4, 0x8affb0, 0.6);
-    flash(sx, 1.5, sz, 0x8affb0, 40, 0.5);
+    return true;
+  },
+  bladefan(ctx) {
+    const { p, sk, id, dx, dz, mult } = ctx;
+    p.attackAnim = 0.001;
+    castGlow(p, dx, dz, sk.color, 12);
+    slash(p.x + dx * 0.5, p.z + dz * 0.5, p.rot, 2.4, sk.color, { sweep: 1.6, dur: 0.2 });
+    const n = sk.blades + (G.ch.tier >= 1 ? 2 : 0), base = Math.atan2(dx, dz);
+    for (let k = 0; k < n; k++) {
+      const a = base + (k - (n - 1) / 2) * 0.2;
+      spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: Math.sin(a), dz: Math.cos(a), speed: 26, range: sk.range, mult, skill: id, color: sk.color, size: 0.3, pierce: true, spiral: 0x3a0a2a });
+    }
+    Sfx.swing(); Sfx.tone(820, 0.1, 'sawtooth', 0.025, 0.6);
+    return true;
+  },
+  whirl(ctx) {
+    const { p, sk, id, mult } = ctx;
+    const gap = 0.17, n = sk.hits;
+    p.attackAnim = 0.001;
+    p.spin = { t: 0, dur: gap * n, turns: n };
+    for (let k = 0; k < n; k++) G.delayed.push({ t: k * gap, fn: () => {
+      if (!p.alive) return;
+      slash(p.x, p.z, p.rot + k * 1.3, sk.radius * 0.95, k % 2 ? 0xffd0e0 : sk.color, { wide: true, sweep: Math.PI * 2, dur: 0.22, y: k % 2 ? 1.3 : 0.8, op: 0.8 });
+      spawnRing(p.x, p.z, 0.5, sk.radius, sk.color, 0.25);
+      emit(p.x, 0.9, p.z, { n: 14, color: 0xff2a4a, speed: 7, up: 0.3, life: 0.4, size: 0.9, grav: 0, spread: 0.6 });
+      monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.25 }));
+      Sfx.swing();
+    } });
+    shake(0.3);
+    return true;
+  },
+  eclipse(ctx) {
+    const { p, sk, id, mult } = ctx;
+    p.attackAnim = 0.001;
+    p.hop = { t: 0, dur: 0.3, h: 1.4 };
+    bubble(p.x, p.z, sk.radius * 0.35, 0x2a0a3a, 0.35, p);
+    G.delayed.push({ t: 0.28, fn: () => {
+      if (!p.alive) return;
+      const x = p.x, z = p.z;
+      for (let i = 0; i < 8; i++) slash(x, z, i * 0.8, sk.radius * (0.55 + (i % 3) * 0.2), i % 2 ? 0xffd0f0 : sk.color, { wide: true, sweep: Math.PI * 1.4, dur: 0.3 + i * 0.03, y: 0.5 + (i % 4) * 0.35, op: 0.85 });
+      shockRing(x, z, sk.radius * 1.2, sk.color, 0.45);
+      spawnRing(x, z, 0.5, sk.radius, 0xff2a6a, 0.5, { op: 0.9 });
+      shards(x, z, 1.2, sk.radius * 0.9, 16, 0xd0a0ff, 0.8, { h: 1.6, stagger: 0.2 });
+      pillar(x, z, 1.4, 8, sk.color, 0.6, { grow: 1.2 });
+      flash(x, 1.4, z, sk.color, 80, 0.5);
+      monstersIn(x, z, sk.radius).forEach((m) => hitMonster(m, mult, id, { slow: true, kb: 1 }));
+      // a fúria cresce: bônus curto de dano
+      G.buffs = G.buffs.filter((b) => b.id !== id);
+      G.buffs.push({ id, name: sk.name, until: G.time + sk.dur, stats: sk.buff });
+      recalc();
+      shake(0.9); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
+    } });
+    Sfx.swing();
+    return true;
+  },
+  drain(ctx) {
+    const { p, sk, id, dx, dz, mult } = ctx;
+    p.castAnim = 0.001;
+    castGlow(p, dx, dz, sk.color);
+    spawnProjectile({ from: 'p', x: p.x + dx * 0.8, z: p.z + dz * 0.8, dx, dz, speed: 22, range: sk.range + 2, mult, skill: id, color: sk.color, size: 0.5, spiral: 0x5a0a1a, drain: sk.drain });
+    Sfx.zap();
+    return true;
+  },
+  drainnova(ctx) {
+    const { p, sk, id, mult } = ctx;
+    p.castAnim = 0.001;
+    const c = sk.color;
+    spawnRing(p.x, p.z, 0.5, sk.radius, c, 0.5, { op: 0.9 });
+    shockRing(p.x, p.z, sk.radius * 1.1, 0xff3a5a, 0.45);
+    // almas: espirais que saem do herói e sobem
+    for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2; emit(p.x + Math.cos(a), 0.8, p.z + Math.sin(a), { n: 1, color: i % 3 ? c : 0xe8fff0, speed: sk.radius * 1.8, dir: [Math.cos(a), 0.25, Math.sin(a)], life: 0.6, size: 1.3, grav: -1.5, drag: 0.6 }); }
+    shards(p.x, p.z, 1.2, sk.radius * 0.9, 14, 0xe8e0c8, 0.8, { h: 1.3, stagger: 0.2 });
+    pillar(p.x, p.z, 1.1, 6, c, 0.6, { grow: 1 });
+    flash(p.x, 1.5, p.z, c, 55, 0.45);
+    monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.6, drain: sk.drain }));
+    shake(0.5); Sfx.noise(0.5, 0.1, 1400);
+    return true;
+  },
+  army(ctx) {
+    const { p, sk, id, tx, tz, mult } = ctx;
+    p.castAnim = 0.001;
+    spawnRing(tx, tz, sk.radius, sk.radius, sk.color, 0.5, { hold: true, op: 0.5 });
+    cracks(tx, tz, sk.radius, 12, 0x7affb0, 1.1);
+    G.delayed.push({ t: 0.4, fn: () => {
+      emit(tx, 0.3, tz, { n: 70, color: 0x3a2a24, speed: 8, up: 1.4, life: 0.8, size: 1.4, spread: sk.radius * 0.6, jitter: true });
+      shards(tx, tz, 0.8, sk.radius, 18, 0xe8e0c8, 0.9, { h: 1.8, stagger: 0.25 });
+      pillar(tx, tz, sk.radius * 0.3, 7, sk.color, 0.6, { grow: 1 });
+      shockRing(tx, tz, sk.radius * 1.2, 0x7affb0, 0.45);
+      flash(tx, 1.4, tz, sk.color, 70, 0.5);
+      monstersIn(tx, tz, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 1, fromX: tx, fromZ: tz, drain: 10 }));
+      for (let i = 0; i < sk.count; i++) {
+        const a = (i / sk.count) * Math.PI * 2 + 0.4, ax = tx + Math.cos(a) * 1.8, az = tz + Math.sin(a) * 1.8;
+        if (!walkableR(G.L, ax, az, 0.3)) continue;
+        raiseFx(ax, az, 0x7affb0, true);
+        spawnAlly(sk.ally, ax, az, sk.dur);
+      }
+      shake(0.9); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
+    } });
     return true;
   },
 };
@@ -11308,6 +11551,20 @@ const SKILL_ART = {
   aura: ['#4a4a12', '#121204', '<g stroke="#ffe88a" stroke-width="2.5" stroke-linecap="round">' + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return '<path d="M' + (32 + Math.cos(a) * 15).toFixed(1) + ' ' + (32 + Math.sin(a) * 15).toFixed(1) + ' L' + (32 + Math.cos(a) * (i % 2 ? 24 : 28)).toFixed(1) + ' ' + (32 + Math.sin(a) * (i % 2 ? 24 : 28)).toFixed(1) + '"/>'; }).join('') + '</g><circle cx="32" cy="32" r="11" fill="#fff4b0"/><path d="M32 24 Q38 30 32 40 Q26 30 32 24Z" fill="#6ab04a"/>'],
   spirit: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".5"/><path d="M32 58 L32 30" stroke="#6b4a2a" stroke-width="5"/><path d="M32 40 L22 30 M32 36 L42 26" stroke="#6b4a2a" stroke-width="3"/><circle cx="32" cy="20" r="14" fill="#3aa05a"/><circle cx="20" cy="28" r="9" fill="#4ab86a"/><circle cx="44" cy="26" r="9" fill="#4ab86a"/><g fill="#d8ffb0"><circle cx="14" cy="12" r="2"/><circle cx="50" cy="10" r="1.6"/><circle cx="54" cy="44" r="2"/><circle cx="10" cy="46" r="1.4"/></g>'],
   rain: ['#20304a', '#060a12', '<path d="M4 10 Q32 0 60 10" stroke="#8aa8d0" stroke-width="2" fill="none" opacity=".6"/>' + [8, 20, 32, 44, 56].map((x, i) => '<g transform="translate(' + x + ' ' + (14 + (i % 2) * 10) + ')"><path d="M0 0 L0 24" stroke="#e8d8b0" stroke-width="2"/><path class="bl" d="M0 30 L-4 22 L4 22Z"/><path d="M0 0 L-3 -4 M0 0 L3 -4" stroke="#6ab04a" stroke-width="2"/></g>').join('')],
+  // Dark Elf: lâminas duplas, sangue e sombra
+  bladedance: ['#5a1030', '#14030c', '<g fill="none" stroke="#ff6a9a" stroke-width="3" stroke-linecap="round" opacity=".85"><path d="M10 30 A22 22 0 0 1 46 12"/><path d="M54 34 A22 22 0 0 1 18 52"/></g><g transform="rotate(-40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g>'],
+  bladefan: ['#4a0e3a', '#10030c', '<g transform="rotate(-50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(-25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(0 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><circle cx="32" cy="54" r="5" fill="#ff4a7a"/>'],
+  fury: ['#6a0a1a', '#180206', '<circle cx="32" cy="34" r="22" fill="url(#glow)" opacity=".6"/><path d="M14 56 Q18 40 26 44 Q22 28 32 18 Q34 30 40 32 Q40 22 48 14 Q50 34 52 44 Q52 54 46 58Z" fill="#ff2a4a" opacity=".85"/><path d="M22 56 Q26 46 30 48 Q30 40 36 36 Q38 46 44 48 Q46 54 42 58Z" fill="#ffb0c8"/><g fill="#fff"><path d="M24 30 L30 34 L24 36Z"/><path d="M40 30 L34 34 L40 36Z"/></g>'],
+  shadowstep: ['#2a0e4a', '#08030e', '<g fill="#8a4aff" opacity=".35"><path d="M8 50 L20 22 L26 22 L16 50Z"/><path d="M18 52 L30 24 L36 24 L26 52Z" opacity=".7"/></g><g transform="rotate(35 42 32)"><path class="bl" d="M40 4 L44 4 L45 38 L39 38Z"/><rect class="au" x="33" y="37" width="18" height="4" rx="2"/></g><g stroke="#d0a0ff" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M4 30 L18 30"/><path d="M6 40 L20 40"/></g>'],
+  bloodstorm: ['#5a0614', '#140104', '<g fill="none" stroke-linecap="round"><path d="M32 32 m-6 0 a6 6 0 1 1 12 0 a12 12 0 1 1 -24 0 a18 18 0 1 1 36 0 a22 22 0 1 1 -44 0" stroke="#ff2a4a" stroke-width="3.5"/></g><g transform="rotate(-60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g fill="#ff4a6a"><circle cx="12" cy="14" r="2"/><circle cx="52" cy="50" r="2.4"/><circle cx="50" cy="12" r="1.6"/></g>'],
+  eclipse: ['#2a0a3a', '#06020a', '<circle cx="32" cy="32" r="26" fill="url(#glow)" opacity=".55"/><circle cx="32" cy="32" r="15" fill="#0a0410"/><circle cx="32" cy="32" r="15" fill="none" stroke="#ff4a8a" stroke-width="2.5"/><g transform="rotate(0 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(45 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(90 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(135 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(180 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(225 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(270 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(315 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g>'],
+  // Necromancer: sangue, ossos e almas
+  drain: ['#4a0612', '#120104', '<path d="M32 8 Q48 30 46 42 Q44 56 32 56 Q20 56 18 42 Q16 30 32 8Z" fill="#c8102a" stroke="#ff5a6a" stroke-width="2"/><path d="M26 40 Q26 48 32 50" stroke="#ffb0b8" stroke-width="3" fill="none" stroke-linecap="round"/><g stroke="#b04aff" stroke-width="2" fill="none" opacity=".8"><path d="M6 20 Q14 28 10 38"/><path d="M58 20 Q50 28 54 38"/></g>'],
+  bonespear: ['#2a2a22', '#0a0a06', '<g transform="rotate(45 32 32)"><rect x="29.5" y="14" width="5" height="46" rx="2.5" fill="#e8e0c8" stroke="#3a3428"/><path d="M32 0 L39 16 L32 13 L25 16Z" fill="#f4eed8" stroke="#3a3428"/><g stroke="#a89c80" stroke-width="1.5"><path d="M29 26 L35 26"/><path d="M29 36 L35 36"/><path d="M29 46 L35 46"/></g></g><g fill="#9a4aff" opacity=".6"><circle cx="12" cy="52" r="4"/><circle cx="20" cy="46" r="2"/></g>'],
+  raise: ['#0e2a1c', '#030a06', '<circle cx="32" cy="30" r="22" fill="url(#glow)" opacity=".45"/><path d="M20 30 Q20 12 32 12 Q44 12 44 30 L44 36 L38 36 L38 42 L26 42 L26 36 L20 36Z" fill="#e8e0c8" stroke="#2a2418" stroke-width="1.5"/><circle cx="27" cy="28" r="4.5" fill="#0a1a10"/><circle cx="37" cy="28" r="4.5" fill="#0a1a10"/><circle cx="27" cy="28" r="2" fill="#7affb0"/><circle cx="37" cy="28" r="2" fill="#7affb0"/><path d="M30 42 L30 46 M34 42 L34 46" stroke="#2a2418" stroke-width="1.5"/><path d="M6 60 L14 50 L22 56 L32 48 L42 56 L50 50 L58 60Z" fill="#3a2a1c"/>'],
+  bloodpact: ['#3a0610', '#0e0104', '<circle cx="32" cy="32" r="20" fill="none" stroke="#ff2a3a" stroke-width="2"/><path d="M32 12 L37 26 L52 26 L40 35 L45 50 L32 41 L19 50 L24 35 L12 26 L27 26Z" fill="none" stroke="#ff5a6a" stroke-width="2"/><path d="M32 22 Q40 32 38 38 Q36 44 32 44 Q28 44 26 38 Q24 32 32 22Z" fill="#c8102a"/>'],
+  soulburst: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".6"/><g transform="rotate(0 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(72 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(144 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(216 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(288 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><circle cx="32" cy="32" r="6" fill="#e8fff0"/>'],
+  army: ['#3a0612', '#0a0104', '<path d="M2 62 L10 50 L20 56 L32 46 L44 56 L54 50 L62 62Z" fill="#2a1a14"/><g transform="translate(16 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(48 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(32 28) scale(1.2)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g>'],
 };
 const _skillIcon = {};
 function skillIconURI(id) {
@@ -15049,7 +15306,7 @@ function paneChar() {
   h += '<h4>Combate</h4><dl class="kv">' +
     '<dt>Combat Points</dt><dd class="cpv">' + fmt(G.cp || 0) + '</dd>' +
     '<dt>HP / MP / AG</dt><dd>' + fmt(st.maxHp) + ' / ' + fmt(st.maxMp) + ' / ' + fmt(st.maxAg) + '</dd>' +
-    '<dt>' + (ch.cls === 'dw' ? 'Dano mágico' : 'Dano') + '</dt><dd>' + fmt(st.minDmg) + ' ~ ' + fmt(st.maxDmg) + '</dd>' +
+    '<dt>' + (ch.cls === 'dw' || C.magic ? 'Dano mágico' : 'Dano') + '</dt><dd>' + fmt(st.minDmg) + ' ~ ' + fmt(st.maxDmg) + '</dd>' +
     '<dt>Defesa</dt><dd>' + fmt(st.def) + '</dd>' +
     '<dt>Velocidade de ataque</dt><dd>' + st.atkSpeed + ' (' + st.attackInterval.toFixed(2) + 's)</dd>' +
     '<dt>Crítico / Excelente</dt><dd>' + st.critPct + '% / ' + st.excPct + '%</dd>' +
@@ -15170,7 +15427,7 @@ function itemDetail(it, where) {
   else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
-    h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.CLASSES[it.cls].tiers[0] : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
+    h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.itemUsers(it).join(', ') : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
     h += '<div class="ln cpl">CP do item: <b class="num">' + fmt(R.itemCP(it)) + '</b>';
     if (where === 'bag' && classOk(it)) {
       const cur = G.ch.equip[it.slot], d = cpWith(it) - cpOf(G.ch);
@@ -15191,7 +15448,7 @@ function itemDetail(it, where) {
       const have = req.stat === 'level' ? G.ch.level : G.ch.stats[req.stat];
       h += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
     }
-    if (it.cls && it.cls !== G.ch.cls) h += '<div class="ln req bad">Exclusivo de ' + R.CLASSES[it.cls].tiers[0] + ' — venda ou negocie no mercado.</div>';
+    if (it.cls && !classOk(it)) h += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
     h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
   }
   h += '<div class="row" style="margin-top:8px">';
@@ -15224,7 +15481,7 @@ function paneInv() {
     const it = ch.equip[s];
     const sel = UI.sel && UI.sel.where === 'eq' && UI.sel.slot === s;
     if (it) h += cellHtml(it, ' data-act="seleq" data-slot="' + s + '"', sel).replace('class="cell', 'class="cell eq');
-    else h += '<div class="eq" data-slot="' + s + '"><em>' + R.SLOT_LABEL[s] + '</em><img class="sil" src="' + iconURI(s === 'weapon' ? (ch.cls === 'dw' ? 'staff' : ch.cls === 'elf' ? 'bow' : 'sword') : s, '#6a6078') + '" alt=""></div>';
+    else h += '<div class="eq" data-slot="' + s + '"><em>' + R.SLOT_LABEL[s] + '</em><img class="sil" src="' + iconURI(s === 'weapon' ? R.CLASSES[ch.cls].weapon : s, '#6a6078') + '" alt=""></div>';
   });
   const cats = { all: 'Todos', mine: 'Minha classe', other: 'Outras', mat: 'Materiais' };
   const cnt = { all: ch.bag.length, mine: 0, other: 0, mat: 0 };
@@ -15573,11 +15830,18 @@ function playerLook(ch) {
     c.lerp(new THREE.Color(R.RARITY[it.rarity].color), 0.18 + it.tier * 0.03);
     return c.getHex();
   };
-  const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34 }[ch.cls];
+  const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34, de: [0x3a2a44, 0x4a1a2a, 0x2a1a3a][ch.tier] || 0x3a2a44, nc: [0x1a1a22, 0x24222c, 0x3a0e16][ch.tier] || 0x1a1a22 }[ch.cls];
   const o = {
     dk: { gltf: 'knight', skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', eye: 0xff5a3a, weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
     dw: { gltf: 'mage', skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
     elf: { gltf: 'rogueFem', skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
+    // Dark Elf: modelo feminino sem capuz (Rogue), pele cinza-lilás, uma espada em cada mão (só a direita é o item equipado)
+    de: { gltf: 'rogueFem', tintK: 0.7, skinK: 0.3, skin: 0xb49ccc, hoodColor: [0x2a1a3a, 0x5a0e22, 0x1e0a30][ch.tier] || 0x2a1a3a, cloth: [0x1e1428, 0x3a0a18, 0x160a22][ch.tier] || 0x1e1428, head: 'hair', hair: 0xeae4f4, eye: 0xff4a7a, weapon: 'blade', offhand: true, thin: true, cape: true, capeColor: [0x2a0e2a, 0x4a0a14, 0x1a0628][ch.tier] || 0x2a0e2a },
+    // Necromancer: manto negro e chapéu; como Death Knight e Bloody Knight veste armadura com elmo e chifres.
+    // Sempre um cajado em cada mão (só o da direita é o item equipado).
+    nc: ch.tier >= 1
+      ? { gltf: 'knight', tintK: 0.75, skinK: 0.4, skin: 0xc8c0b8, cloth: ch.tier >= 2 ? 0x3a060c : 0x121018, head: 'helm', horns: true, eye: ch.tier >= 2 ? 0xff3a4a : 0x7affb0, weapon: 'rod', offhand: true, bulky: true, weaponGlow: ch.tier >= 2 ? 0xff3a4a : 0x7affb0, cape: true, capeColor: ch.tier >= 2 ? 0x4a0a10 : 0x1a0a14 }
+      : { gltf: 'mage', tintK: 0.8, skinK: 0.4, skin: 0xc8c0b8, cloth: 0x16161c, head: 'hood', eye: 0x7affb0, weapon: 'rod', offhand: true, robe: true, weaponGlow: 0x7affb0, cape: true, capeColor: 0x0e0e12 },
   }[ch.cls];
   o.armor = tint(eq.armor || eq.helm, armorBase);
   o.trim = rc(eq.gloves || eq.boots, ch.tier >= 1 ? 0xffd24a : 0xc9a24a);
@@ -15585,6 +15849,7 @@ function playerLook(ch) {
     o.weaponColor = tint(eq.weapon, 0xc8d0dc);
     if (R.RARITY[eq.weapon.rarity].order >= 2) o.weaponGlow = rc(eq.weapon);
     if (ch.cls === 'dw') o.weaponGlow = rc(eq.weapon, 0x7aa8ff);
+    if (ch.cls === 'nc' && R.RARITY[eq.weapon.rarity].order < 2) o.weaponGlow = ch.tier >= 2 ? 0xff3a4a : 0x7affb0;
   }
   o.pauldron = ch.tier >= 1;
   o.trimGlow = ch.tier >= 2;
@@ -15595,7 +15860,7 @@ function buildCharacterModel(ch) {
   const m = buildHumanoid(playerLook(ch));
   const w = ch.equip.wings;
   if (w) attachWings(m, parseInt(R.RARITY[w.rarity].color.slice(1), 16), 0.75 + w.tier * 0.08);
-  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0 }[ch.cls], 0.8);
+  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], 0.8);
   m.orb = m.weapon ? m.weapon.children.find((c) => c.userData.orb) || null : null;
   applyRefine(m, ch.equip);
   return m;
@@ -15608,6 +15873,7 @@ function applyRefine(m, eq) {
   const fx = [];
   const w = eq.weapon;
   if (w && m.weapon) fx.push(attachRefineFx(m.weapon, w.plus || 0));
+  if (w && m.offhand) fx.push(attachRefineFx(m.offhand, w.plus || 0)); // a cópia da mão esquerda brilha junto
   const ap = Math.max(0, ...['helm', 'armor', 'gloves', 'boots', 'wings'].map((s) => (eq[s] && eq[s].plus) || 0));
   const ak = refineK(ap), top = Math.max(ap, (w && w.plus) || 0);
   // o halo no chão aparece com qualquer peça +15; sem armadura refinada, só ele e poucas faíscas
@@ -15757,7 +16023,7 @@ function updateTarget(p, dt) {
 function engageMonster(p, m, dt) {
   if (m.dead) { p.target = null; return; }
   const d = Math.hypot(m.x - p.x, m.z - p.z);
-  const needLos = G.ch.cls !== 'dk';
+  const needLos = G.ch.cls !== 'dk' && G.ch.cls !== 'de';
   if (d <= attackRange(m) && (!needLos || lineClear(G.L, p.x, p.z, m.x, m.z, 0))) {
     p.path = null;
     face(p, m.x, m.z);
@@ -15819,7 +16085,7 @@ function skillPose(p, dt) {
   if (p.spin) {
     const s = p.spin; s.t += dt;
     const k = Math.min(1, s.t / s.dur);
-    spin = (1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.dir || 1);
+    spin = (s.turns > 1 ? k : 1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.turns || 1) * (s.dir || 1);
     if (k >= 1) p.spin = null;
   }
   if (p.pop) {
@@ -15880,7 +16146,7 @@ const BAG_SIZE = CONFIG.bag.size;
 function cpOf(ch) { return R.combatPower(R.deriveStats(ch, [])); }
 function fmtCP(v) { return v >= 1e6 ? (v / 1e6).toFixed(1).replace('.0', '') + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v); }
 /** Pode ser usado por esta classe (independe de requisito de atributo). */
-function classOk(it) { return !!(it && it.slot && (!it.cls || it.cls === G.ch.cls)); }
+function classOk(it) { return R.canUse(G.ch.cls, it); }
 function reqOk(it) {
   const req = R.itemReq(it);
   if (!req) return true;
@@ -15899,7 +16165,7 @@ function bagCat(it) { return !it.slot ? 'mat' : classOk(it) ? 'mine' : 'other'; 
 function equipFromBag(idx, quiet) {
   const ch = G.ch, it = ch.bag[idx];
   if (!it || !it.slot) return false;
-  if (!classOk(it)) { if (!quiet) log('Este item é exclusivo de ' + R.CLASSES[it.cls].tiers[0] + '.', 'warn'); return false; }
+  if (!classOk(it)) { if (!quiet) log('Este item é exclusivo de ' + R.itemUsers(it).join(', ') + '.', 'warn'); return false; }
   const old = ch.equip[it.slot];
   ch.bag.splice(idx, 1);
   if (old) ch.bag.push(old);
@@ -15992,10 +16258,10 @@ const { attackRange, basicAttack, breakBarrel, hitMonster, hurtPlayer, killMonst
 // ---------- combate ----------
 
 /** Alcance do ataque básico por classe (m), somado ao raio do alvo. */
-const RANGE = { dk: 2.3, dw: 13, elf: 15 };
+const RANGE = { dk: 2.3, dw: 13, elf: 15, de: 2.4, nc: 12 };
 function attackRange(m) { return RANGE[G.ch.cls] + (m ? m.radius : 0); }
 
-/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ}. Devolve o dano. */
+/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain}. Devolve o dano. */
 function hitMonster(m, mult, skillId, opts) {
   if (!m || m.dead) return 0;
   opts = opts || {};
@@ -16009,6 +16275,12 @@ function hitMonster(m, mult, skillId, opts) {
   const h = m.model.height;
   floatText(m.x, h + 0.3, m.z, fmt(r.dmg), r.type === 'exc' ? 'exc' : r.type === 'crit' ? 'crit' : '');
   if (G.st.lifeSteal) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
+  // drenagem das habilidades (Necromancer): cura uma fração do dano e o sangue voa até o herói
+  if (opts.drain && G.player.alive) {
+    G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * opts.drain / 100);
+    const p = G.player, dx = p.x - m.x, dz = p.z - m.z, dd = Math.hypot(dx, dz) || 1;
+    emit(m.x, h * 0.6, m.z, { n: 6, color: 0xff2a3a, speed: Math.min(14, dd * 2.4), dir: [dx / dd, 0.25, dz / dd], life: 0.4, size: 0.8, grav: 0, drag: 0 });
+  }
   if (opts.slow) m.slowUntil = G.time + 2.5;
   if (opts.kb) {
     const dx = m.x - (opts.fromX != null ? opts.fromX : G.player.x), dz = m.z - (opts.fromZ != null ? opts.fromZ : G.player.z), d = Math.hypot(dx, dz) || 1;
@@ -16253,6 +16525,28 @@ function basicAttack(m) {
     p.slashFlip = !p.slashFlip;
     slashArc(p.x, p.z, ang, wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xfff0d0, { radius: 2.3, flip: p.slashFlip });
     Sfx.swing();
+  } else if (cls === 'de') {
+    // duas espadas: dois cortes rápidos (um de cada mão) no alvo e em quem estiver colado nele
+    const ang = Math.atan2(m.x - p.x, m.z - p.z);
+    const wpn = G.ch.equip && G.ch.equip.weapon;
+    const col = wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xffd0e0;
+    const cut = (flip) => {
+      if (!p.alive) return;
+      for (const o of monstersIn(p.x, p.z, 2.7)) {
+        let da = Math.atan2(o.x - p.x, o.z - p.z) - ang;
+        while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+        if (o === m || Math.abs(da) < 0.7) hitMonster(o, o === m ? 0.62 : 0.4, null);
+      }
+      slashArc(p.x, p.z, ang, flip ? 0xff5a8a : col, { radius: 2.2, flip });
+      Sfx.swing();
+    };
+    cut(false);
+    G.delayed.push({ t: Math.min(0.16, G.st.attackInterval * 0.4), fn: () => cut(true) });
+  } else if (cls === 'nc') {
+    // orbe sombrio que drena um pouco de vida
+    const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
+    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: (m.x - p.x) / d, dz: (m.z - p.z) / d, speed: 20, range: 15, mult: 0.85, color: 0xb04aff, size: 0.35, spiral: 0xff3a5a, drain: 8 });
+    Sfx.zap();
   } else if (cls === 'dw') {
     const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
     spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: (m.x - p.x) / d, dz: (m.z - p.z) / d, speed: 22, range: 16, mult: 0.85, color: 0xa8c8ff, size: 0.35 });
@@ -16345,7 +16639,7 @@ function titlePreview(ch) {
 function previewChar(cls) {
   const ch = R.newCharacter('Prévia', cls);
   const w = R.makeEquip(R.hash32('preview', cls), 0, 'comum', cls, 0, 'normal');
-  w.slot = 'weapon'; w.cls = cls; w.tier = 0; ch.equip.weapon = w;
+  w.slot = 'weapon'; w.cls = R.gearCls(cls, 'weapon'); w.tier = 0; ch.equip.weapon = w;
   return ch;
 }
 function renderTitle() {
@@ -16388,7 +16682,7 @@ function createChar() {
   if (S.chars.length >= 5) { err.textContent = 'Limite de 5 personagens neste navegador.'; return; }
   const ch = R.newCharacter(name, UI.pickedClass);
   const starter = R.makeEquip(R.hash32('starter', name), 0, 'comum', ch.cls, 0, 'normal');
-  starter.slot = 'weapon'; starter.tier = 0; starter.plus = 0; starter.cls = ch.cls; starter.luck = false; starter.addOpt = 0; starter.exc = [];
+  starter.slot = 'weapon'; starter.tier = 0; starter.plus = 0; starter.cls = R.gearCls(ch.cls, 'weapon'); starter.luck = false; starter.addOpt = 0; starter.exc = [];
   ch.equip.weapon = starter;
   ch.bag.push({ kind: 'potion', id: 'hp', qty: 10, uid: 'php' }, { kind: 'potion', id: 'mp', qty: 6, uid: 'pmp' });
   S.chars.push(ch);

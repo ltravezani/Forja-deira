@@ -17,15 +17,26 @@ import { stylize } from './stylize.js';
 const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', rogueFem: 'Rogue', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
 /** Arma na mão direita: nó do próprio personagem ou arquivo avulso (props). */
 const WEAPON = {
-  knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword' },
-  mage: { staff: '2H_Staff', sword: '1H_Wand' },
-  rogue: { bow: '2H_Crossbow', sword: 'Knife' },
-  rogueFem: { bow: '2H_Crossbow', sword: 'Knife' },
+  knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword', rod: 'Mage:2H_Staff' },
+  mage: { staff: '2H_Staff', sword: '1H_Wand', rod: '2H_Staff' },
+  rogue: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
+  rogueFem: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
   barbarian: { club: '1H_Axe', sword: '1H_Axe' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
 };
 const SHIELD = { knight: 'Badge_Shield', skeleton: 'Skeleton_Shield_Small_A' };
+/**
+ * Segunda arma na mão esquerda (visual `offhand`: Dark Elf e Necromancer). "Modelo:Nó"
+ * pega a peça de outro personagem (todos têm o mesmo encaixe de mão); sem entrada aqui,
+ * a arma da mão direita é copiada para a esquerda.
+ */
+const OFFHAND = {
+  knight: { sword: '1H_Sword_Offhand' },
+  rogue: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
+  rogueFem: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
+  barbarian: { club: '1H_Axe_Offhand', sword: '1H_Axe_Offhand' },
+};
 /** Clipes: locomoção, golpes (alternados), disparo, magia e queda. */
 const CLIP = { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', chop: '1H_Melee_Attack_Chop', slice: '1H_Melee_Attack_Slice_Diagonal', shoot: '2H_Ranged_Shoot', spell: 'Spellcast_Shoot', cast: 'Spellcast_Raise', death: 'Death_A' };
 /** Altura do modelo procedural (unidades do corpo); o glTF é escalado para ela, um pouco menor (cabeça e ombros largos pesam mais na tela). */
@@ -92,13 +103,15 @@ function tint(hex, k) {
  * textura antes de tingir: com ele um manto roxo vira vermelho de verdade (só
  * multiplicar escureceria para marrom).
  */
-function ownMat(map, color, emissive, ei, mats, desat) {
+function ownMat(map, color, emissive, ei, mats, desat, hood) {
   const m = new THREE.MeshToonMaterial({ map, color });
-  const U = { uDesat: { value: desat || 0 } };
+  const U = { uDesat: { value: desat || 0 }, uHood: { value: new THREE.Color(hood == null ? 0 : hood) }, uHoodOn: { value: hood == null ? 0 : 1 } };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uDesat = U.uDesat;
+    sh.uniforms.uHood = U.uHood;
+    sh.uniforms.uHoodOn = U.uHoodOn;
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uDesat;')
+      .replace('#include <common>', '#include <common>\nuniform float uDesat;\nuniform vec3 uHood;\nuniform float uHoodOn;')
       .replace('#include <map_fragment>', DESAT_MAP);
   };
   stylize(m, { rim: 0.3 });
@@ -111,6 +124,9 @@ function ownMat(map, color, emissive, ei, mats, desat) {
 const DESAT_MAP = `#ifdef USE_MAP
     vec4 sampledDiffuseColor = texture2D( map, vMapUv );
     float mapLum = dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+    // capuz: os texels verdes da cabeça viram a cor pedida (o rosto continua com a pele)
+    float greenish = sampledDiffuseColor.g - max( sampledDiffuseColor.r, sampledDiffuseColor.b );
+    if ( uHoodOn > 0.5 && greenish > 0.03 ) sampledDiffuseColor.rgb = uHood * ( 0.6 + mapLum * 1.6 );
     sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, vec3( mapLum * 1.35 ), uDesat );
     diffuseColor *= sampledDiffuseColor;
   #endif`;
@@ -179,7 +195,7 @@ export function buildGltfHumanoid(o, cartoon) {
   const k = o.tintK != null ? o.tintK : 0.42, sk = o.skinK != null ? o.skinK : skel ? 0.25 : 0.12;
   const M = {
     body: ownMat(map, tint(o.armor || o.cloth, k), 0, 0, mats, k * 0.9),
-    skin: ownMat(map, tint(o.skin, sk), 0, 0, mats, sk * 0.9),
+    skin: ownMat(map, tint(o.skin, sk), 0, 0, mats, sk * 0.9, o.hoodColor),
     cape: ownMat(map, tint(o.capeColor || o.cloth, 0.55), 0, 0, mats, 0.5),
     weapon: ownMat(map, tint(o.weaponColor, 0.35), o.weaponGlow || 0, o.weaponGlow ? 0.45 : 0, mats),
   };
@@ -188,8 +204,9 @@ export function buildGltfHumanoid(o, cartoon) {
   const showHat = key === 'knight' ? o.head === 'helm' : key === 'mage' ? o.head === 'hood' : key === 'barbarian' ? !!o.horns : !o.crown;
   const showCape = skel || !!(o.cape || o.bulky || o.crown || o.robe);
   const wantW = WEAPON[key] && WEAPON[key][o.weapon], wantS = o.shield && SHIELD[key];
+  const wantO = o.offhand && OFFHAND[key] ? OFFHAND[key][o.weapon] : null;
   const drop = [];
-  let weapon = null;
+  let weapon = null, offhand = null;
   scene.traverse((c) => {
     if (!c.isMesh) return;
     c.castShadow = true; c.receiveShadow = true;
@@ -198,6 +215,7 @@ export function buildGltfHumanoid(o, cartoon) {
       const role = roleOf(c.name, key);
       if (c.name === wantW) { c.material = M.weapon; weapon = c; }
       else if (c.name === wantS) c.material = M.weapon;
+      else if (c.name === wantO) { c.material = M.weapon; offhand = c; }
       else if (role === 'hat' && showHat) c.material = M.hat;
       else if (role === 'cape' && showCape) c.material = M.cape;
       else drop.push(c);
@@ -213,7 +231,9 @@ export function buildGltfHumanoid(o, cartoon) {
   // armas avulsas (pacote de esqueletos) vão para os encaixes das mãos
   const hand = (side) => find(scene, 'handslot' + side);
   const prop = (name, side) => {
-    const P = LIB.props[name];
+    // "Modelo:Nó" = peça emprestada de outro personagem (mantém a pose relativa ao encaixe)
+    const [from, node] = name.indexOf(':') > 0 ? name.split(':') : [null, name];
+    const P = from ? LIB.chars[from] && find(LIB.chars[from], node) : LIB.props[name];
     if (!P) return null;
     const g = P.clone();
     g.traverse((c) => { if (c.isMesh) { c.material = M.weapon; c.castShadow = true; } });
@@ -223,10 +243,14 @@ export function buildGltfHumanoid(o, cartoon) {
   };
   if (wantW && !weapon) weapon = prop(wantW, 'r');
   if (wantS && !find(scene, wantS)) prop(wantS, 'l');
+  if (o.offhand && !offhand) {
+    if (wantO) offhand = prop(wantO, 'l');
+    else if (weapon && hand('l')) { offhand = weapon.clone(); hand('l').add(offhand); }
+  }
   // orbe no topo do cajado (o jogador anima o tamanho dele)
-  if (weapon && o.weapon === 'staff') {
+  const addOrb = (w) => {
     const b = new THREE.Box3();
-    weapon.traverse((c) => { if (c.isMesh) { c.geometry.computeBoundingBox(); b.union(c.geometry.boundingBox); } });
+    w.traverse((c) => { if (c.isMesh) { c.geometry.computeBoundingBox(); b.union(c.geometry.boundingBox); } });
     const orb = new THREE.Group();
     orb.userData.orb = true;
     orb.position.set((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2);
@@ -234,8 +258,12 @@ export function buildGltfHumanoid(o, cartoon) {
     s.scale.setScalar((b.max.y - b.min.y) * 0.3);
     orb.add(s);
     orb.scale.setScalar(0.3);
-    weapon.add(orb);
-  }
+    w.add(orb);
+  };
+  // rod: cajado de verdade em qualquer modelo (Necromancer e suas evoluções de armadura)
+  const orbs = o.weapon === 'staff' || o.weapon === 'rod';
+  if (weapon && orbs) addOrb(weapon);
+  if (offhand && orbs) addOrb(offhand);
   const mixer = new THREE.AnimationMixer(scene);
   const acts = {};
   for (const [id, name] of Object.entries(CLIP)) {
@@ -250,9 +278,9 @@ export function buildGltfHumanoid(o, cartoon) {
   const m = {
     root, scene, kind: 'gltf', mixer, acts, mats,
     body: scene, torso: anchor(find(scene, 'chest'), scene), head: anchor(find(scene, 'head'), scene),
-    weapon, cape: null, armorMat: M.body, trimMat: M.body, height: BODY_H * S,
+    weapon, offhand, cape: null, armorMat: M.body, trimMat: M.body, height: BODY_H * S,
     anim: { cur: null, over: null, prev: 0, dead: false, lastT: null, flip: false },
-    atk: o.weapon === 'bow' ? 'shoot' : key === 'mage' && o.weapon === 'staff' ? 'spell' : 'melee',
+    atk: o.weapon === 'bow' ? 'shoot' : o.weapon === 'rod' || (key === 'mage' && o.weapon === 'staff') ? 'spell' : 'melee',
   };
   // idle começa num ponto aleatório: um grupo de monstros não respira em uníssono
   play(m, acts.idle, 0);

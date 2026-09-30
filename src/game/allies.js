@@ -1,5 +1,5 @@
 // ---------- aliados (pet e invocações) ----------
-import { animateModel, buildBeast, disposeModel } from '../art/models.js';
+import { animateModel, buildBeast, buildHumanoid, disposeModel } from '../art/models.js';
 import { G } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
@@ -12,9 +12,16 @@ import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 import { gy } from '../world/grid.js';
 
+/** Mortos-vivos erguidos pelo Necromancer: visual e força do golpe (fração do dano do herói). */
+const UNDEAD = {
+  skeleton: { k: 0.55, o: { gltf: 'skeleton', skin: 0xd8e8d0, cloth: 0x2a3a30, armor: 0x3a4a40, head: 'skull', eye: 0x7affb0, weapon: 'sword', weaponGlow: 0x7affb0, thin: true, scale: 0.95 } },
+  deathknight: { k: 1.1, o: { gltf: 'skeleton', tintK: 0.6, skin: 0xe8d8d0, cloth: 0x5a0a14, armor: 0x2a1a22, trim: 0xff3a5a, trimGlow: true, head: 'skull', eye: 0xff3a5a, weapon: 'sword', weaponGlow: 0xff3a5a, shield: true, crown: false, scale: 1.2 } },
+};
 export function spawnAlly(kind, x, z, dur) {
+  const U = UNDEAD[kind];
   const model = kind === 'pet'
     ? buildBeast({ fur: 0xe8883a, dark: 0x3a2a22, eye: 0x1a1a1a, tailColor: 0xfff0e0, bushy: true, scale: 0.62 })
+    : U ? buildHumanoid(U.o)
     : buildBeast({ fur: 0x5ae08a, dark: 0x2a6a4a, eye: 0xffffff, flame: false, scale: 1.1 });
   if (kind === 'spirit') model.mats.forEach((m) => { m.userData.baseEmissive = new THREE.Color(0x2aa05a); m.userData.baseEI = 0.5; m.emissive.copy(m.userData.baseEmissive); m.emissiveIntensity = 0.5; m.transparent = true; m.opacity = 0.85; });
   model.root.position.set(x, gy(x, z), z);
@@ -47,7 +54,7 @@ export function updateAllies(dt) {
   const p = G.player;
   for (let i = G.allies.length - 1; i >= 0; i--) {
     const a = G.allies[i];
-    if (a.until < G.time) { emit(a.x, 0.6, a.z, { n: 30, color: 0x8affb0, speed: 3, life: 0.6, size: 1 }); removeAlly(a); G.allies.splice(i, 1); continue; }
+    if (a.until < G.time) { emit(a.x, 0.6, a.z, { n: 30, color: UNDEAD[a.kind] ? 0xd8e8d0 : 0x8affb0, speed: 3, life: 0.6, size: 1 }); removeAlly(a); G.allies.splice(i, 1); continue; }
     if (a.kind === 'pet' && a.away) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
@@ -71,7 +78,8 @@ export function updateAllies(dt) {
         a.atkCd = 1;
         a.attackAnim = 0.001;
         face(a, a.target.x, a.target.z);
-        const k = a.kind === 'pet' ? 0.3 : 0.9;
+        const k = a.kind === 'pet' ? 0.3 : UNDEAD[a.kind] ? UNDEAD[a.kind].k : 0.9;
+        if (UNDEAD[a.kind]) slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), a.kind === 'deathknight' ? 0xff5a7a : 0xb0ffd0, { radius: 1.5, dur: 0.15 });
         if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
         hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
       }

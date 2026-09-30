@@ -12,7 +12,7 @@ const D = (kind) => texDetail(kind);
 const CARTOON = { humanoid: 1.2, spider: 1.1, beast: 1.15, floater: 1.12, bat: 1.15, golem: 1.08 };
 
 function buildWeapon(hand, arms, o, M) {
-  const wk = o.weapon || 'none';
+  const wk = o.weapon === 'blade' ? 'sword' : o.weapon === 'rod' ? 'staff' : o.weapon || 'none';
   const wc = o.weaponColor || 0xb8c0cc, wg = o.weaponGlow || 0;
   const steel = toon(wc, wg, wg ? 0.7 : 0, { metal: 0.85, rough: 0.32, env: 1.1 });
   const leather = toon(0x3a2418, 0, 0, { rough: 0.9, map: D('leather') });
@@ -288,9 +288,15 @@ export function buildHumanoid(o) {
   const hand = pivot(arms[1], 0, -0.7, 0.05);
   const weapon = buildWeapon(hand, arms, o, mats);
   if (weapon && o.weapon !== 'bow') weapon.scale.set(1.4, 1.12, 1.4); // armas robustas
+  // segunda arma na mão esquerda (só visual: Dark Elf e Necromancer)
+  let offhand = null;
+  if (o.offhand && o.weapon !== 'bow') {
+    offhand = buildWeapon(pivot(arms[0], 0, -0.7, 0.05), arms, Object.assign({}, o, { shield: false }), mats);
+    if (offhand) offhand.scale.set(1.4, 1.12, 1.4);
+  }
   const S = (o.scale || 1) * CARTOON.humanoid;
   root.scale.setScalar(S);
-  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
+  return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, offhand, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
 /** Humanoide com esqueleto e clipes (art/gltfModels.js) mais os enfeites procedurais que o modelo não tem. */

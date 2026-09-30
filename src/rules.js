@@ -142,13 +142,68 @@
       color: '#4fc27a',
       blurb: 'Dano contínuo à distância, cura e invocação. Agilidade é tudo.',
     },
+    // gear: de qual classe vêm os itens que ela usa (arma e armaduras); sem gear, os da própria classe
+    de: {
+      id: 'de', tiers: ['Dark Elf', 'Bloody Elf', 'Shadowblade'],
+      role: 'Lâminas duplas e fúria', weapon: 'sword', mainStat: 'str', dual: true,
+      gear: { weapon: 'dk', armor: 'elf' },
+      base: { str: 24, agi: 26, vit: 20, ene: 12 }, ppl: 5,
+      konst: { maxHp: 40, maxMp: 8 },
+      rel: [
+        ['maxHp', 1.5, 'level'], ['maxHp', 2.5, 'vit'],
+        ['maxMp', 1, 'level'], ['maxMp', 1, 'ene'],
+        ['maxAg', 0.6, 'ene'], ['maxAg', 0.3, 'vit'], ['maxAg', 0.3, 'agi'], ['maxAg', 0.15, 'str'],
+        ['def', 1 / 5, 'agi'], ['atkSpeed', 1 / 12, 'agi'],
+        ['minDmg', 1 / 8, 'str'], ['minDmg', 1 / 12, 'agi'],
+        ['maxDmg', 1 / 5, 'str'], ['maxDmg', 1 / 8, 'agi'],
+        ['skillMul', 0.001, 'ene'],
+      ],
+      auto: { str: 0.4, agi: 0.3, vit: 0.25, ene: 0.05 },
+      color: '#c23a6a',
+      blurb: 'Duas espadas, golpes em área e fúria. Força gera dano, Agilidade dá velocidade. Usa as espadas do Dark Knight e as armaduras da Fairy Elf.',
+    },
+    nc: {
+      id: 'nc', tiers: ['Necromancer', 'Death Knight', 'Bloody Knight'],
+      role: 'Roubo de vida e mortos-vivos', weapon: 'staff', mainStat: 'ene', dual: true, magic: true,
+      gear: { weapon: 'dw', armor: 'dw' },
+      base: { str: 20, agi: 16, vit: 22, ene: 26 }, ppl: 5,
+      // roubo de vida próprio da classe (soma com itens e árvore)
+      konst: { maxHp: 55, maxMp: 16, minWiz: 3, maxWiz: 5 },
+      passive: { lifeSteal: 2 },
+      rel: [
+        ['maxHp', 1.5, 'level'], ['maxHp', 2.5, 'vit'],
+        ['maxMp', 1.5, 'level'], ['maxMp', 1.5, 'ene'],
+        ['maxAg', 0.3, 'ene'], ['maxAg', 0.3, 'vit'], ['maxAg', 0.3, 'agi'], ['maxAg', 0.2, 'str'],
+        ['def', 1 / 4, 'agi'], ['atkSpeed', 1 / 20, 'agi'],
+        ['minDmg', 1 / 8, 'str'], ['maxDmg', 1 / 4, 'str'],
+        ['minWiz', 1 / 10, 'ene'], ['maxWiz', 1 / 4.5, 'ene'],
+      ],
+      auto: { str: 0.05, agi: 0.15, vit: 0.3, ene: 0.5 },
+      color: '#8a4ad0',
+      blurb: 'Drena a vida dos inimigos e ergue os mortos. Energia gera dano mágico. Usa os cajados e armaduras do Dark Wizard.',
+    },
   };
+  /** Classe dos itens que `cls` equipa no slot (a própria, ou a indicada em gear). */
+  function gearCls(cls, slot) {
+    const g = CLASSES[cls] && CLASSES[cls].gear;
+    return g ? (slot === 'weapon' ? g.weapon : g.armor) : cls;
+  }
+  /** Esta classe pode equipar o item? (anéis, colares e asas servem a todas) */
+  function canUse(cls, it) {
+    return !!(it && it.slot && (!it.cls || gearCls(cls, it.slot) === it.cls));
+  }
+  /** Nomes das classes que usam o item (para a descrição). */
+  function itemUsers(it) {
+    return Object.keys(CLASSES).filter((c) => canUse(c, it)).map((c) => CLASSES[c].tiers[0]);
+  }
 
-  /** Elenco completo planejado. Apenas 3 jogáveis no MVP (Fase 1). */
+  /** Elenco completo planejado. Só as classes com entrada em CLASSES são jogáveis. */
   const ROSTER = [
     { id: 'dk', name: 'Dark Knight', phase: 1 },
     { id: 'dw', name: 'Dark Wizard', phase: 1 },
     { id: 'elf', name: 'Fairy Elf', phase: 1 },
+    { id: 'de', name: 'Dark Elf', phase: 1 },
+    { id: 'nc', name: 'Necromancer', phase: 1 },
     { id: 'sum', name: 'Summoner', phase: 2, role: 'Maldições e invocações' },
     { id: 'mg', name: 'Magic Gladiator', phase: 2, role: 'Híbrido espada + magia' },
     { id: 'dl', name: 'Dark Lord', phase: 2, role: 'Comando, corvo e montaria' },
@@ -194,6 +249,20 @@
     aura: { cls: 'elf', name: 'Aura Élfica', lvl: 60, tier: 0, mp: 30, ag: 10, cd: 20, kind: 'buff', buff: { dmgPct: 15, defPct: 20 }, dur: 30, desc: '+15% dano e +20% defesa por 30s.' },
     spirit: { cls: 'elf', name: 'Espírito da Floresta', lvl: 150, tier: 1, mp: 60, ag: 20, cd: 25, kind: 'summon', dur: 30, desc: 'Invoca um guardião por 30s.' },
     rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 400, tier: 2, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
+    // Dark Elf: lâminas duplas, área e fúria
+    bladedance: { cls: 'de', name: 'Dança das Lâminas', lvl: 1, tier: 0, mp: 6, ag: 6, cd: 0.5, kind: 'spin', mult: 1.35, radius: 3.6, color: 0xff4a7a, desc: 'Gira as duas espadas e corta todos ao redor.' },
+    bladefan: { cls: 'de', name: 'Leque de Lâminas', lvl: 25, tier: 0, mp: 12, ag: 8, cd: 1, kind: 'bladefan', mult: 1.25, blades: 5, range: 11, color: 0xff5a8a, desc: 'Arremessa lâminas sombrias em leque que atravessam os inimigos.' },
+    fury: { cls: 'de', name: 'Fúria Sombria', lvl: 50, tier: 0, mp: 30, ag: 20, cd: 22, kind: 'buff', buff: { dmgPct: 25, atkSpeed: 25 }, dur: 30, color: 0xff2a4a, desc: '+25% dano e +25 de velocidade de ataque por 30s.' },
+    shadowstep: { cls: 'de', name: 'Passo Sombrio', lvl: 80, tier: 0, mp: 16, ag: 12, cd: 1.6, kind: 'dash', mult: 2.1, range: 8, radius: 3, color: 0xc84aff, desc: 'Avança pelas sombras cortando o caminho e explode em lâminas no fim.' },
+    bloodstorm: { cls: 'de', name: 'Tempestade Sangrenta', lvl: 150, tier: 1, mp: 30, ag: 18, cd: 3, kind: 'whirl', mult: 1.05, hits: 5, radius: 5, color: 0xff2a4a, desc: 'Redemoinho de lâminas: 5 cortes seguidos em área enquanto você anda.' },
+    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 400, tier: 2, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
+    // Necromancer: roubo de vida, dano e necromancia
+    drain: { cls: 'nc', name: 'Toque Vampírico', lvl: 1, tier: 0, mp: 4, ag: 1, cd: 0.36, kind: 'drain', mult: 1.1, drain: 30, range: 14, color: 0xff3a5a, desc: 'Projétil de sangue: cura 30% do dano causado.' },
+    bonespear: { cls: 'nc', name: 'Lança de Ossos', lvl: 20, tier: 0, mp: 10, ag: 5, cd: 0.9, kind: 'pierce', mult: 1.9, range: 18, color: 0xe8e0c8, desc: 'Lança de osso que atravessa todos os inimigos.' },
+    raise: { cls: 'nc', name: 'Erguer Esqueleto', lvl: 40, tier: 0, mp: 35, ag: 10, cd: 12, kind: 'summon', ally: 'skeleton', count: 2, dur: 30, color: 0x7affb0, desc: 'Ergue 2 esqueletos guerreiros por 30s.' },
+    bloodpact: { cls: 'nc', name: 'Pacto de Sangue', lvl: 70, tier: 0, mp: 40, ag: 15, cd: 22, kind: 'buff', buff: { lifeSteal: 6, dmgPct: 12 }, dur: 30, color: 0xff2a3a, desc: '+6% de roubo de vida e +12% dano por 30s.' },
+    soulburst: { cls: 'nc', name: 'Explosão de Almas', lvl: 150, tier: 1, mp: 40, ag: 14, cd: 2.4, kind: 'drainnova', mult: 2.9, radius: 7, drain: 15, color: 0x7affb0, desc: 'Onda de almas ao redor; cura 15% do dano causado.' },
+    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 400, tier: 2, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
   };
   const skillsFor = (cls) => Object.keys(SKILLS).filter((k) => SKILLS[k].cls === cls);
 
@@ -215,6 +284,16 @@
       { name: 'Caçadora', nodes: [['dmgPct', 3, 'Mira'], ['skill:triple', 8, 'Leque Mortal'], ['critPct', 1, 'Ponto Fraco'], ['skill:rain', 8, 'Tempestade']] },
       { name: 'Guardiã', nodes: [['hpPct', 4, 'Casca de Carvalho'], ['defPct', 3, 'Folhagem'], ['healPct', 8, 'Toque Vital'], ['lifeSteal', 0.5, 'Seiva']] },
       { name: 'Vento', nodes: [['atkSpeedPct', 2, 'Corda Tensa'], ['moveSpeedPct', 2, 'Passo Leve'], ['skill:pierce', 8, 'Flecha do Vento'], ['mfPct', 4, 'Olho da Fortuna']] },
+    ],
+    de: [
+      { name: 'Carnificina', nodes: [['dmgPct', 3, 'Fio Duplo'], ['skill:bladedance', 8, 'Dança Voraz'], ['critPct', 1, 'Corte Certeiro'], ['skill:eclipse', 8, 'Noite Eterna']] },
+      { name: 'Sombra', nodes: [['moveSpeedPct', 2, 'Pés de Sombra'], ['skill:shadowstep', 8, 'Rastro Negro'], ['defPct', 3, 'Couro Élfico'], ['hpPct', 4, 'Resistência']] },
+      { name: 'Fúria', nodes: [['atkSpeedPct', 2, 'Frenesi'], ['skill:bloodstorm', 8, 'Olho da Tempestade'], ['lifeSteal', 0.5, 'Sede'], ['skill:bladefan', 8, 'Leque Mortal']] },
+    ],
+    nc: [
+      { name: 'Sangue', nodes: [['lifeSteal', 0.5, 'Presas'], ['skill:drain', 8, 'Sanguessuga'], ['hpPct', 4, 'Coração Frio'], ['skill:soulburst', 8, 'Colheita']] },
+      { name: 'Ossos', nodes: [['dmgPct', 3, 'Medula'], ['skill:bonespear', 8, 'Lança Serrilhada'], ['critPct', 1, 'Fratura'], ['defPct', 3, 'Couraça de Ossos']] },
+      { name: 'Túmulo', nodes: [['cdPct', -2, 'Ritual Rápido'], ['costPct', -3, 'Pacto Barato'], ['mpPct', 4, 'Poço Sombrio'], ['skill:army', 8, 'Legião']] },
     ],
   };
   const treeNodeId = (cls, b, n) => cls + '.' + b + '.' + n;
@@ -433,7 +512,7 @@
     }
     const ord = RARITY[rarity].order;
     const it = { uid: hex(hash32(seed, 'uid')) + hex(seed).slice(2), slot, cls: slot === 'ring' || slot === 'pendant' || slot === 'wings' ? null : cls, tier, rarity, plus: 0, luck: false, skill: false, addOpt: 0, exc: [], anc: null, legend: null, seed: hex(seed) };
-    if (slot === 'weapon' || slot === 'armor' || slot === 'helm' || slot === 'gloves' || slot === 'boots') it.cls = cls;
+    if (slot === 'weapon' || slot === 'armor' || slot === 'helm' || slot === 'gloves' || slot === 'boots') it.cls = gearCls(cls, slot);
     // +nível inicial
     const pr = rnd();
     it.plus = pr < 0.55 ? 0 : pr < 0.8 ? 1 : pr < 0.93 ? 2 : pr < 0.985 ? 3 : 4;
@@ -599,6 +678,8 @@
       const st = itemStats(it);
       for (const k in st) add(k, st[k]);
     }
+    // passivo da classe
+    if (C.passive) for (const k in C.passive) add(k, C.passive[k]);
     // árvore
     TREES[ch.cls].forEach((br, bi) => br.nodes.forEach((n, ni) => {
       const r = (ch.tree || {})[treeNodeId(ch.cls, bi, ni)] || 0;
@@ -645,7 +726,7 @@
       skillMul: 1 + d.skillMul,
     };
     for (const k in b) if (k.indexOf('skillBoost:') === 0) out.boosts[k.slice(11)] = b[k];
-    if (C.id === 'dw') {
+    if (C.id === 'dw' || C.magic) {
       const rise = 1 + (b.wizRise || 0) / 100;
       out.minDmg = Math.floor((d.minWiz + (b.wizMin || 0)) * rise);
       out.maxDmg = Math.floor((d.maxWiz + (b.wizMax || 0)) * rise);
@@ -761,7 +842,7 @@
   return {
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
-    CLASSES, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
+    CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,

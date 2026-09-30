@@ -25,7 +25,7 @@ function releaseMesh(pr) {
   meshPool[pr.arrow ? 'arrow' : 'orb'].push(pr.mesh);
 }
 
-/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, dmg?, src?, y?, spiral?} */
+/** o: {from:'p'|'m', x, z, dx, dz, speed, range, color, arrow?, size?, mult?, skill?, pierce?, slow?, drain?, dmg?, src?, y?, spiral?} */
 export function spawnProjectile(o) {
   const mesh = takeMesh(o.arrow ? 'arrow' : 'orb');
   if (o.arrow) {
@@ -72,7 +72,7 @@ function hitMonsters(pr) {
     const hr = PROJ_RADIUS + m.radius;
     if ((m.x - pr.x) ** 2 + (m.z - pr.z) ** 2 >= hr * hr) continue;
     pr.hit.add(m.id);
-    hitMonster(m, pr.mult, pr.skill, { slow: pr.slow });
+    hitMonster(m, pr.mult, pr.skill, { slow: pr.slow, drain: pr.drain });
     if (!pr.pierce) return true;
   }
   return false;

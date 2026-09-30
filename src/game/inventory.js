@@ -16,7 +16,7 @@ export const BAG_SIZE = CONFIG.bag.size;
 export function cpOf(ch) { return R.combatPower(R.deriveStats(ch, [])); }
 export function fmtCP(v) { return v >= 1e6 ? (v / 1e6).toFixed(1).replace('.0', '') + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v); }
 /** Pode ser usado por esta classe (independe de requisito de atributo). */
-export function classOk(it) { return !!(it && it.slot && (!it.cls || it.cls === G.ch.cls)); }
+export function classOk(it) { return R.canUse(G.ch.cls, it); }
 export function reqOk(it) {
   const req = R.itemReq(it);
   if (!req) return true;
@@ -35,7 +35,7 @@ export function bagCat(it) { return !it.slot ? 'mat' : classOk(it) ? 'mine' : 'o
 export function equipFromBag(idx, quiet) {
   const ch = G.ch, it = ch.bag[idx];
   if (!it || !it.slot) return false;
-  if (!classOk(it)) { if (!quiet) log('Este item é exclusivo de ' + R.CLASSES[it.cls].tiers[0] + '.', 'warn'); return false; }
+  if (!classOk(it)) { if (!quiet) log('Este item é exclusivo de ' + R.itemUsers(it).join(', ') + '.', 'warn'); return false; }
   const old = ch.equip[it.slot];
   ch.bag.splice(idx, 1);
   if (old) ch.bag.push(old);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { R } from './helpers.mjs';
 
-const CLASSES = ['dk', 'dw', 'elf'];
+const CLASSES = ['dk', 'dw', 'elf', 'de', 'nc'];
 
 test('atributos derivados são finitos para todas as classes e níveis', () => {
   for (const cls of CLASSES) {
@@ -107,3 +107,41 @@ test('sellValue: metade do valor, por unidade em pilhas', () => {
   const p = { kind: 'potion', id: 'hp', qty: 10 };
   assert.equal(R.sellValue(p), R.sellValue(p, 1) * 10);
 });
+
+test('Dark Elf e Necromancer usam os itens das classes indicadas', () => {
+  const it = (slot, cls) => ({ slot, cls });
+  assert.ok(R.canUse('de', it('weapon', 'dk')));
+  assert.ok(!R.canUse('de', it('weapon', 'elf')));
+  assert.ok(R.canUse('de', it('armor', 'elf')) && R.canUse('de', it('boots', 'elf')));
+  assert.ok(!R.canUse('de', it('armor', 'dk')));
+  assert.ok(R.canUse('nc', it('weapon', 'dw')) && R.canUse('nc', it('helm', 'dw')));
+  assert.ok(!R.canUse('nc', it('weapon', 'dk')));
+  assert.ok(R.canUse('nc', it('ring', null)));
+  // as classes antigas continuam só com os próprios itens
+  assert.ok(R.canUse('dk', it('weapon', 'dk')) && !R.canUse('dk', it('armor', 'elf')));
+  assert.deepEqual(R.itemUsers(it('weapon', 'dk')), ['Dark Knight', 'Dark Elf']);
+  // drops favorecidos pela classe nova saem com a classe do item (nunca 'de'/'nc')
+  for (let i = 0; i < 400; i++) {
+    for (const c of ['de', 'nc']) {
+      const e = R.makeEquip(R.hash32('nova', c, i), 60, null, c, 0, 'normal');
+      assert.ok(e.cls == null || ['dk', 'dw', 'elf'].includes(e.cls), c + ': ' + e.cls);
+      assert.ok(R.itemName(e));
+    }
+  }
+});
+
+test('classes novas: 3 evoluções, habilidades e árvore completas', () => {
+  for (const c of ['de', 'nc']) {
+    assert.equal(R.CLASSES[c].tiers.length, 3);
+    const sk = R.skillsFor(c);
+    assert.ok(sk.length >= 6, c);
+    assert.ok(sk.some((id) => R.SKILLS[id].lvl === 1));
+    assert.ok(sk.some((id) => R.SKILLS[id].tier === 1) && sk.some((id) => R.SKILLS[id].tier === 2));
+    for (const br of R.TREES[c]) for (const n of br.nodes) if (n[0].indexOf('skill:') === 0) assert.equal(R.SKILLS[n[0].slice(6)].cls, c);
+  }
+  // Necromancer tem dano mágico e roubo de vida próprio
+  const ch = R.newCharacter('N', 'nc');
+  const st = R.deriveStats(ch, []);
+  assert.ok(st.lifeSteal > 0 && st.maxDmg > 0);
+});
+
