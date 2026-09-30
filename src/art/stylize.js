@@ -1,20 +1,20 @@
 // =============================================================================
-// Estilo cartoon unificado: todo material sólido do jogo (heróis, NPCs,
-// monstros, chão, paredes e adereços) passa por aqui, para que o mundo e os
-// personagens tenham a mesma luz em faixas, o mesmo brilho de borda e o mesmo
-// reflexo "pintado" nos metais. O contorno preto vem de um passe de tela
+// Estilo unificado: todo material sólido do jogo (heróis, NPCs, monstros,
+// chão, paredes e adereços) passa por aqui, para que o mundo e os
+// personagens tenham a mesma rampa de luz suave, o mesmo brilho de borda e o
+// mesmo reflexo nos metais. O contorno preto vem de um passe de tela
 // (engine/renderer.js), então vale igualmente para tudo que grava profundidade.
 // =============================================================================
 
 let _grad = null;
-/** Rampa de luz em faixas (sombra, meio-tom, luz, realce), filtro "nearest". */
+/** Rampa de luz (sombra → realce) com filtro linear: sombreado suave, sem faixas duras. */
 export function toonGradient() {
   if (_grad) return _grad;
   const v = [78, 128, 180, 222, 244];
   const data = new Uint8Array(v.length * 4);
   v.forEach((g, i) => data.set([g, g, g, 255], i * 4));
   _grad = new THREE.DataTexture(data, v.length, 1, THREE.RGBAFormat);
-  _grad.minFilter = _grad.magFilter = THREE.NearestFilter;
+  _grad.minFilter = _grad.magFilter = THREE.LinearFilter;
   _grad.generateMipmaps = false;
   _grad.needsUpdate = true;
   return _grad;
@@ -40,7 +40,7 @@ const RIM_CHUNK = `
   #if NUM_DIR_LIGHTS > 0
   {
     // quanto o fragmento recebe do sol: luz difusa direta ÷ (cor × luz do sol).
-    // Já inclui a sombra projetada e a faixa do toon; luzes pontuais somam e "acendem" a área.
+    // Já inclui a sombra projetada e a rampa de luz; luzes pontuais somam e "acendem" a área.
     vec3 sRef = diffuseColor.rgb * RECIPROCAL_PI * directionalLights[ 0 ].color;
     float sLit = dot( reflectedLight.directDiffuse, vec3( 1.0 ) ) / max( dot( sRef, vec3( 1.0 ) ), 1e-4 );
     float sShade = ( 1.0 - smoothstep( 0.12, 0.62, sLit ) ) * uShadowStrength;
@@ -52,13 +52,13 @@ const RIM_CHUNK = `
   {
     vec3 sV = normalize( vViewPosition );
     float sNV = 1.0 - clamp( dot( normal, sV ), 0.0, 1.0 );
-    // borda iluminada: faixa dura, como em animação desenhada
-    float sRim = smoothstep( 0.62, 0.7, sNV ) * uRim;
+    // borda iluminada suave (sem recorte duro)
+    float sRim = smoothstep( 0.45, 1.0, sNV ) * uRim * 0.8;
     outgoingLight += diffuseColor.rgb * uRimColor * sRim;
     #if NUM_DIR_LIGHTS > 0
-      // reflexo pintado (metais): mancha de luz recortada em vez de especular físico
+      // reflexo dos metais: realce suave em volta do ponto de luz
       vec3 sH = normalize( directionalLights[ 0 ].direction + sV );
-      float sSpec = smoothstep( 0.972, 0.98, dot( normal, sH ) ) * uSpec;
+      float sSpec = pow( smoothstep( 0.9, 1.0, dot( normal, sH ) ), 2.0 ) * uSpec * 0.6;
       outgoingLight += directionalLights[ 0 ].color * sSpec * ( 0.06 + diffuseColor.rgb * 0.5 );
     #endif
   }

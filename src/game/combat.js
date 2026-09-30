@@ -7,7 +7,7 @@ import { Sfx } from '../engine/audio.js';
 import { impactStar, shockRing, slashArc } from '../engine/combatfx.js';
 import { emit, spawnRing } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
-import { impactFlash, shake, world } from '../engine/renderer.js';
+import { shake, world } from '../engine/renderer.js';
 import { hitStop } from './feel.js';
 import { autoEquipOn, potionCount } from './inventory.js';
 import { dropLoot } from './loot.js';
@@ -52,10 +52,7 @@ export function hitMonster(m, mult, skillId, opts) {
   const dd = Math.hypot(fx - m.x, fz - m.z) || 1, off = Math.min(m.radius, dd * 0.5);
   const big = r.type !== 'normal';
   impactStar(m.x + (fx - m.x) / dd * off, h * 0.6, m.z + (fz - m.z) / dd * off, r.type === 'exc' ? 0x7affa0 : big ? 0xffd060 : 0xfff0d0, big ? 1.9 : 1.1);
-  if (big) {
-    shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
-    if (CONFIG.feel.hitStop > 0) impactFlash(r.type === 'exc' ? 1 : 0.7);
-  }
+  if (big) shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
   Sfx.hit();
   if (m.hp <= 0) killMonster(m);
   return r.dmg;
