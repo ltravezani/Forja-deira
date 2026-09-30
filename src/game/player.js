@@ -53,9 +53,9 @@ function playerLook(ch) {
   };
   const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34 }[ch.cls];
   const o = {
-    dk: { skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', eye: 0xff5a3a, weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
-    dw: { skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
-    elf: { skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
+    dk: { gltf: 'knight', skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', eye: 0xff5a3a, weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
+    dw: { gltf: 'mage', skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
+    elf: { gltf: 'rogue', skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
   }[ch.cls];
   o.armor = tint(eq.armor || eq.helm, armorBase);
   o.trim = rc(eq.gloves || eq.boots, ch.tier >= 1 ? 0xffd24a : 0xc9a24a);
@@ -118,7 +118,10 @@ export function newPlayer() {
 // ---------- atualização por quadro ----------
 export function updatePlayer(dt) {
   const p = G.player;
-  if (!p.alive) return;
+  if (!p.alive) {
+    if (p.model && p.model.dead) animateModel(p.model, { t: G.time, dt, dead: true }); // queda do modelo animado
+    return;
+  }
   if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) { p.x = G.L.start.x * TILE; p.z = G.L.start.z * TILE; p.path = null; }
   p.atkCd -= dt;
   p.moving = false;
