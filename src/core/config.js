@@ -33,6 +33,8 @@ export const CONFIG = {
     ink: 0.16,              // cor do contorno = cor da cena × ink (tinta escura colorida, não preto puro)
     edge0: 0.012, edge1: 0.05, // faixa do laplaciano relativo de profundidade que vira traço
     lineWidth: 1.1,         // px (× densidade de pixels)
+    normalEdge: 0.09,       // 1 − cos do ângulo entre normais vizinhas a partir do qual uma quina vira traço (~25°)
+    silhouetteWidth: 1.9,   // px: raio das amostras de silhueta (degraus grandes de profundidade)
     bloom: 0.6,             // intensidade do brilho (partes acima do limiar: fogo, lava, cristais, magia)
     bloomThreshold: 1.5,    // brilho linear (antes do tone mapping) a partir do qual algo "acende"
     vignette: 0.38,         // escurecimento das bordas da tela (0 = sem vinheta)

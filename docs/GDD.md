@@ -285,5 +285,6 @@ Roteiro em fases (capturas antes/depois com `python3 tools/shots.py --tag <nome>
 | Fase | Data | O que mudou |
 |---|---|---|
 | 1. Sombras coloridas e brilho | 30/09/2026 | Uniforms compartilhados `STYLE_U` em `stylize.js`: as áreas pouco iluminadas pelo sol ganham o tom do bioma (`BIOMES[x].shadow`: azul na cidade, roxo nas cavernas e ruínas, vinho no Abismo), normalizado para não escurecer. Brilhos sólidos (`glowMat` com opacidade ≥ 0,8) saem em HDR (`CONFIG.style.glowCore`) e acendem no bloom; feixes de loot Ancestral/Lendário também. Opção "Brilho (bloom)" em Opções → Gráficos (segue a qualidade até ser escolhida; desligado sem alvo HalfFloat) |
+| 2. Contorno de anime | 30/09/2026 | No mesmo passe final: normais reconstruídas da profundidade (quatro quadrantes em volta do pixel) traçam quinas de paredes, degraus, blocos e canteiros (`CONFIG.style.normalEdge`, ~25°); silhuetas com amostras num raio maior (`silhouetteWidth`, 1,9 px) ficam mais grossas. Chão plano e superfícies curvas lisas não geram traço. Custo: 9 leituras extras de profundidade, sem passe novo. "Contorno cartoon" continua desligando tudo |
 
 A antiga opção de carregar arte de um cliente externo foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).

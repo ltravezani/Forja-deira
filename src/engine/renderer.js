@@ -113,6 +113,7 @@ const postMat = new THREE.ShaderMaterial({
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
+    uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
   },
   vertexShader: FS_VERT,
@@ -121,8 +122,11 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
     uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
+    uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+    // posição em espaço de visão reconstruída da profundidade
+    vec3 vpos(vec2 uv) { vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).x * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
     void main() {
       vec4 c = texture2D(tColor, vUv);
       if (uOutline > 0.5) {
@@ -132,7 +136,19 @@ const postMat = new THREE.ShaderMaterial({
         float d = lin(vUv - vec2(0.0, o.y)), u = lin(vUv + vec2(0.0, o.y));
         // laplaciano relativo: rampas (chão inclinado na tela) somem, degraus e silhuetas ficam
         float lap = (abs(l + r - 2.0 * z) + abs(u + d - 2.0 * z)) / z;
-        float e = smoothstep(uEdge.x, uEdge.y, lap) * (1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d)))));
+        float e = smoothstep(uEdge.x, uEdge.y, lap);
+        // quinas e dobras: normais dos quatro quadrantes em volta do pixel (reconstruídas da
+        // profundidade, sem passe extra). Num plano são iguais; numa quina, divergem.
+        vec3 pc = vpos(vUv), pl = vpos(vUv - vec2(o.x, 0.0)) - pc, pr = vpos(vUv + vec2(o.x, 0.0)) - pc;
+        vec3 pd = vpos(vUv - vec2(0.0, o.y)) - pc, pu = vpos(vUv + vec2(0.0, o.y)) - pc;
+        vec3 n1 = normalize(cross(pr, pu)), n2 = normalize(cross(pu, pl)), n3 = normalize(cross(pl, pd)), n4 = normalize(cross(pd, pr));
+        float nd = 1.0 - min(min(dot(n1, n3), dot(n2, n4)), min(dot(n1, n2), dot(n3, n4)));
+        e = max(e, smoothstep(uNormalEdge, uNormalEdge * 2.2, nd) * 0.75);
+        // silhueta mais grossa: do lado de trás de um degrau grande de profundidade, amostra num raio maior
+        vec2 w = o * uSilWidth;
+        float zn = min(min(lin(vUv - vec2(w.x, 0.0)), lin(vUv + vec2(w.x, 0.0))), min(lin(vUv - vec2(0.0, w.y)), lin(vUv + vec2(0.0, w.y))));
+        e = max(e, smoothstep(0.06, 0.12, (z - zn) / z));
+        e *= 1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d))));
         c.rgb = mix(c.rgb, c.rgb * uInk, e);
       }
       // brilho: soma das duas escalas (halo curto e halo largo), por cima do traço
@@ -220,6 +236,7 @@ function resizePost() {
   postMat.uniforms.uTexel.value.set(1 / w, 1 / h);
   postMat.uniforms.uAspect.value = w / h;
   postMat.uniforms.uWidth.value = Math.max(1, renderer.getPixelRatio() * CONFIG.style.lineWidth);
+  postMat.uniforms.uSilWidth.value = CONFIG.style.silhouetteWidth / CONFIG.style.lineWidth;
 }
 /** Brilho: limiar em 1/4, desfoque; cópia para 1/8, desfoque mais largo. */
 function renderBloom() {
@@ -247,6 +264,7 @@ export function renderFrame() {
   U.uBloom.value = post.bloom ? CONFIG.style.bloom : 0;
   U.uOutline.value = post.outline ? 1 : 0;
   U.uNear.value = camera.near; U.uFar.value = camera.far;
+  U.uProjInv.value.copy(camera.projectionMatrixInverse);
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
