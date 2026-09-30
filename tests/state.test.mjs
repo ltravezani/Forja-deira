@@ -47,3 +47,18 @@ test('loadSave converte o Zen de saves antigos em Gold sem perder saldo', async 
   assert.deepEqual(ch.bag[0].exc, ['gold30', 'hp4']);
   assert.deepEqual(ch.equip.gloves.exc, ['gold30']);
 });
+
+test('personagens das classes novas sobrevivem ao save (sanitize e ida e volta em JSON)', async () => {
+  const { sanitizeCharacter } = await load('core/state.js');
+  for (const cls of ['de', 'nc']) {
+    const ch = R.newCharacter('Nova', cls);
+    ch.equip.weapon = R.makeEquip(R.hash32('t', cls), 0, 'comum', cls, 0, 'normal');
+    ch.equip.weapon.slot = 'weapon'; ch.equip.weapon.cls = R.gearCls(cls, 'weapon');
+    ch.skillBar.push('twist'); // habilidade de outra classe sai da barra
+    const back = sanitizeCharacter(JSON.parse(JSON.stringify(ch)));
+    assert.equal(back.cls, cls);
+    assert.deepEqual(back.skillBar, R.skillsFor(cls).filter((k) => R.SKILLS[k].lvl <= 1));
+    assert.ok(R.canUse(cls, back.equip.weapon));
+    assert.ok(Number.isFinite(R.deriveStats(back, []).maxDmg));
+  }
+});

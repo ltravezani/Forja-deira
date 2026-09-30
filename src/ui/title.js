@@ -24,7 +24,7 @@ export function titlePreview(ch) {
 function previewChar(cls) {
   const ch = R.newCharacter('Prévia', cls);
   const w = R.makeEquip(R.hash32('preview', cls), 0, 'comum', cls, 0, 'normal');
-  w.slot = 'weapon'; w.cls = cls; w.tier = 0; ch.equip.weapon = w;
+  w.slot = 'weapon'; w.cls = R.gearCls(cls, 'weapon'); w.tier = 0; ch.equip.weapon = w;
   return ch;
 }
 export function renderTitle() {
@@ -67,7 +67,7 @@ function createChar() {
   if (S.chars.length >= 5) { err.textContent = 'Limite de 5 personagens neste navegador.'; return; }
   const ch = R.newCharacter(name, UI.pickedClass);
   const starter = R.makeEquip(R.hash32('starter', name), 0, 'comum', ch.cls, 0, 'normal');
-  starter.slot = 'weapon'; starter.tier = 0; starter.plus = 0; starter.cls = ch.cls; starter.luck = false; starter.addOpt = 0; starter.exc = [];
+  starter.slot = 'weapon'; starter.tier = 0; starter.plus = 0; starter.cls = R.gearCls(ch.cls, 'weapon'); starter.luck = false; starter.addOpt = 0; starter.exc = [];
   ch.equip.weapon = starter;
   ch.bag.push({ kind: 'potion', id: 'hp', qty: 10, uid: 'php' }, { kind: 'potion', id: 'mp', qty: 6, uid: 'pmp' });
   S.chars.push(ch);

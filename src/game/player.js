@@ -51,11 +51,18 @@ function playerLook(ch) {
     c.lerp(new THREE.Color(R.RARITY[it.rarity].color), 0.18 + it.tier * 0.03);
     return c.getHex();
   };
-  const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34 }[ch.cls];
+  const armorBase = { dk: 0x7a7e88, dw: 0x2e2a48, elf: 0x4a5a34, de: [0x3a2a44, 0x4a1a2a, 0x2a1a3a][ch.tier] || 0x3a2a44, nc: [0x1a1a22, 0x24222c, 0x3a0e16][ch.tier] || 0x1a1a22 }[ch.cls];
   const o = {
     dk: { gltf: 'knight', skin: 0xd8a888, cloth: 0x4a1616, head: 'helm', eye: 0xff5a3a, weapon: 'sword', bulky: true, shield: true, horns: ch.tier >= 1, cape: true, capeColor: 0x3a0e10, shieldColor: 0x5a1414 },
     dw: { gltf: 'mage', skin: 0xe0b89a, cloth: 0x221c3a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0x7aa8ff, eye: 0x9ac8ff, cape: true, capeColor: 0x1a1430 },
     elf: { gltf: 'rogue', skin: 0xf0caa8, cloth: 0x2e3a22, head: 'hair', hair: 0xd8b86a, weapon: 'bow', thin: true, cape: true, capeColor: 0x24301a },
+    // Dark Elf: pele cinza-lilás, capuz escuro, uma espada em cada mão (só a direita é o item equipado)
+    de: { gltf: 'rogue', tintK: 0.7, skinK: 0.45, skin: 0xb49ccc, hoodColor: [0x2a1a3a, 0x5a0e22, 0x1e0a30][ch.tier] || 0x2a1a3a, cloth: [0x1e1428, 0x3a0a18, 0x160a22][ch.tier] || 0x1e1428, head: 'hair', eye: 0xff4a7a, weapon: 'blade', offhand: true, thin: true, cape: true, capeColor: [0x2a0e2a, 0x4a0a14, 0x1a0628][ch.tier] || 0x2a0e2a },
+    // Necromancer: manto negro e chapéu; como Death Knight e Bloody Knight veste armadura com elmo e chifres.
+    // Sempre um cajado em cada mão (só o da direita é o item equipado).
+    nc: ch.tier >= 1
+      ? { gltf: 'knight', tintK: 0.75, skinK: 0.4, skin: 0xc8c0b8, cloth: ch.tier >= 2 ? 0x3a060c : 0x121018, head: 'helm', horns: true, eye: ch.tier >= 2 ? 0xff3a4a : 0x7affb0, weapon: 'rod', offhand: true, bulky: true, weaponGlow: ch.tier >= 2 ? 0xff3a4a : 0x7affb0, cape: true, capeColor: ch.tier >= 2 ? 0x4a0a10 : 0x1a0a14 }
+      : { gltf: 'mage', tintK: 0.8, skinK: 0.4, skin: 0xc8c0b8, cloth: 0x16161c, head: 'hood', eye: 0x7affb0, weapon: 'rod', offhand: true, robe: true, weaponGlow: 0x7affb0, cape: true, capeColor: 0x0e0e12 },
   }[ch.cls];
   o.armor = tint(eq.armor || eq.helm, armorBase);
   o.trim = rc(eq.gloves || eq.boots, ch.tier >= 1 ? 0xffd24a : 0xc9a24a);
@@ -63,6 +70,7 @@ function playerLook(ch) {
     o.weaponColor = tint(eq.weapon, 0xc8d0dc);
     if (R.RARITY[eq.weapon.rarity].order >= 2) o.weaponGlow = rc(eq.weapon);
     if (ch.cls === 'dw') o.weaponGlow = rc(eq.weapon, 0x7aa8ff);
+    if (ch.cls === 'nc' && R.RARITY[eq.weapon.rarity].order < 2) o.weaponGlow = ch.tier >= 2 ? 0xff3a4a : 0x7affb0;
   }
   o.pauldron = ch.tier >= 1;
   o.trimGlow = ch.tier >= 2;
@@ -73,7 +81,7 @@ export function buildCharacterModel(ch) {
   const m = buildHumanoid(playerLook(ch));
   const w = ch.equip.wings;
   if (w) attachWings(m, parseInt(R.RARITY[w.rarity].color.slice(1), 16), 0.75 + w.tier * 0.08);
-  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0 }[ch.cls], 0.8);
+  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], 0.8);
   m.orb = m.weapon ? m.weapon.children.find((c) => c.userData.orb) || null : null;
   applyRefine(m, ch.equip);
   return m;
@@ -86,6 +94,7 @@ function applyRefine(m, eq) {
   const fx = [];
   const w = eq.weapon;
   if (w && m.weapon) fx.push(attachRefineFx(m.weapon, w.plus || 0));
+  if (w && m.offhand) fx.push(attachRefineFx(m.offhand, w.plus || 0)); // a cópia da mão esquerda brilha junto
   const ap = Math.max(0, ...['helm', 'armor', 'gloves', 'boots', 'wings'].map((s) => (eq[s] && eq[s].plus) || 0));
   const ak = refineK(ap), top = Math.max(ap, (w && w.plus) || 0);
   // o halo no chão aparece com qualquer peça +15; sem armadura refinada, só ele e poucas faíscas
@@ -235,7 +244,7 @@ function updateTarget(p, dt) {
 function engageMonster(p, m, dt) {
   if (m.dead) { p.target = null; return; }
   const d = Math.hypot(m.x - p.x, m.z - p.z);
-  const needLos = G.ch.cls !== 'dk';
+  const needLos = G.ch.cls !== 'dk' && G.ch.cls !== 'de';
   if (d <= attackRange(m) && (!needLos || lineClear(G.L, p.x, p.z, m.x, m.z, 0))) {
     p.path = null;
     face(p, m.x, m.z);
@@ -297,7 +306,7 @@ function skillPose(p, dt) {
   if (p.spin) {
     const s = p.spin; s.t += dt;
     const k = Math.min(1, s.t / s.dur);
-    spin = (1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.dir || 1);
+    spin = (s.turns > 1 ? k : 1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (s.turns || 1) * (s.dir || 1);
     if (k >= 1) p.spin = null;
   }
   if (p.pop) {

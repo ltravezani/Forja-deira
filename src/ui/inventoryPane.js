@@ -38,7 +38,7 @@ function itemDetail(it, where) {
   else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
-    h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.CLASSES[it.cls].tiers[0] : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
+    h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.itemUsers(it).join(', ') : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
     h += '<div class="ln cpl">CP do item: <b class="num">' + fmt(R.itemCP(it)) + '</b>';
     if (where === 'bag' && classOk(it)) {
       const cur = G.ch.equip[it.slot], d = cpWith(it) - cpOf(G.ch);
@@ -59,7 +59,7 @@ function itemDetail(it, where) {
       const have = req.stat === 'level' ? G.ch.level : G.ch.stats[req.stat];
       h += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
     }
-    if (it.cls && it.cls !== G.ch.cls) h += '<div class="ln req bad">Exclusivo de ' + R.CLASSES[it.cls].tiers[0] + ' — venda ou negocie no mercado.</div>';
+    if (it.cls && !classOk(it)) h += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
     h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
   }
   h += '<div class="row" style="margin-top:8px">';
@@ -92,7 +92,7 @@ export function paneInv() {
     const it = ch.equip[s];
     const sel = UI.sel && UI.sel.where === 'eq' && UI.sel.slot === s;
     if (it) h += cellHtml(it, ' data-act="seleq" data-slot="' + s + '"', sel).replace('class="cell', 'class="cell eq');
-    else h += '<div class="eq" data-slot="' + s + '"><em>' + R.SLOT_LABEL[s] + '</em><img class="sil" src="' + iconURI(s === 'weapon' ? (ch.cls === 'dw' ? 'staff' : ch.cls === 'elf' ? 'bow' : 'sword') : s, '#6a6078') + '" alt=""></div>';
+    else h += '<div class="eq" data-slot="' + s + '"><em>' + R.SLOT_LABEL[s] + '</em><img class="sil" src="' + iconURI(s === 'weapon' ? R.CLASSES[ch.cls].weapon : s, '#6a6078') + '" alt=""></div>';
   });
   const cats = { all: 'Todos', mine: 'Minha classe', other: 'Outras', mat: 'Materiais' };
   const cnt = { all: ch.bag.length, mine: 0, other: 0, mat: 0 };
