@@ -1,5 +1,6 @@
 // ---------- painéis Personagem, Habilidades, Drops e Opções ----------
 import { gltfEnabled, gltfStats } from '../art/gltfModels.js';
+import { Cloud } from '../core/cloud.js';
 import { G, S, UI } from '../core/state.js';
 import { esc, fmt, R } from '../core/util.js';
 import { MUSIC_LEVELS, musicLevel } from '../engine/music.js';
@@ -103,6 +104,7 @@ export function paneOpts() {
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
-  h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
+  h += '<p class="note">' + (Cloud.user ? 'Conectado à nuvem como <b>' + esc(Cloud.user.email) + '</b>: o progresso sobe sozinho a cada minuto. Apagar os dados locais não apaga o save da nuvem.' : 'Para guardar o progresso na nuvem, use o botão "Salvar na nuvem" na tela inicial.') + '</p>';
+  h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador' + (Cloud.user ? ' e na nuvem' : '') + '.</p>';
   return h;
 }

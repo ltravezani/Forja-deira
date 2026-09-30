@@ -382,6 +382,37 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 .t-create { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 150px); overflow-y: auto; box-sizing: border-box; background: linear-gradient(rgba(22,16,30,.94), rgba(12,9,17,.96)); border: 1px solid #5a4630; border-radius: 6px; padding: 14px 16px; box-shadow: 0 14px 40px rgba(0,0,0,.6); }
 .t-crhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .t-crhead h4 { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.t-acct { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; color: #e2d6bd; background: rgba(14,10,20,.72); border: 1px solid #5a4630; border-radius: 4px; z-index: 2; }
+.t-acct svg { width: 18px; height: 18px; flex: none; }
+.t-acct:hover { color: var(--gold); border-color: var(--gold); }
+.t-acct.on { color: #bfe3b0; }
+.t-acct.st-conflict, .t-acct.st-relogin, .t-acct.st-error { color: #ffcf7a; border-color: #b8862e; }
+.t-acct.st-offline { color: var(--muted); }
+@media (max-width: 760px) { .t-acct { top: auto; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); white-space: nowrap; } .t-sel { bottom: 116px; } }
+.modal.acct-on { z-index: 30; } /* a janela da conta abre sobre a tela de título */
+.acct { position: relative; }
+.acct p { line-height: 1.45; }
+.acct-x { position: absolute; top: -6px; right: -6px; }
+.acct-tabs { display: flex; gap: 4px; margin: 10px 0 12px; border-bottom: 1px solid var(--edge); }
+.acct-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; color: var(--muted); font-size: 14px; }
+.acct-tabs button.on { color: var(--gold); border-bottom-color: var(--gold); }
+.acct-form { display: grid; gap: 10px; }
+.acct-f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.acct-f .fld { width: 100%; box-sizing: border-box; font-size: 16px; }
+.acct-actions { justify-content: flex-end; margin-top: 12px; }
+.acct-form .acct-actions { margin-top: 2px; }
+.acct-actions .t-link { margin-right: auto; }
+.acct-err { color: #ff8a7a; margin: 0; }
+.acct-info { color: #bfe3b0; margin: 0 0 8px; }
+.acct-st { margin: 6px 0 12px; color: var(--text); }
+.acct-st.acct-conflict, .acct-st.acct-error, .acct-st.acct-relogin { color: #ffcf7a; }
+.acct-h { margin: 16px 0 8px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.acct-bk { display: grid; gap: 6px; }
+.acct-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 4px; }
+@media (max-width: 520px) { .acct-cmp { grid-template-columns: 1fr; } }
+.acct-chars { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.acct-chars b { color: var(--text); }
+.acct-chars span { font-size: 12px; color: var(--muted); }
 .t-foot { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: #9a8fb0; text-shadow: 0 1px 2px #000; padding: 0 16px; pointer-events: none; }
 .t-foot span { color: #7a7090; }
 .roster { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -519,7 +550,8 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
       </div>
       <p class="note" id="createErr"></p>
     </aside>
-    <footer class="t-foot">Clique ou WASD move · clique ataca · 1–6 e botão direito: habilidades · Q/E poções · Espaço coleta · T portal · Alt mostra itens<br><span>Jogo offline · progresso salvo neste navegador</span></footer>
+    <button class="t-acct" id="tAcct" type="button"></button>
+    <footer class="t-foot">Clique ou WASD move · clique ataca · 1–6 e botão direito: habilidades · Q/E poções · Espaço coleta · T portal · Alt mostra itens<br><span id="tFootSave">Jogo offline · progresso salvo neste navegador</span></footer>
   </section>
 </div>
 <div class="fatal" id="fatal" hidden role="alert"><div><h2>Não foi possível iniciar o jogo</h2><p id="fatalMsg"></p><button class="btn gold" onclick="location.reload()">Tentar de novo</button></div></div>

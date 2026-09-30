@@ -13,7 +13,7 @@ import { glyph, iconHtml } from './icons.js';
 import { log, toast } from './log.js';
 import { BIOMES, DUNGEON_ORDER, floorLevel, towerBiome } from '../world/biomes.js';
 
-function modal(html) { $('#dialog').innerHTML = html; $('#modal').hidden = false; }
+function modal(html) { $('#dialog').innerHTML = html; $('#modal').classList.remove('acct-on'); $('#modal').hidden = false; }
 export function closeModal() { $('#modal').hidden = true; }
 const SELL_CATS = { all: 'Todos', jewel: 'Joias', potion: 'Poções' };
 const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');

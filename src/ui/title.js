@@ -94,7 +94,7 @@ export function initTitle() {
   $('#tNext').addEventListener('click', () => titleStep(1));
   $('#tBack').addEventListener('click', () => { UI.titleMode = 'select'; $('#createErr').textContent = ''; renderTitle(); });
   window.addEventListener('keydown', (e) => {
-    if (G.mode !== 'title' || $('#title').hidden) return;
+    if (G.mode !== 'title' || $('#title').hidden || !$('#modal').hidden) return;
     if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
     if (UI.titleMode === 'create') { if (e.key === 'Escape' && S.chars.length) { UI.titleMode = 'select'; renderTitle(); } return; }
     if (e.key === 'ArrowLeft') titleStep(-1);
