@@ -4,9 +4,10 @@ import { CONFIG } from '../core/config.js';
 import { G, persist } from '../core/state.js';
 import { fmt, R, rand } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
+import { impactStar, shockRing, slashArc } from '../engine/combatfx.js';
 import { emit, spawnRing } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
-import { shake, world } from '../engine/renderer.js';
+import { impactFlash, shake, world } from '../engine/renderer.js';
 import { hitStop } from './feel.js';
 import { autoEquipOn, potionCount } from './inventory.js';
 import { dropLoot } from './loot.js';
@@ -46,6 +47,15 @@ export function hitMonster(m, mult, skillId, opts) {
     if (!m.boss) { const nx = m.x + (dx / d) * opts.kb, nz = m.z + (dz / d) * opts.kb; if (walkableR(G.L, nx, nz, 0.4)) { m.x = nx; m.z = nz; } }
   }
   emit(m.x, h * 0.55, m.z, { n: r.type === 'normal' ? 5 : 12, color: r.type === 'exc' ? 0x4be07a : 0xffe0a0, speed: 5, life: 0.35, size: 0.7, grav: -10 });
+  // faísca em estrela no ponto do golpe (um pouco à frente, do lado de quem bateu)
+  const fx = opts.fromX != null ? opts.fromX : G.player.x, fz = opts.fromZ != null ? opts.fromZ : G.player.z;
+  const dd = Math.hypot(fx - m.x, fz - m.z) || 1, off = Math.min(m.radius, dd * 0.5);
+  const big = r.type !== 'normal';
+  impactStar(m.x + (fx - m.x) / dd * off, h * 0.6, m.z + (fz - m.z) / dd * off, r.type === 'exc' ? 0x7affa0 : big ? 0xffd060 : 0xfff0d0, big ? 1.9 : 1.1);
+  if (big) {
+    shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
+    if (CONFIG.feel.hitStop > 0) impactFlash(r.type === 'exc' ? 1 : 0.7);
+  }
   Sfx.hit();
   if (m.hp <= 0) killMonster(m);
   return r.dmg;
@@ -269,7 +279,10 @@ export function basicAttack(m) {
       while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
       if (o === m || Math.abs(da) < 0.9) hitMonster(o, o === m ? 1 : 0.6, null);
     }
-    for (let i = -3; i <= 3; i++) { const a = ang + i * 0.25; emit(p.x + Math.sin(a) * 1.8, 1.1, p.z + Math.cos(a) * 1.8, { n: 1, color: 0xfff0d0, speed: 1, life: 0.2, size: 0.9 }); }
+    // rastro em meia-lua com a cor da raridade da arma; alterna o lado a cada golpe
+    const wpn = G.ch.equip && G.ch.equip.weapon;
+    p.slashFlip = !p.slashFlip;
+    slashArc(p.x, p.z, ang, wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xfff0d0, { radius: 2.3, flip: p.slashFlip });
     Sfx.swing();
   } else if (cls === 'dw') {
     const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;

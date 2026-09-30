@@ -78,12 +78,15 @@ input, select { font-family: inherit; }
 
 /* ---------- textos flutuantes ---------- */
 .dmg {
-  position: absolute; font-family: var(--f-num); font-weight: 700; font-size: 20px;
-  color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0,0,0,.8);
+  position: absolute; font-family: var(--f-display); font-weight: 700; font-size: 21px; letter-spacing: .5px;
+  color: #fff;
+  /* contorno grosso em 8 direções + sombra projetada (legível sobre qualquer bioma) */
+  text-shadow: 2px 0 0 #120a06, -2px 0 0 #120a06, 0 2px 0 #120a06, 0 -2px 0 #120a06,
+    1.5px 1.5px 0 #120a06, -1.5px 1.5px 0 #120a06, 1.5px -1.5px 0 #120a06, -1.5px -1.5px 0 #120a06, 0 4px 2px rgba(0,0,0,.6);
   transform: translate(-50%, -50%); white-space: nowrap; will-change: transform, opacity;
 }
-.dmg.crit { color: #7fd0ff; font-size: 24px; }
-.dmg.exc { color: var(--r-excelente); font-size: 26px; }
+.dmg.crit { color: #ffd23a; font-size: 30px; }
+.dmg.exc { color: #7affa0; font-size: 32px; }
 .dmg.hurt { color: #ff5a4a; font-size: 18px; }
 .dmg.heal { color: var(--ok); }
 .dmg.info { color: var(--gold); font-size: 16px; font-family: var(--f-ui); }
@@ -3092,7 +3095,7 @@ return { findPath, gy, lineClear, walkable, walkableR };
 })();
 
 // ---- engine/renderer.js ----
-const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
+const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
 // ---------- renderer, cena, luzes e câmera ----------
 
 const canvas = $('#view');
@@ -3196,7 +3199,7 @@ function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
+const post = { flash: 0, flashFrames: 0, rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -3205,7 +3208,7 @@ const postMat = new THREE.ShaderMaterial({
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
-    uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
+    uFlash: { value: 0 }, uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
   },
   vertexShader: FS_VERT,
@@ -3214,7 +3217,7 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
     uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
-    uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
+    uniform float uFlash; uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
     // posição em espaço de visão reconstruída da profundidade
@@ -3248,6 +3251,8 @@ const postMat = new THREE.ShaderMaterial({
       // gradação por bioma: tinta nas sombras/meios-tons e saturação
       float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(lum), c.rgb, uSat) * mix(uTint, vec3(1.0), smoothstep(0.0, 1.2, lum));
+      // quadro de impacto (crítico): clarão branco quente de 1–2 quadros, mais forte no centro
+      c.rgb = mix(c.rgb, vec3(1.6, 1.5, 1.35), uFlash * 0.28 * (1.0 - 0.5 * length(vUv - 0.5)));
       // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
       vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
       c.rgb *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q) * 1.25);
@@ -3357,6 +3362,8 @@ function renderFrame() {
   U.uOutline.value = post.outline ? 1 : 0;
   U.uNear.value = camera.near; U.uFar.value = camera.far;
   U.uProjInv.value.copy(camera.projectionMatrixInverse);
+  U.uFlash.value = post.flashFrames > 0 ? post.flash : 0;
+  if (post.flashFrames > 0) post.flashFrames--;
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
@@ -3372,6 +3379,8 @@ function updateBloom() {
 function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
 /** Estado efetivo do brilho (Opções mostra o que está valendo). */
 function bloomOn() { return post.bloom; }
+/** Quadro de impacto: clarão branco por 2 quadros (quem chama respeita a opção de pausa de impacto). */
+function impactFlash(k) { post.flash = Math.max(post.flashFrames > 0 ? post.flash : 0, Math.min(1, k)); post.flashFrames = 2; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 function setOutline(on) { post.outline = !!on; }
 /** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */
@@ -3379,7 +3388,7 @@ function setGrade(tint, sat) {
   postMat.uniforms.uTint.value.setHex(tint == null ? 0xffffff : tint);
   postMat.uniforms.uSat.value = sat == null ? 1 : sat;
 }
-return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world };
+return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world };
 })();
 
 // ---- engine/audio.js ----
@@ -3453,6 +3462,197 @@ const Sfx = {
   coin() { this.seq([1300, 1750], 0.05, 0.1, 'square', 0.022); },
 };
 return { Sfx };
+})();
+
+// ---- engine/combatfx.js ----
+const { clearCombatFx, impactStar, shockRing, slashArc, updateCombatFx } = (() => {
+// =============================================================================
+// Efeitos de combate estilizados, em pools fixos (nenhuma alocação por golpe):
+// rastro de golpe em meia-lua, faíscas em estrela no ponto de impacto e anel de
+// choque achatado no chão. Materiais e texturas são criados uma vez; cada uso
+// só troca cor, posição e opacidade. Tudo aditivo e sem gravar profundidade.
+// =============================================================================
+
+const ease = (k) => 1 - Math.pow(1 - k, 3);
+
+// ---------- texturas em canvas ----------
+/** Degradê da meia-lua: u = ângulo (0 = cauda transparente, 1 = ponta branca), v = raio. */
+function slashTexture() {
+  const W = 128, H = 32, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d'), img = g.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = x / (W - 1), v = y / (H - 1);
+    // corpo: some na cauda, cheio perto da ponta; borda externa (v = 1) mais forte e dura
+    const body = Math.pow(u, 1.1) * Math.min(1, (1 - u) * 14);
+    const edge = 0.3 + 0.55 * Math.pow(v, 1.3) + (v > 0.86 ? 0.45 : 0);
+    const a = Math.min(1, body * edge);
+    // miolo branco na ponta e na borda externa; resto recebe a cor do material
+    const w = Math.min(1, Math.pow(u, 6) * 1.2 + (v > 0.9 ? 0.6 : 0));
+    const k = (y * W + x) * 4;
+    img.data[k] = img.data[k + 1] = img.data[k + 2] = 255 * (0.55 + 0.45 * w);
+    img.data[k + 3] = 255 * a;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+/** Estrela de 4 pontas com miolo branco (faísca de impacto). */
+function starTexture() {
+  const S = 64, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const star = (n, r0, r1, rot, fill) => {
+    g.beginPath();
+    for (let i = 0; i < n * 2; i++) {
+      const a = rot + (i / (n * 2)) * Math.PI * 2, r = i % 2 ? r1 : r0;
+      g.lineTo(S / 2 + Math.cos(a) * r, S / 2 + Math.sin(a) * r);
+    }
+    g.closePath(); g.fillStyle = fill; g.fill();
+  };
+  star(4, 31, 5, -Math.PI / 2, 'rgba(255,255,255,0.55)');
+  star(4, 20, 4, -Math.PI / 4, 'rgba(255,255,255,0.35)');
+  star(4, 22, 3.5, -Math.PI / 2, '#ffffff');
+  const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, 9);
+  gr.addColorStop(0, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// ---------- geometria da meia-lua (UV polar: u ao longo do arco, v do raio interno ao externo) ----------
+function crescentGeometry(span, seg) {
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= seg; i++) {
+    const u = i / seg, a = -span / 2 + span * u;
+    // largura da lâmina: fina nas pontas, larga perto do fim do golpe (formato de meia-lua)
+    const inner = 1 - 0.5 * Math.sin(Math.PI * Math.pow(u, 0.8));
+    for (const [r, v] of [[inner, 0], [1, 1]]) { pos.push(Math.sin(a) * r, 0, Math.cos(a) * r); uv.push(u, v); }
+    if (i < seg) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+// ---------- pools ----------
+const SLASH_N = 16, STAR_N = 24, SHOCK_N = 8;
+let pools = null;
+function init() {
+  if (pools) return pools;
+  const addMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0 });
+  const crescent = crescentGeometry(Math.PI * 0.78, 28);
+  const sT = slashTexture(), stT = starTexture();
+  pools = { slash: [], star: [], shock: [], cur: { slash: 0, star: 0, shock: 0 } };
+  for (let i = 0; i < SLASH_N; i++) {
+    const m = new THREE.Mesh(crescent, addMat(sT));
+    m.visible = false; m.renderOrder = 8; m.frustumCulled = false; // por cima de tudo, como um traço de animação
+    scene.add(m);
+    pools.slash.push({ m, t: 1, dur: 1 });
+  }
+  for (let i = 0; i < STAR_N; i++) {
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: stT, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    m.visible = false; m.renderOrder = 7;
+    scene.add(m);
+    pools.star.push({ m, t: 1, dur: 1 });
+  }
+  const ring = new THREE.RingGeometry(0.82, 1, 48);
+  ring.rotateX(-Math.PI / 2);
+  for (let i = 0; i < SHOCK_N; i++) {
+    const m = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    m.visible = false; m.renderOrder = 2;
+    scene.add(m);
+    pools.shock.push({ m, t: 1, dur: 1 });
+  }
+  return pools;
+}
+/** Próximo item livre do pool (ou o mais antigo, se todos estiverem em uso). */
+function take(kind) {
+  const P = init(), list = P[kind];
+  for (let k = 0; k < list.length; k++) {
+    const i = (P.cur[kind] + k) % list.length;
+    if (list[i].t >= list[i].dur) { P.cur[kind] = (i + 1) % list.length; return list[i]; }
+  }
+  const f = list[P.cur[kind]];
+  P.cur[kind] = (P.cur[kind] + 1) % list.length;
+  return f;
+}
+
+/**
+ * Rastro de golpe em meia-lua, orientado por `rot` (ângulo do ataque, como atan2(dx, dz)).
+ * o: { radius, y, dur, flip (varre da direita para a esquerda), tilt }
+ */
+function slashArc(x, z, rot, color, o) {
+  o = o || {};
+  const f = take('slash');
+  f.t = 0; f.dur = o.dur || 0.18;
+  f.x = x; f.z = z; f.y = (o.y != null ? o.y : 1.05) + gy(x, z);
+  f.rot = rot; f.flip = o.flip ? -1 : 1; f.r = o.radius || 2; f.tilt = o.tilt || 0.18;
+  f.m.material.color.setHex(color).multiplyScalar(CONFIG.style.glowCore);
+  f.m.visible = true;
+  setSlash(f, 0);
+}
+function setSlash(f, k) {
+  const e = ease(k), m = f.m;
+  m.position.set(f.x, f.y, f.z);
+  // a lâmina varre ~70° durante o golpe e abre um pouco
+  m.rotation.set(f.tilt, f.rot + f.flip * (e - 0.5) * 1.2, 0, 'YXZ');
+  m.scale.set(f.r * (0.8 + 0.25 * e) * f.flip, 1, f.r * (0.8 + 0.25 * e));
+  m.material.opacity = k < 0.15 ? k / 0.15 : 1 - Math.pow((k - 0.15) / 0.85, 1.5);
+}
+
+/** Faísca em estrela no ponto de impacto. size em metros. */
+function impactStar(x, y, z, color, size) {
+  const f = take('star');
+  f.t = 0; f.dur = 0.16 + size * 0.05; f.s = size;
+  f.m.position.set(x, y + gy(x, z), z);
+  f.m.material.color.setHex(color).multiplyScalar(CONFIG.style.glowCore);
+  f.m.material.rotation = Math.random() * 0.8 - 0.4;
+  f.m.visible = true;
+  setStar(f, 0);
+}
+function setStar(f, k) {
+  const s = f.s * (k < 0.3 ? 0.5 + ease(k / 0.3) * 0.7 : 1.2 - (k - 0.3) * 0.6);
+  f.m.scale.set(s, s, 1);
+  f.m.material.opacity = 1 - k * k;
+}
+
+/** Anel de choque achatado no chão (golpes fortes e habilidades de área). */
+function shockRing(x, z, radius, color, dur) {
+  const f = take('shock');
+  f.t = 0; f.dur = dur || 0.35; f.r = radius;
+  f.m.position.set(x, 0.1 + gy(x, z), z);
+  f.m.material.color.setHex(color).multiplyScalar(1.4);
+  f.m.visible = true;
+  setShock(f, 0);
+}
+function setShock(f, k) {
+  const e = ease(k);
+  f.m.scale.set(f.r * (0.2 + 0.8 * e), 1, f.r * (0.2 + 0.8 * e));
+  f.m.material.opacity = 0.9 * (1 - k);
+}
+
+function updateCombatFx(dt) {
+  if (!pools) return;
+  for (const [list, set] of [[pools.slash, setSlash], [pools.star, setStar], [pools.shock, setShock]]) {
+    for (const f of list) {
+      if (f.t >= f.dur) continue;
+      f.t += dt;
+      if (f.t >= f.dur) { f.m.visible = false; continue; }
+      set(f, f.t / f.dur);
+    }
+  }
+}
+/** Esconde tudo (troca de zona). As malhas são reaproveitadas, nunca liberadas. */
+function clearCombatFx() {
+  if (!pools) return;
+  for (const k of ['slash', 'star', 'shock']) for (const f of pools[k]) { f.t = f.dur = 1; f.m.visible = false; }
+}
+return { clearCombatFx, impactStar, shockRing, slashArc, updateCombatFx };
 })();
 
 // ---- engine/effects.js ----
@@ -3605,10 +3805,12 @@ function toScreen(x, y, z) {
 // (sem criar/destruir nós nem timers por golpe; o limite vale sempre).
 const floats = [];
 let floatCursor = 0;
+// sobe com um pulo de escala: nasce grande, assenta e some subindo
 const RISE = [
-  { opacity: 0, transform: 'translate(-50%, calc(-50% + 6px))' },
-  { opacity: 1, offset: 0.12 },
-  { opacity: 0, transform: 'translate(-50%, calc(-50% - 54px))' },
+  { opacity: 0, transform: 'translate(-50%, calc(-50% + 6px)) scale(1.7)' },
+  { opacity: 1, transform: 'translate(-50%, calc(-50% - 4px)) scale(0.92)', offset: 0.12 },
+  { opacity: 1, transform: 'translate(-50%, calc(-50% - 10px)) scale(1)', offset: 0.22 },
+  { opacity: 0, transform: 'translate(-50%, calc(-50% - 54px)) scale(0.9)' },
 ];
 function floatEl() {
   const O = CONFIG.overlay;
@@ -4331,7 +4533,8 @@ function updateAllies(dt) {
         a.attackAnim = 0.001;
         face(a, a.target.x, a.target.z);
         const k = a.kind === 'pet' ? 0.3 : 0.9;
-        hitMonster(a.target, k, null);
+        if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
+        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
       }
     } else {
       const d = Math.hypot(p.x - a.x, p.z - a.z);
@@ -5216,6 +5419,7 @@ const EFFECTS = {
       if (!p.alive) return;
       const x = p.x, z = p.z;
       for (let k = 0; k < 3; k++) G.delayed.push({ t: k * 0.12, fn: () => { spawnRing(x, z, 0.6, sk.radius * (0.6 + k * 0.2), 0xffb070, 0.45); emit(x, 0.3, z, { n: 30, color: 0xc8a070, speed: 8, up: 0.6, life: 0.6, size: 1.2, spread: 2 }); } });
+      shockRing(x, z, sk.radius * 1.2, 0xffc080, 0.4);
       cracks(x, z, sk.radius * 0.9, 10, 0xff9a4a, 0.9);
       shards(x, z, 1.2, sk.radius * 0.8, 10, 0xc89a60, 0.7, { h: 1, stagger: 0.15 });
       scorch(x, z, sk.radius * 0.5, 3);
@@ -5236,6 +5440,7 @@ const EFFECTS = {
       emit(tx, 0.5, tz, { n: 90, color: 0xff7a3a, speed: 12, up: 1, life: 0.8, size: 1.6, spread: 1, jitter: true });
       emit(tx, 0.5, tz, { n: 40, color: 0xffe0a0, speed: 5, up: 3, life: 0.6, size: 1.2 });
       spawnRing(tx, tz, 0.5, sk.radius * 1.1, 0xffa050, 0.5);
+      shockRing(tx, tz, sk.radius * 1.3, 0xffb070, 0.4);
       pillar(tx, tz, sk.radius * 0.35, 7, 0xff5a2a, 0.7, { grow: 1 });
       pillar(tx, tz, sk.radius * 0.16, 9, 0xffe0a0, 0.5, { grow: 0.5 });
       cracks(tx, tz, sk.radius, 12, 0xff6a2a, 1);
@@ -5310,6 +5515,7 @@ const EFFECTS = {
     G.delayed.push({ t: 0.5, fn: () => {
       emit(tx, 0.4, tz, { n: isRain ? 30 : 70, color: col, speed: isRain ? 5 : 10, up: 1, life: 0.7, size: 1.3, spread: sk.radius * (isRain ? 1.4 : 0.5), jitter: true });
       spawnRing(tx, tz, 0.5, sk.radius * 1.1, col, 0.45);
+      if (!isRain) shockRing(tx, tz, sk.radius * 1.3, col, 0.4);
       if (!isRain) {
         pillar(tx, tz, sk.radius * 0.35, 5, 0xff7a2a, 0.55, { grow: 1.2 });
         shards(tx, tz, 0.8, sk.radius * 0.8, 9, 0xff8a4a, 0.8, { h: 1.1, stagger: 0.1 });
@@ -5327,6 +5533,7 @@ const EFFECTS = {
     const fire = id === 'hell';
     const c = fire ? 0xff6a2a : 0x9ae0ff;
     spawnRing(p.x, p.z, 0.5, sk.radius, c, 0.5, { op: 0.9 });
+    shockRing(p.x, p.z, sk.radius * 1.1, c, 0.45);
     for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; emit(p.x + Math.cos(a), 0.6, p.z + Math.sin(a), { n: 1, color: c, speed: sk.radius * 2, dir: [Math.cos(a), 0.05, Math.sin(a)], life: 0.5, size: 1.4, grav: 0, drag: 0.5 }); }
     shards(p.x, p.z, 1.5, sk.radius * 0.95, fire ? 24 : 18, fire ? 0xff7a3a : 0xbfeeff, 0.9, { h: fire ? 2.2 : 1.6, stagger: 0.25 });
     pillar(p.x, p.z, 1.2, fire ? 8 : 4, c, 0.7, { grow: fire ? 1.5 : 0.8 });
@@ -8929,6 +9136,7 @@ function clearWorld() {
   clearAllies(true);
   clearEffects();
   clearFx();
+  clearCombatFx();
   resetFloatText();
 }
 function placePlayer(L) {
@@ -10029,6 +10237,15 @@ function hitMonster(m, mult, skillId, opts) {
     if (!m.boss) { const nx = m.x + (dx / d) * opts.kb, nz = m.z + (dz / d) * opts.kb; if (walkableR(G.L, nx, nz, 0.4)) { m.x = nx; m.z = nz; } }
   }
   emit(m.x, h * 0.55, m.z, { n: r.type === 'normal' ? 5 : 12, color: r.type === 'exc' ? 0x4be07a : 0xffe0a0, speed: 5, life: 0.35, size: 0.7, grav: -10 });
+  // faísca em estrela no ponto do golpe (um pouco à frente, do lado de quem bateu)
+  const fx = opts.fromX != null ? opts.fromX : G.player.x, fz = opts.fromZ != null ? opts.fromZ : G.player.z;
+  const dd = Math.hypot(fx - m.x, fz - m.z) || 1, off = Math.min(m.radius, dd * 0.5);
+  const big = r.type !== 'normal';
+  impactStar(m.x + (fx - m.x) / dd * off, h * 0.6, m.z + (fz - m.z) / dd * off, r.type === 'exc' ? 0x7affa0 : big ? 0xffd060 : 0xfff0d0, big ? 1.9 : 1.1);
+  if (big) {
+    shockRing(m.x, m.z, 1.4 + m.radius, r.type === 'exc' ? 0x7affa0 : 0xffd060, 0.3);
+    if (CONFIG.feel.hitStop > 0) impactFlash(r.type === 'exc' ? 1 : 0.7);
+  }
   Sfx.hit();
   if (m.hp <= 0) killMonster(m);
   return r.dmg;
@@ -10252,7 +10469,10 @@ function basicAttack(m) {
       while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
       if (o === m || Math.abs(da) < 0.9) hitMonster(o, o === m ? 1 : 0.6, null);
     }
-    for (let i = -3; i <= 3; i++) { const a = ang + i * 0.25; emit(p.x + Math.sin(a) * 1.8, 1.1, p.z + Math.cos(a) * 1.8, { n: 1, color: 0xfff0d0, speed: 1, life: 0.2, size: 0.9 }); }
+    // rastro em meia-lua com a cor da raridade da arma; alterna o lado a cada golpe
+    const wpn = G.ch.equip && G.ch.equip.weapon;
+    p.slashFlip = !p.slashFlip;
+    slashArc(p.x, p.z, ang, wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xfff0d0, { radius: 2.3, flip: p.slashFlip });
     Sfx.swing();
   } else if (cls === 'dw') {
     const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
@@ -10953,6 +11173,7 @@ function frame(dt) {
   Music.tick();
   updateRings(fxDt);
   updateFx(fxDt);
+  updateCombatFx(fxDt);
   renderFrame();
 }
 

@@ -4,6 +4,7 @@ import { G } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
+import { slashArc } from '../engine/combatfx.js';
 import { world } from '../engine/renderer.js';
 import { hitMonster } from './combat.js';
 import { face, stepToward, turn } from './movement.js';
@@ -71,7 +72,8 @@ export function updateAllies(dt) {
         a.attackAnim = 0.001;
         face(a, a.target.x, a.target.z);
         const k = a.kind === 'pet' ? 0.3 : 0.9;
-        hitMonster(a.target, k, null);
+        if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
+        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
       }
     } else {
       const d = Math.hypot(p.x - a.x, p.z - a.z);

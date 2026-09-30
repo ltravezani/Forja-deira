@@ -22,10 +22,12 @@ export function toScreen(x, y, z) {
 // (sem criar/destruir nós nem timers por golpe; o limite vale sempre).
 const floats = [];
 let floatCursor = 0;
+// sobe com um pulo de escala: nasce grande, assenta e some subindo
 const RISE = [
-  { opacity: 0, transform: 'translate(-50%, calc(-50% + 6px))' },
-  { opacity: 1, offset: 0.12 },
-  { opacity: 0, transform: 'translate(-50%, calc(-50% - 54px))' },
+  { opacity: 0, transform: 'translate(-50%, calc(-50% + 6px)) scale(1.7)' },
+  { opacity: 1, transform: 'translate(-50%, calc(-50% - 4px)) scale(0.92)', offset: 0.12 },
+  { opacity: 1, transform: 'translate(-50%, calc(-50% - 10px)) scale(1)', offset: 0.22 },
+  { opacity: 0, transform: 'translate(-50%, calc(-50% - 54px)) scale(0.9)' },
 ];
 function floatEl() {
   const O = CONFIG.overlay;

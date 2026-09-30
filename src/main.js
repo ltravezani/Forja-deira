@@ -8,6 +8,7 @@ import { G, loadSave, S } from './core/state.js';
 import { TILE } from './core/util.js';
 import { installDebugHook } from './debug.js';
 import { Sfx } from './engine/audio.js';
+import { updateCombatFx } from './engine/combatfx.js';
 import { updateParticles, updateRings } from './engine/effects.js';
 import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
@@ -33,6 +34,7 @@ function frame(dt) {
   Music.tick();
   updateRings(fxDt);
   updateFx(fxDt);
+  updateCombatFx(fxDt);
   renderFrame();
 }
 
