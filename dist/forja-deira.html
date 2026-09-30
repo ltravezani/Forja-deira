@@ -1374,6 +1374,7 @@ const CONFIG = {
     bloomThreshold: 1.5,    // brilho linear (antes do tone mapping) a partir do qual algo "acende"
     vignette: 0.38,         // escurecimento das bordas da tela (0 = sem vinheta)
     shadowTint: 1.2,        // multiplica a força do tom de sombra de cada bioma (BIOMES[x].shadow)
+    heightFog: 1,           // multiplica a densidade da névoa de altura dos biomas (0 = desligada)
     glowCore: 1.8,          // brilhos sólidos (orbes, olhos, núcleos, magias) em HDR: passam do limiar do bloom
   },
   particles: { max: 4000 },
@@ -3095,7 +3096,7 @@ return { findPath, gy, lineClear, walkable, walkableR };
 })();
 
 // ---- engine/renderer.js ----
-const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
+const { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world } = (() => {
 // ---------- renderer, cena, luzes e câmera ----------
 
 const canvas = $('#view');
@@ -3210,6 +3211,9 @@ const postMat = new THREE.ShaderMaterial({
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
     uFlash: { value: 0 }, uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
+    uContrast: { value: 1 }, uLift: { value: new THREE.Color(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Color(1, 1, 1) },
+    uCamWorld: { value: new THREE.Matrix4() }, uTime: { value: 0 },
+    uHFog: { value: new THREE.Color(0, 0, 0) }, uHFogP: { value: new THREE.Vector3(0, 1, 0) },
   },
   vertexShader: FS_VERT,
   fragmentShader: `
@@ -3217,6 +3221,8 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
     uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
+    uniform float uContrast; uniform vec3 uLift; uniform vec3 uGamma; uniform vec3 uGain;
+    uniform mat4 uCamWorld; uniform float uTime; uniform vec3 uHFog; uniform vec3 uHFogP;
     uniform float uFlash; uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
@@ -3246,11 +3252,25 @@ const postMat = new THREE.ShaderMaterial({
         e *= 1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d))));
         c.rgb = mix(c.rgb, c.rgb * uInk, e);
       }
+      // névoa de altura: neblina rasteira / cinzas (posição de mundo reconstruída da profundidade)
+      if (uHFogP.z > 0.0) {
+        vec3 vp = vpos(vUv);
+        vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
+        float hf = 1.0 - smoothstep(0.0, uHFogP.y, wp.y);
+        float fn = sin(wp.x * 0.23 + uTime * 0.21) * sin(wp.z * 0.19 - uTime * 0.17) * 0.5 + 0.5;
+        hf *= uHFogP.z * (0.55 + 0.45 * fn) * smoothstep(4.0, 16.0, -vp.z);
+        c.rgb = mix(c.rgb, uHFog, clamp(hf, 0.0, 0.35));
+      }
       // brilho: soma das duas escalas (halo curto e halo largo), por cima do traço
       if (uBloom > 0.0) c.rgb += (texture2D(tBloomA, vUv).rgb * 0.65 + texture2D(tBloomB, vUv).rgb * 0.55) * uBloom;
       // gradação por bioma: tinta nas sombras/meios-tons e saturação
       float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(lum), c.rgb, uSat) * mix(uTint, vec3(1.0), smoothstep(0.0, 1.2, lum));
+      // lift/gamma/gain e contraste por bioma (no linear, antes do tone mapping; 0,18 = cinza médio)
+      c.rgb = max(c.rgb, vec3(0.0));
+      // contraste só na luminância (não satura mais as cores já fortes do bioma)
+      c.rgb *= pow(max(lum, 1e-4) / 0.18, uContrast - 1.0);
+      c.rgb = pow(c.rgb, 1.0 / uGamma) * uGain + uLift * (1.0 - smoothstep(0.0, 0.35, lum));
       // quadro de impacto (crítico): clarão branco quente de 1–2 quadros, mais forte no centro
       c.rgb = mix(c.rgb, vec3(1.6, 1.5, 1.35), uFlash * 0.28 * (1.0 - 0.5 * length(vUv - 0.5)));
       // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
@@ -3362,6 +3382,8 @@ function renderFrame() {
   U.uOutline.value = post.outline ? 1 : 0;
   U.uNear.value = camera.near; U.uFar.value = camera.far;
   U.uProjInv.value.copy(camera.projectionMatrixInverse);
+  U.uCamWorld.value.copy(camera.matrixWorld);
+  U.uTime.value = performance.now() / 1000;
   U.uFlash.value = post.flashFrames > 0 ? post.flash : 0;
   if (post.flashFrames > 0) post.flashFrames--;
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
@@ -3383,12 +3405,28 @@ function bloomOn() { return post.bloom; }
 function impactFlash(k) { post.flash = Math.max(post.flashFrames > 0 ? post.flash : 0, Math.min(1, k)); post.flashFrames = 2; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 function setOutline(on) { post.outline = !!on; }
-/** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */
-function setGrade(tint, sat) {
-  postMat.uniforms.uTint.value.setHex(tint == null ? 0xffffff : tint);
-  postMat.uniforms.uSat.value = sat == null ? 1 : sat;
+/**
+ * Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra).
+ * look (opcional): { contrast, lift (hex, somado nas sombras), gamma [r,g,b], gain (hex) }.
+ */
+function setGrade(tint, sat, look) {
+  const U = postMat.uniforms;
+  look = look || {};
+  U.uTint.value.setHex(tint == null ? 0xffffff : tint);
+  U.uSat.value = sat == null ? 1 : sat;
+  U.uContrast.value = look.contrast || 1;
+  U.uLift.value.setHex(look.lift || 0).multiplyScalar(0.035);
+  U.uGamma.value.fromArray(look.gamma || [1, 1, 1]);
+  U.uGain.value.setHex(look.gain == null ? 0xffffff : look.gain);
 }
-return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setOutline, shake, sun, torchLights, updateCamera, world };
+/** Névoa de altura do bioma: [cor, altura (m), densidade 0–1] ou null. */
+function setHeightFog(f) {
+  const U = postMat.uniforms;
+  if (!f || !CONFIG.style.heightFog) { U.uHFogP.value.set(0, 1, 0); return; }
+  U.uHFog.value.setHex(f[0]);
+  U.uHFogP.value.set(0, f[1], f[2] * CONFIG.style.heightFog);
+}
+return { CAM, applyQuality, bloomOn, camTarget, camera, canvas, hemi, heroLight, impactFlash, particleScale, renderFrame, renderer, resetCamera, resize, scene, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, world };
 })();
 
 // ---- engine/audio.js ----
@@ -5882,17 +5920,17 @@ const { BIOMES, DUNGEON_ORDER, TOWER_ORDER, floorLevel, towerBiome } = (() => {
  */
 
 const BIOMES = {
-  town: { name: 'Refúgio de Aldrena', fog: [0x181b26, 34, 88], hemi: [0x7a8ab8, 0x3a2e22, 2.1], sun: [0xa8bcff, 2.3], light: 0xffc07a, exposure: 1.15, shadow: [0x4a5cc0, 0.5], grade: [0xc4d0ff, 1.03] },
-  forest: { name: 'Floresta Sussurrante', base: 3, fog: [0x0e1610, 26, 68], hemi: [0x7a9a70, 0x2a2016, 1.8], sun: [0xc8dcb0, 1.8], light: 0xffc88a, exposure: 1.05, shadow: [0x2e6a86, 0.42], grade: [0xd4ecd0, 1.0], templates: ['cave', 'room', 'cave', 'hall'], monsters: ['goblin', 'spider', 'wolf'], boss: 'queen', decor: 'forest', ambient: 0x9aff8a },
-  caves: { name: 'Cavernas de Cristal', base: 30, fog: [0x0a0c1a, 24, 64], hemi: [0x8a92b8, 0x14101c, 1.7], sun: [0xc0caf0, 1.2], light: 0xc8d8ff, exposure: 1.1, shadow: [0x5a44c8, 0.55], grade: [0xc8d4ff, 1.02], templates: ['cave', 'cave', 'room'], monsters: ['bat', 'golem', 'kobold'], boss: 'colossus', decor: 'crystal', ambient: 0x8ad0ff },
-  ruins: { name: 'Ruínas de Kael', base: 70, fog: [0x16131c, 26, 70], hemi: [0x9a90b0, 0x2a2016, 1.6], sun: [0xe0d4ff, 1.7], light: 0xffc890, exposure: 1.05, shadow: [0x54489a, 0.45], grade: [0xf0e2d0, 1.0], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['skeleton', 'archer', 'specter'], boss: 'skeking', decor: 'ruins', ambient: 0xd8c8a8 },
-  castle: { name: 'Castelo Carmesim', base: 120, fog: [0x160a0e, 26, 66], hemi: [0xb08090, 0x241018, 1.7], sun: [0xffc8b8, 1.4], light: 0xffb888, exposure: 1.05, shadow: [0x5a2a78, 0.5], grade: [0xffd4dc, 1.02], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['knight', 'gargoyle', 'warlock'], boss: 'lord', decor: 'castle', ambient: 0xff8a6a },
-  abyss: { name: 'Abismo de Obsidiana', base: 180, fog: [0x1c0806, 26, 66], hemi: [0x9a6a64, 0x2a0e0a, 1.5], sun: [0xffa070, 1.4], light: 0xffb080, exposure: 1.1, shadow: [0x8a1838, 0.55], grade: [0xffd0c0, 0.98], templates: ['cave', 'hall', 'cave', 'room'], monsters: ['lavademon', 'hound', 'herald'], boss: 'tyrant', decor: 'lava', ambient: 0xff7a2a },
+  town: { name: 'Refúgio de Aldrena', fog: [0x181b26, 34, 88], hemi: [0x7a8ab8, 0x3a2e22, 2.1], sun: [0xa8bcff, 2.3], light: 0xffc07a, exposure: 1.15, shadow: [0x4a5cc0, 0.5], grade: [0xc4d0ff, 1.03], look: { contrast: 1.05, lift: 0x1a2a55, gamma: [0.98, 1, 1.04], gain: 0xfff4e8 }, hfog: [0x4a5068, 0.9, 0.1] },
+  forest: { name: 'Floresta Sussurrante', base: 3, fog: [0x0e1610, 26, 68], hemi: [0x7a9a70, 0x2a2016, 1.8], sun: [0xc8dcb0, 1.8], light: 0xffc88a, exposure: 1.05, shadow: [0x2e6a86, 0.42], grade: [0xd4ecd0, 1.0], look: { contrast: 1.06, lift: 0x103a2a, gamma: [0.98, 1.03, 0.98], gain: 0xfff8d8 }, hfog: [0x6a7a6a, 1.1, 0.14], templates: ['cave', 'room', 'cave', 'hall'], monsters: ['goblin', 'spider', 'wolf'], boss: 'queen', decor: 'forest', ambient: 0x9aff8a },
+  caves: { name: 'Cavernas de Cristal', base: 30, fog: [0x0a0c1a, 24, 64], hemi: [0x8a92b8, 0x14101c, 1.7], sun: [0xc0caf0, 1.2], light: 0xc8d8ff, exposure: 1.1, shadow: [0x5a44c8, 0.55], grade: [0xc8d4ff, 1.02], look: { contrast: 1.08, lift: 0x2a1a5a, gamma: [1, 1, 1.05], gain: 0xe8f0ff }, hfog: [0x4a5070, 0.9, 0.12], templates: ['cave', 'cave', 'room'], monsters: ['bat', 'golem', 'kobold'], boss: 'colossus', decor: 'crystal', ambient: 0x8ad0ff },
+  ruins: { name: 'Ruínas de Kael', base: 70, fog: [0x16131c, 26, 70], hemi: [0x9a90b0, 0x2a2016, 1.6], sun: [0xe0d4ff, 1.7], light: 0xffc890, exposure: 1.05, shadow: [0x54489a, 0.45], grade: [0xf0e2d0, 1.0], look: { contrast: 1.04, lift: 0x2a2040, gamma: [1.03, 1, 0.96], gain: 0xfff0d8 }, hfog: [0x8a8494, 1.0, 0.14], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['skeleton', 'archer', 'specter'], boss: 'skeking', decor: 'ruins', ambient: 0xd8c8a8 },
+  castle: { name: 'Castelo Carmesim', base: 120, fog: [0x160a0e, 26, 66], hemi: [0xb08090, 0x241018, 1.7], sun: [0xffc8b8, 1.4], light: 0xffb888, exposure: 1.05, shadow: [0x5a2a78, 0.5], grade: [0xffd4dc, 1.02], look: { contrast: 1.06, lift: 0x3a0a1a, gamma: [1.01, 0.99, 1], gain: 0xfff0ec }, hfog: [0x4a3034, 0.8, 0.1], templates: ['hall', 'room', 'cross', 'hall'], monsters: ['knight', 'gargoyle', 'warlock'], boss: 'lord', decor: 'castle', ambient: 0xff8a6a },
+  abyss: { name: 'Abismo de Obsidiana', base: 180, fog: [0x1c0806, 26, 66], hemi: [0x9a6a64, 0x2a0e0a, 1.5], sun: [0xffa070, 1.4], light: 0xffb080, exposure: 1.1, shadow: [0x8a1838, 0.55], grade: [0xffd0c0, 0.98], look: { contrast: 1.06, lift: 0x3a0808, gamma: [1.02, 0.99, 0.97], gain: 0xfff0dc }, hfog: [0x4a2a24, 1.4, 0.18], templates: ['cave', 'hall', 'cave', 'room'], monsters: ['lavademon', 'hound', 'herald'], boss: 'tyrant', decor: 'lava', ambient: 0xff7a2a },
   // ---------- Torre Infinita: biomas próprios (monstros reaproveitados), trocados a cada 5 andares ----------
-  tw_granite: { name: 'Salões de Granito', tower: true, fog: [0x10141c, 26, 70], hemi: [0x8a98b8, 0x1e1a22, 1.7], sun: [0xc8d4ff, 1.5], light: 0xffc890, exposure: 1.08, shadow: [0x4a58b0, 0.45], grade: [0xd8e0ff, 1.02], monsters: ['skeleton', 'knight', 'golem'], boss: 'skeking', decor: 'tower', ambient: 0xbfd0ff },
-  tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, shadow: [0x5a38c0, 0.55], grade: [0xe4d4ff, 1.03], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
-  tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, shadow: [0x2a6a9a, 0.45], grade: [0xd0f4ff, 1.02], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
-  tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, shadow: [0x7a2080, 0.55], grade: [0xffd0ec, 1.0], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
+  tw_granite: { name: 'Salões de Granito', tower: true, fog: [0x10141c, 26, 70], hemi: [0x8a98b8, 0x1e1a22, 1.7], sun: [0xc8d4ff, 1.5], light: 0xffc890, exposure: 1.08, shadow: [0x4a58b0, 0.45], grade: [0xd8e0ff, 1.02], look: { contrast: 1.05, lift: 0x1a2240, gain: 0xf4f6ff }, hfog: [0x505868, 0.8, 0.1], monsters: ['skeleton', 'knight', 'golem'], boss: 'skeking', decor: 'tower', ambient: 0xbfd0ff },
+  tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, shadow: [0x5a38c0, 0.55], grade: [0xe4d4ff, 1.03], look: { contrast: 1.06, lift: 0x2a1450, gamma: [1, 0.98, 1.04] }, hfog: [0x54486a, 0.9, 0.12], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
+  tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, shadow: [0x2a6a9a, 0.45], grade: [0xd0f4ff, 1.02], look: { contrast: 1.06, lift: 0x0a2a3a, gamma: [0.98, 1.02, 1.04] }, hfog: [0x6a8488, 1.1, 0.14], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
+  tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, shadow: [0x7a2080, 0.55], grade: [0xffd0ec, 1.0], look: { contrast: 1.06, lift: 0x300a30, gamma: [1.02, 0.97, 1.02] }, hfog: [0x4a3048, 1.0, 0.14], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
 };
 const DUNGEON_ORDER = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
 const floorLevel = (biome, floor) => BIOMES[biome].base + (floor - 1) * 8;
@@ -7770,6 +7808,9 @@ const { buildLevel, getLevelMeshes, updateTorchLights } = (() => {
 
 const LAVA_DISC = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
 LAVA_DISC.userData.shared = true;
+/** Adereços com cone de luz: [altura da fonte, raio da boca, comprimento, cor]. */
+const CONE_KITS = { brazier: [1.35, 1.1, 3.2, 0xffa050], crystalBig: [0.6, 1.3, 4.2, 0x8ac0ff] };
+let cones = [];
 let levelMeshes = [];
 /** Malhas do nível atual (diagnóstico/testes). */
 function getLevelMeshes() { return levelMeshes; }
@@ -7792,6 +7833,9 @@ function placeKit(name, list, fn, opt) {
     return addLevel(m);
   };
   mk(k.geo, k.geo.attributes.wind ? kitWindMat() : kitMat(), !(opt && opt.noShadow));
+  // raios de luz falsos saindo de braseiros e cristais grandes (ver buildCones)
+  const cs = CONE_KITS[name];
+  if (cs) list.forEach((p, i) => { const o = fn(p, i), s = o.s || 1; cones.push({ x: o.x, y: (o.y || 0) + cs[0] * s, z: o.z, r: cs[1] * s, h: cs[2] * s, color: cs[3] }); });
   if (k.glow) { const g = mk(k.glow, kitGlowMat(), false); g.renderOrder = 3; }
   if (k.roof) mk(k.roof, roofMat(), true);
 }
@@ -8052,6 +8096,7 @@ function buildLevel(L) {
   fires = [];
   mist = null;
   shafts = null;
+  cones = [];
   clearTownFx();
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
@@ -8061,7 +8106,8 @@ function buildLevel(L) {
   heroLight.color.setHex(B.light);
   heroLight.intensity = L.biome === 'town' ? 26 : 36;
   renderer.toneMappingExposure = (B.exposure || 1.05) * 0.88;
-  setGrade(B.grade && B.grade[0], B.grade && B.grade[1]);
+  setGrade(B.grade && B.grade[0], B.grade && B.grade[1], B.look);
+  setHeightFog(B.hfog);
   setShadowTint(B.shadow && B.shadow[0], B.shadow ? B.shadow[1] * CONFIG.style.shadowTint : 0);
   const T = biomeTex(L.biome);
   const town = L.biome === 'town';
@@ -8110,6 +8156,7 @@ function buildLevel(L) {
   const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
+  buildCones();
 }
 
 // ---------- raios de luz (fachos inclinados vindos do alto, na direção do sol) ----------
@@ -8168,7 +8215,45 @@ function buildShafts(L, rnd) {
   shafts.renderOrder = 6;
   addLevel(shafts);
 }
+// ---------- cones de luz: brilho aditivo que sai das fontes (lampiões para baixo; braseiros e cristais para cima) ----------
+const CONE_GEO = new THREE.CylinderGeometry(1, 0.22, 1, 14, 1, true).translate(0, 0.5, 0);
+CONE_GEO.userData.shared = true;
+let coneMesh = null;
+function buildCones() {
+  coneMesh = null;
+  if (!cones.length) return;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 }, uOp: { value: 0.16 } },
+    vertexShader: `varying float vH; varying float vF; varying float vPh; varying vec3 vC;
+      void main() {
+        vH = position.y; vC = instanceColor;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vec3 n = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vF = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        vPh = instanceMatrix[3].x * 0.71 + instanceMatrix[3].z * 0.43;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: `uniform float uOp; uniform float uTime; varying float vH; varying float vF; varying float vPh; varying vec3 vC;
+      void main() {
+        float a = smoothstep(0.0, 0.1, vH) * (1.0 - smoothstep(0.25, 1.0, vH)) * pow(vF, 1.5);
+        a *= 0.75 + 0.25 * sin(uTime * 2.1 + vPh) * sin(uTime * 0.9 + vPh * 2.3);
+        gl_FragColor = vec4(vC * a * uOp, 1.0);
+      }`,
+  });
+  coneMesh = new THREE.InstancedMesh(CONE_GEO, mat, cones.length);
+  const c = new THREE.Color();
+  cones.forEach((k, i) => {
+    // h < 0: cone virado para baixo (a boca estreita fica na fonte de luz)
+    setInstance(coneMesh, i, k.x, k.y, k.z, k.h < 0 ? Math.PI : 0, 0, 0, k.r, Math.abs(k.h), k.r);
+    coneMesh.setColorAt(i, c.setHex(k.color));
+  });
+  coneMesh.computeBoundingSphere();
+  coneMesh.renderOrder = 6;
+  addLevel(coneMesh);
+}
 function updateShafts(px, pz, t, dt) {
+  if (coneMesh) coneMesh.material.uniforms.uTime.value = t;
   if (!shafts) return;
   shafts.material.uniforms.uTime.value = t;
   // poeira flutuando dentro dos fachos próximos
@@ -8197,7 +8282,7 @@ function buildProps(L, B, rnd) {
     placeKit('deadTree', by(P('tree'), (p) => p.v <= 0.35), (p) => ({ x: p.x * T, z: p.z * T, s: 0.9 + p.v, ry: p.v * 9 }));
     placeKit('bush', P('bush'), (p) => ({ x: p.x * T, z: p.z * T, s: 0.7 + p.v * 0.6, ry: p.v * 6 }));
     placeKit('lamp', P('lamp'), (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.atan2(23 - p.z, 23 - p.x) }));
-    P('lamp').forEach((p) => { const a = Math.atan2(23 - p.z, 23 - p.x); const lx = p.x * T + Math.cos(a) * 0.62, lz = p.z * T + Math.sin(a) * 0.62; torches.push({ x: lx, y: 2.3, z: lz, lamp: true }); addFire(lx, 2.8, lz, 1.6, 0xffc070); });
+    P('lamp').forEach((p) => { const a = Math.atan2(23 - p.z, 23 - p.x); const lx = p.x * T + Math.cos(a) * 0.62, lz = p.z * T + Math.sin(a) * 0.62; torches.push({ x: lx, y: 2.3, z: lz, lamp: true }); addFire(lx, 2.8, lz, 1.6, 0xffc070); cones.push({ x: lx, y: 2.75, z: lz, r: 1.5, h: -2.75, color: 0xffc070 }); });
     placeKit('stall', P('stall'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 2 }));
     placeKit('anvil', P('anvil'), (p) => ({ x: p.x * T, z: p.z * T, ry: 0.4 }));
     P('anvil').forEach((p) => { torches.push({ x: p.x * T + 1.4, y: 1.2, z: p.z * T + 0.3, lamp: true, forge: true }); addFire(p.x * T + 1.4, 1.05, p.z * T + 0.3, 1.2, 0xff6a20); });

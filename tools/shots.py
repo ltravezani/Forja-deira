@@ -138,7 +138,10 @@ with sync_playwright() as p:
     ev("(G.ch.level = 120, D.recalc(), G.player.invulnUntil = 1e12, 0)")
     for z in zones:
         if z == 'title': continue
-        fixed = 'const dn = Date.now; Date.now = () => 1700000000000; try { %s } finally { Date.now = dn; }'
+        # seed e aleatoriedade fixas ao montar a zona: mesma planta e mesmos monstros nas duas tags
+        fixed = ('const dn = Date.now, mr = Math.random; let sd = 12345; Date.now = () => 1700000000000; '
+                 'Math.random = () => { sd = (sd * 1103515245 + 12345) %% 2147483648; return sd / 2147483648; }; '
+                 'try { %s } finally { Date.now = dn; Math.random = mr; }')
         if z == 'town': ev('(D.enterTown(), 0)')
         elif z == 'tower': pg.evaluate('() => { const D = window.__FORJA_DEBUG; ' + fixed % 'D.enterTower(1);' + ' }')
         else: pg.evaluate('() => { const D = window.__FORJA_DEBUG; ' + fixed % ("D.enterDungeon('%s', 1);" % z) + ' }')
