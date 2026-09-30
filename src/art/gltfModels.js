@@ -14,12 +14,13 @@ import { glowMat } from './materials.js';
 import { stylize } from './stylize.js';
 
 /** Personagem de cada chave `gltf` usada em data.js, player.js e townlife.js. */
-const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
+const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', rogueFem: 'Rogue', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
 /** Arma na mão direita: nó do próprio personagem ou arquivo avulso (props). */
 const WEAPON = {
   knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword', rod: 'Mage:2H_Staff' },
   mage: { staff: '2H_Staff', sword: '1H_Wand', rod: '2H_Staff' },
   rogue: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
+  rogueFem: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
   barbarian: { club: '1H_Axe', sword: '1H_Axe' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
@@ -33,6 +34,7 @@ const SHIELD = { knight: 'Badge_Shield', skeleton: 'Skeleton_Shield_Small_A' };
 const OFFHAND = {
   knight: { sword: '1H_Sword_Offhand' },
   rogue: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
+  rogueFem: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
   barbarian: { club: '1H_Axe_Offhand', sword: '1H_Axe_Offhand' },
 };
 /** Clipes: locomoção, golpes (alternados), disparo, magia e queda. */
