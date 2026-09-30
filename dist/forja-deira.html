@@ -7167,6 +7167,7 @@ function buildGltfHumanoid(o, cartoon) {
     else if (role === 'cape' && !showCape) drop.push(c);
     else c.material = M[role];
   });
+  const fem = key === 'rogue' && o.head === 'hair' ? borrowHead(scene, drop, M.skin) : null;
   for (const c of drop) c.parent.remove(c);
   shareSkeleton(scene);
   // armas avulsas (pacote de esqueletos) vão para os encaixes das mãos
@@ -7213,10 +7214,70 @@ function buildGltfHumanoid(o, cartoon) {
     anim: { cur: null, over: null, prev: 0, dead: false, lastT: null, flip: false },
     atk: o.weapon === 'bow' ? 'shoot' : key === 'mage' && o.weapon === 'staff' ? 'spell' : 'melee',
   };
+  if (fem) femaleHair(m, fem, o, mats);
   // idle começa num ponto aleatório: um grupo de monstros não respira em uníssono
   play(m, acts.idle, 0);
   if (acts.idle) acts.idle.time = Math.random() * acts.idle.getClip().duration;
   return m;
+}
+
+// ---------- rosto feminino (a elfa) ----------
+/**
+ * O pacote só tem a ladina encapuzada, de rosto masculino: troca a cabeça pela do
+ * mago (mesmo rig, rosto mais delicado e sem chapéu), religada aos ossos deste clone.
+ */
+function borrowHead(scene, drop, mat) {
+  const hood = find(scene, 'Rogue_Head_Hooded'), src = LIB.chars.Mage && find(LIB.chars.Mage, 'Mage_Head');
+  if (!hood || !src || !src.isSkinnedMesh) return null;
+  const bones = src.skeleton.bones.map((b) => find(scene, b.name));
+  if (bones.some((b) => !b)) return null;
+  const head = new THREE.SkinnedMesh(src.geometry, mat);
+  head.name = 'Elf_Head';
+  head.castShadow = true; head.receiveShadow = true;
+  hood.parent.add(head);
+  head.bind(new THREE.Skeleton(bones, src.skeleton.boneInverses), src.bindMatrix);
+  drop.push(hood);
+  return head;
+}
+/** Cabelo longo com franja, rabo de cavalo e orelhas pontudas, presos ao osso da cabeça. */
+function femaleHair(m, head, o, mats) {
+  // caixa da cabeça (pose de repouso) nos eixos da âncora do osso: +y para cima, +z para a frente
+  m.root.updateMatrixWorld(true);
+  head.geometry.computeBoundingBox();
+  const box = head.geometry.boundingBox.clone().applyMatrix4(head.matrixWorld);
+  const inv = new THREE.Matrix4().copy(m.head.matrixWorld).invert();
+  box.applyMatrix4(inv);
+  const c = box.getCenter(new THREE.Vector3()), z = box.getSize(new THREE.Vector3());
+  const w = z.x, h = z.y, d = z.z;
+  const hair = ownMat(null, new THREE.Color(o.hair || 0xd8b86a), 0, 0, mats);
+  const skin = ownMat(null, new THREE.Color(o.skin || 0xf0caa8), 0, 0, mats);
+  const g = new THREE.Group();
+  g.position.copy(c);
+  m.head.add(g);
+  const P = (geo, mat, sx, sy, sz, x, y, zz) => part(geo, mat, sx * w, sy * h, sz * d, x * w, y * h, zz * d, g);
+  // calota e volume da nuca até os ombros
+  P(GEO.sphH, hair, 1.12, 1.0, 1.2, 0, 0.12, -0.06).rotation.x = -0.2; // frente mais alta: a borda some atrás da franja
+  P(GEO.sphS, hair, 1.06, 0.9, 0.62, 0, -0.08, -0.26);
+  P(GEO.sphS, hair, 0.9, 0.7, 0.5, 0, -0.42, -0.3);
+  // franja em mechas e mechas laterais emoldurando o rosto
+  for (let i = -2; i <= 2; i++) P(GEO.sphS, hair, 0.3, 0.26, 0.2, i * 0.17, 0.16 - Math.abs(i) * 0.03, 0.52 - Math.abs(i) * 0.06).rotation.z = -i * 0.25;
+  // cílios e bochechas coradas
+  const lash = ownMat(null, new THREE.Color(0x2a1810), 0, 0, mats), blush = ownMat(null, new THREE.Color(0xf08a8a), 0, 0, mats);
+  for (const sx of [-1, 1]) {
+    P(GEO.sphS, hair, 0.2, 0.85, 0.34, sx * 0.49, -0.2, 0.1).rotation.z = sx * 0.08;
+    P(GEO.sphS, hair, 0.14, 0.4, 0.2, sx * 0.46, -0.62, 0.14);
+    P(GEO.box, lash, 0.07, 0.022, 0.04, sx * 0.26, -0.05, 0.5).rotation.z = -sx * 0.6;
+    P(GEO.sphS, blush, 0.14, 0.07, 0.03, sx * 0.25, -0.28, 0.46);
+    // orelhas de elfa, pontudas e inclinadas para trás
+    const e = P(GEO.cone, skin, 0.1, 0.42, 0.12, sx * 0.56, 0.02, -0.02);
+    e.rotation.set(-0.35, 0, -sx * 1.15);
+  }
+  // rabo de cavalo longo
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.2 * h, -0.5 * d);
+  tail.rotation.x = 0.35;
+  g.add(tail);
+  for (let i = 0; i < 5; i++) part(GEO.sphS, hair, (0.3 - i * 0.035) * w, 0.3 * h, (0.3 - i * 0.035) * d, 0, -0.24 * h * i, -0.05 * d * i, tail, i < 2);
 }
 
 // ---------- animação ----------
