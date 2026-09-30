@@ -51,7 +51,8 @@ export function applyQuality(q) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
   renderer.shadowMap.enabled = Q.shadows;
   post.samples = Q.msaa;
-  post.bloom = Q.bloom;
+  post.qBloom = Q.bloom;
+  updateBloom();
   if (post.rt) { post.rt.dispose(); post.rt = null; }
   sun.castShadow = Q.shadows;
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -103,7 +104,7 @@ export function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, outline: true, bloom: true, size: new THREE.Vector2(), b: null };
+const post = { flash: 0, flashFrames: 0, rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -112,7 +113,11 @@ const postMat = new THREE.ShaderMaterial({
     uNear: { value: CC.near }, uFar: { value: CC.far }, uFade: { value: new THREE.Vector2(58, 95) },
     uInk: { value: CONFIG.style.ink }, uEdge: { value: new THREE.Vector2(CONFIG.style.edge0, CONFIG.style.edge1) },
     uOutline: { value: 1 }, uBloom: { value: 0 }, uVignette: { value: CONFIG.style.vignette },
+    uFlash: { value: 0 }, uProjInv: { value: new THREE.Matrix4() }, uNormalEdge: { value: CONFIG.style.normalEdge }, uSilWidth: { value: 1.8 },
     uTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 }, uAspect: { value: 1 },
+    uContrast: { value: 1 }, uLift: { value: new THREE.Color(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Color(1, 1, 1) },
+    uCamWorld: { value: new THREE.Matrix4() }, uTime: { value: 0 },
+    uHFog: { value: new THREE.Color(0, 0, 0) }, uHFogP: { value: new THREE.Vector3(0, 1, 0) },
   },
   vertexShader: FS_VERT,
   fragmentShader: `
@@ -120,8 +125,13 @@ const postMat = new THREE.ShaderMaterial({
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
     uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
+    uniform float uContrast; uniform vec3 uLift; uniform vec3 uGamma; uniform vec3 uGain;
+    uniform mat4 uCamWorld; uniform float uTime; uniform vec3 uHFog; uniform vec3 uHFogP;
+    uniform float uFlash; uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
     float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+    // posição em espaço de visão reconstruída da profundidade
+    vec3 vpos(vec2 uv) { vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).x * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
     void main() {
       vec4 c = texture2D(tColor, vUv);
       if (uOutline > 0.5) {
@@ -131,14 +141,42 @@ const postMat = new THREE.ShaderMaterial({
         float d = lin(vUv - vec2(0.0, o.y)), u = lin(vUv + vec2(0.0, o.y));
         // laplaciano relativo: rampas (chão inclinado na tela) somem, degraus e silhuetas ficam
         float lap = (abs(l + r - 2.0 * z) + abs(u + d - 2.0 * z)) / z;
-        float e = smoothstep(uEdge.x, uEdge.y, lap) * (1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d)))));
+        float e = smoothstep(uEdge.x, uEdge.y, lap);
+        // quinas e dobras: normais dos quatro quadrantes em volta do pixel (reconstruídas da
+        // profundidade, sem passe extra). Num plano são iguais; numa quina, divergem.
+        vec3 pc = vpos(vUv), pl = vpos(vUv - vec2(o.x, 0.0)) - pc, pr = vpos(vUv + vec2(o.x, 0.0)) - pc;
+        vec3 pd = vpos(vUv - vec2(0.0, o.y)) - pc, pu = vpos(vUv + vec2(0.0, o.y)) - pc;
+        vec3 n1 = normalize(cross(pr, pu)), n2 = normalize(cross(pu, pl)), n3 = normalize(cross(pl, pd)), n4 = normalize(cross(pd, pr));
+        float nd = 1.0 - min(min(dot(n1, n3), dot(n2, n4)), min(dot(n1, n2), dot(n3, n4)));
+        e = max(e, smoothstep(uNormalEdge, uNormalEdge * 2.2, nd) * 0.75);
+        // silhueta mais grossa: do lado de trás de um degrau grande de profundidade, amostra num raio maior
+        vec2 w = o * uSilWidth;
+        float zn = min(min(lin(vUv - vec2(w.x, 0.0)), lin(vUv + vec2(w.x, 0.0))), min(lin(vUv - vec2(0.0, w.y)), lin(vUv + vec2(0.0, w.y))));
+        e = max(e, smoothstep(0.06, 0.12, (z - zn) / z));
+        e *= 1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d))));
         c.rgb = mix(c.rgb, c.rgb * uInk, e);
+      }
+      // névoa de altura: neblina rasteira / cinzas (posição de mundo reconstruída da profundidade)
+      if (uHFogP.z > 0.0) {
+        vec3 vp = vpos(vUv);
+        vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
+        float hf = 1.0 - smoothstep(0.0, uHFogP.y, wp.y);
+        float fn = sin(wp.x * 0.23 + uTime * 0.21) * sin(wp.z * 0.19 - uTime * 0.17) * 0.5 + 0.5;
+        hf *= uHFogP.z * (0.55 + 0.45 * fn) * smoothstep(4.0, 16.0, -vp.z);
+        c.rgb = mix(c.rgb, uHFog, clamp(hf, 0.0, 0.35));
       }
       // brilho: soma das duas escalas (halo curto e halo largo), por cima do traço
       if (uBloom > 0.0) c.rgb += (texture2D(tBloomA, vUv).rgb * 0.65 + texture2D(tBloomB, vUv).rgb * 0.55) * uBloom;
       // gradação por bioma: tinta nas sombras/meios-tons e saturação
       float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(lum), c.rgb, uSat) * mix(uTint, vec3(1.0), smoothstep(0.0, 1.2, lum));
+      // lift/gamma/gain e contraste por bioma (no linear, antes do tone mapping; 0,18 = cinza médio)
+      c.rgb = max(c.rgb, vec3(0.0));
+      // contraste só na luminância (não satura mais as cores já fortes do bioma)
+      c.rgb *= pow(max(lum, 1e-4) / 0.18, uContrast - 1.0);
+      c.rgb = pow(c.rgb, 1.0 / uGamma) * uGain + uLift * (1.0 - smoothstep(0.0, 0.35, lum));
+      // quadro de impacto (crítico): clarão branco quente de 1–2 quadros, mais forte no centro
+      c.rgb = mix(c.rgb, vec3(1.6, 1.5, 1.35), uFlash * 0.28 * (1.0 - 0.5 * length(vUv - 0.5)));
       // vinheta oval suave (escurece as bordas, puxa o olho para o herói)
       vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
       c.rgb *= 1.0 - uVignette * smoothstep(0.35, 1.05, length(q) * 1.25);
@@ -219,6 +257,7 @@ function resizePost() {
   postMat.uniforms.uTexel.value.set(1 / w, 1 / h);
   postMat.uniforms.uAspect.value = w / h;
   postMat.uniforms.uWidth.value = Math.max(1, renderer.getPixelRatio() * CONFIG.style.lineWidth);
+  postMat.uniforms.uSilWidth.value = CONFIG.style.silhouetteWidth / CONFIG.style.lineWidth;
 }
 /** Brilho: limiar em 1/4, desfoque; cópia para 1/8, desfoque mais largo. */
 function renderBloom() {
@@ -246,13 +285,48 @@ export function renderFrame() {
   U.uBloom.value = post.bloom ? CONFIG.style.bloom : 0;
   U.uOutline.value = post.outline ? 1 : 0;
   U.uNear.value = camera.near; U.uFar.value = camera.far;
+  U.uProjInv.value.copy(camera.projectionMatrixInverse);
+  U.uCamWorld.value.copy(camera.matrixWorld);
+  U.uTime.value = performance.now() / 1000;
+  U.uFlash.value = post.flashFrames > 0 ? post.flash : 0;
+  if (post.flashFrames > 0) post.flashFrames--;
   if (scene.fog) U.uFade.value.set(scene.fog.near + 20, scene.fog.far + 10);
   pass(postMat, null);
 }
+/**
+ * Brilho (bloom): segue a qualidade (ligado em alta/média, desligado em baixa)
+ * até o jogador escolher em Opções. Sem alvo HDR (HalfFloat) fica sempre desligado:
+ * num alvo de 8 bits nada passa do limiar.
+ */
+function updateBloom() {
+  post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
+}
+/** on: true/false = escolha do jogador; null = padrão da qualidade. */
+export function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
+/** Estado efetivo do brilho (Opções mostra o que está valendo). */
+export function bloomOn() { return post.bloom; }
+/** Quadro de impacto: clarão branco por 2 quadros (quem chama respeita a opção de pausa de impacto). */
+export function impactFlash(k) { post.flash = Math.max(post.flashFrames > 0 ? post.flash : 0, Math.min(1, k)); post.flashFrames = 2; }
 /** Liga/desliga o contorno (opção de acessibilidade/desempenho). */
 export function setOutline(on) { post.outline = !!on; }
-/** Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra). */
-export function setGrade(tint, sat) {
-  postMat.uniforms.uTint.value.setHex(tint == null ? 0xffffff : tint);
-  postMat.uniforms.uSat.value = sat == null ? 1 : sat;
+/**
+ * Gradação de cor do bioma: tint = cor multiplicada nas sombras, sat = saturação (1 = neutra).
+ * look (opcional): { contrast, lift (hex, somado nas sombras), gamma [r,g,b], gain (hex) }.
+ */
+export function setGrade(tint, sat, look) {
+  const U = postMat.uniforms;
+  look = look || {};
+  U.uTint.value.setHex(tint == null ? 0xffffff : tint);
+  U.uSat.value = sat == null ? 1 : sat;
+  U.uContrast.value = look.contrast || 1;
+  U.uLift.value.setHex(look.lift || 0).multiplyScalar(0.035);
+  U.uGamma.value.fromArray(look.gamma || [1, 1, 1]);
+  U.uGain.value.setHex(look.gain == null ? 0xffffff : look.gain);
+}
+/** Névoa de altura do bioma: [cor, altura (m), densidade 0–1] ou null. */
+export function setHeightFog(f) {
+  const U = postMat.uniforms;
+  if (!f || !CONFIG.style.heightFog) { U.uHFogP.value.set(0, 1, 0); return; }
+  U.uHFog.value.setHex(f[0]);
+  U.uHFogP.value.set(0, f[1], f[2] * CONFIG.style.heightFog);
 }

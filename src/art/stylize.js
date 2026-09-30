@@ -20,7 +20,35 @@ export function toonGradient() {
   return _grad;
 }
 
+/**
+ * Uniforms compartilhados por todos os materiais estilizados: trocar de bioma
+ * muda só os valores (sem recompilar shaders). uShadowTint é o tom das áreas
+ * pouco iluminadas pelo sol (normalizado para não mudar o brilho, só a cor);
+ * uShadowStrength vai de 0 (sombra neutra) a 1.
+ */
+export const STYLE_U = {
+  uShadowTint: { value: new THREE.Color(1, 1, 1) },
+  uShadowStrength: { value: 0 },
+};
+/** Tom de sombra do bioma atual (hex) e sua força (0–1). */
+export function setShadowTint(hex, strength) {
+  STYLE_U.uShadowTint.value.setHex(hex == null ? 0xffffff : hex);
+  STYLE_U.uShadowStrength.value = hex == null ? 0 : strength;
+}
+
 const RIM_CHUNK = `
+  #if NUM_DIR_LIGHTS > 0
+  {
+    // quanto o fragmento recebe do sol: luz difusa direta ÷ (cor × luz do sol).
+    // Já inclui a sombra projetada e a faixa do toon; luzes pontuais somam e "acendem" a área.
+    vec3 sRef = diffuseColor.rgb * RECIPROCAL_PI * directionalLights[ 0 ].color;
+    float sLit = dot( reflectedLight.directDiffuse, vec3( 1.0 ) ) / max( dot( sRef, vec3( 1.0 ) ), 1e-4 );
+    float sShade = ( 1.0 - smoothstep( 0.12, 0.62, sLit ) ) * uShadowStrength;
+    // tom normalizado pela luminância: muda a cor da sombra sem escurecê-la
+    vec3 sTint = min( uShadowTint / max( dot( uShadowTint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-3 ), vec3( 1.7 ) );
+    outgoingLight = ( outgoingLight - totalEmissiveRadiance ) * mix( vec3( 1.0 ), sTint, sShade ) + totalEmissiveRadiance;
+  }
+  #endif
   {
     vec3 sV = normalize( vViewPosition );
     float sNV = 1.0 - clamp( dot( normal, sV ), 0.0, 1.0 );
@@ -49,9 +77,9 @@ export function stylize(mat, o) {
   mat.userData.stylize = U;
   mat.onBeforeCompile = (sh, r) => {
     if (prev) prev(sh, r);
-    Object.assign(sh.uniforms, U);
+    Object.assign(sh.uniforms, U, STYLE_U);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uSpec; uniform vec3 uRimColor;')
+      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uSpec; uniform vec3 uRimColor; uniform vec3 uShadowTint; uniform float uShadowStrength;')
       .replace('#include <opaque_fragment>', RIM_CHUNK);
   };
   const key = 'toonStyle|' + (prev ? prev.toString() : '');

@@ -2,16 +2,22 @@
 import { GEO } from '../art/geometry.js';
 import { disposeObject } from '../art/materials.js';
 import { CUT, CUT_GLSL, cutaway, setCutaway } from '../art/cutaway.js';
-import { stylize, toonGradient, toonMaterial } from '../art/stylize.js';
+import { setShadowTint, stylize, toonGradient, toonMaterial } from '../art/stylize.js';
 import { fbm, hash2, makeTexSet, sat, texDecal, texPlaza, vnoise } from '../art/textures.js';
+import { CONFIG } from '../core/config.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
-import { camera, hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
+import { camera, hemi, heroLight, renderer, scene, setGrade, setHeightFog, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
-import { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
+import { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
 import { buildTownFx, clearTownFx, updateTownFx } from './townfx.js';
 
+const LAVA_DISC = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+LAVA_DISC.userData.shared = true;
+/** Adereços com cone de luz: [altura da fonte, raio da boca, comprimento, cor]. */
+const CONE_KITS = { brazier: [1.35, 1.1, 3.2, 0xffa050], crystalBig: [0.6, 1.3, 4.2, 0x8ac0ff] };
+let cones = [];
 let levelMeshes = [];
 /** Malhas do nível atual (diagnóstico/testes). */
 export function getLevelMeshes() { return levelMeshes; }
@@ -33,7 +39,10 @@ function placeKit(name, list, fn, opt) {
     m.computeBoundingSphere();
     return addLevel(m);
   };
-  mk(k.geo, kitMat(), !(opt && opt.noShadow));
+  mk(k.geo, k.geo.attributes.wind ? kitWindMat() : kitMat(), !(opt && opt.noShadow));
+  // raios de luz falsos saindo de braseiros e cristais grandes (ver buildCones)
+  const cs = CONE_KITS[name];
+  if (cs) list.forEach((p, i) => { const o = fn(p, i), s = o.s || 1; cones.push({ x: o.x, y: (o.y || 0) + cs[0] * s, z: o.z, r: cs[1] * s, h: cs[2] * s, color: cs[3] }); });
   if (k.glow) { const g = mk(k.glow, kitGlowMat(), false); g.renderOrder = 3; }
   if (k.roof) mk(k.roof, roofMat(), true);
 }
@@ -294,6 +303,7 @@ export function buildLevel(L) {
   fires = [];
   mist = null;
   shafts = null;
+  cones = [];
   clearTownFx();
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
@@ -303,7 +313,9 @@ export function buildLevel(L) {
   heroLight.color.setHex(B.light);
   heroLight.intensity = L.biome === 'town' ? 26 : 36;
   renderer.toneMappingExposure = (B.exposure || 1.05) * 0.88;
-  setGrade(B.grade && B.grade[0], B.grade && B.grade[1]);
+  setGrade(B.grade && B.grade[0], B.grade && B.grade[1], B.look);
+  setHeightFog(B.hfog);
+  setShadowTint(B.shadow && B.shadow[0], B.shadow ? B.shadow[1] * CONFIG.style.shadowTint : 0);
   const T = biomeTex(L.biome);
   const town = L.biome === 'town';
   // chão: cidade = calçamento nas ruas, grama fora; masmorras = manchas de A/B
@@ -351,6 +363,7 @@ export function buildLevel(L) {
   const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
+  buildCones();
 }
 
 // ---------- raios de luz (fachos inclinados vindos do alto, na direção do sol) ----------
@@ -409,7 +422,45 @@ function buildShafts(L, rnd) {
   shafts.renderOrder = 6;
   addLevel(shafts);
 }
+// ---------- cones de luz: brilho aditivo que sai das fontes (lampiões para baixo; braseiros e cristais para cima) ----------
+const CONE_GEO = new THREE.CylinderGeometry(1, 0.22, 1, 14, 1, true).translate(0, 0.5, 0);
+CONE_GEO.userData.shared = true;
+let coneMesh = null;
+function buildCones() {
+  coneMesh = null;
+  if (!cones.length) return;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 }, uOp: { value: 0.16 } },
+    vertexShader: `varying float vH; varying float vF; varying float vPh; varying vec3 vC;
+      void main() {
+        vH = position.y; vC = instanceColor;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vec3 n = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vF = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        vPh = instanceMatrix[3].x * 0.71 + instanceMatrix[3].z * 0.43;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: `uniform float uOp; uniform float uTime; varying float vH; varying float vF; varying float vPh; varying vec3 vC;
+      void main() {
+        float a = smoothstep(0.0, 0.1, vH) * (1.0 - smoothstep(0.25, 1.0, vH)) * pow(vF, 1.5);
+        a *= 0.75 + 0.25 * sin(uTime * 2.1 + vPh) * sin(uTime * 0.9 + vPh * 2.3);
+        gl_FragColor = vec4(vC * a * uOp, 1.0);
+      }`,
+  });
+  coneMesh = new THREE.InstancedMesh(CONE_GEO, mat, cones.length);
+  const c = new THREE.Color();
+  cones.forEach((k, i) => {
+    // h < 0: cone virado para baixo (a boca estreita fica na fonte de luz)
+    setInstance(coneMesh, i, k.x, k.y, k.z, k.h < 0 ? Math.PI : 0, 0, 0, k.r, Math.abs(k.h), k.r);
+    coneMesh.setColorAt(i, c.setHex(k.color));
+  });
+  coneMesh.computeBoundingSphere();
+  coneMesh.renderOrder = 6;
+  addLevel(coneMesh);
+}
 function updateShafts(px, pz, t, dt) {
+  if (coneMesh) coneMesh.material.uniforms.uTime.value = t;
   if (!shafts) return;
   shafts.material.uniforms.uTime.value = t;
   // poeira flutuando dentro dos fachos próximos
@@ -438,7 +489,7 @@ function buildProps(L, B, rnd) {
     placeKit('deadTree', by(P('tree'), (p) => p.v <= 0.35), (p) => ({ x: p.x * T, z: p.z * T, s: 0.9 + p.v, ry: p.v * 9 }));
     placeKit('bush', P('bush'), (p) => ({ x: p.x * T, z: p.z * T, s: 0.7 + p.v * 0.6, ry: p.v * 6 }));
     placeKit('lamp', P('lamp'), (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.atan2(23 - p.z, 23 - p.x) }));
-    P('lamp').forEach((p) => { const a = Math.atan2(23 - p.z, 23 - p.x); const lx = p.x * T + Math.cos(a) * 0.62, lz = p.z * T + Math.sin(a) * 0.62; torches.push({ x: lx, y: 2.3, z: lz, lamp: true }); addFire(lx, 2.8, lz, 1.6, 0xffc070); });
+    P('lamp').forEach((p) => { const a = Math.atan2(23 - p.z, 23 - p.x); const lx = p.x * T + Math.cos(a) * 0.62, lz = p.z * T + Math.sin(a) * 0.62; torches.push({ x: lx, y: 2.3, z: lz, lamp: true }); addFire(lx, 2.8, lz, 1.6, 0xffc070); cones.push({ x: lx, y: 2.75, z: lz, r: 1.5, h: -2.75, color: 0xffc070 }); });
     placeKit('stall', P('stall'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 2 }));
     placeKit('anvil', P('anvil'), (p) => ({ x: p.x * T, z: p.z * T, ry: 0.4 }));
     P('anvil').forEach((p) => { torches.push({ x: p.x * T + 1.4, y: 1.2, z: p.z * T + 0.3, lamp: true, forge: true }); addFire(p.x * T + 1.4, 1.05, p.z * T + 0.3, 1.2, 0xff6a20); });
@@ -516,7 +567,8 @@ function buildProps(L, B, rnd) {
     for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
   }
   if (deco === 'forest') {
-    placeKit('pine', by(tall, (p) => p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
+    placeKit('pine', by(tall, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
+    placeKit('oak', by(tall, (p) => p.v >= 0.3 && p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.75 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('deadTree', by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('bush', by(low, (p) => p.v < 0.4), (p) => ({ ...pos(p, 0.8), s: 0.7 + p.v, ry: p.v * 9 }));
     placeKit('rock', by(low, (p) => p.v >= 0.4 && p.v < 0.6), (p) => ({ ...pos(p, 0.8), s: 0.6 + p.v * 0.5, ry: p.v * 9 }));
@@ -554,6 +606,12 @@ function buildProps(L, B, rnd) {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
     placeKit('lavapool', pools, (p) => ({ ...pos(p, 0.5), ry: p.v * 9, s: 0.7 + p.v * 0.5 }), { noShadow: true });
+    if (pools.length) { // superfície animada da lava (disco de raio 1 → elipse da poça)
+      const lava = new THREE.InstancedMesh(LAVA_DISC, lavaMat(), pools.length);
+      pools.forEach((p, i) => { const q = pos(p, 0.5), s = 0.7 + p.v * 0.5; setInstance(lava, i, q.x, 0.08, q.z, 0, p.v * 9, 0, s * 1.0, 1, s * 0.8); });
+      lava.computeBoundingSphere();
+      addLevel(lava);
+    }
     pools.forEach((p) => torches.push({ x: p.x * T, y: 0.8, z: p.z * T, lava: true }));
     const br = by(low, (p) => p.v >= 0.35 && p.v < 0.55);
     placeKit('brazier', br, (p) => ({ ...pos(p, 0.3) }));

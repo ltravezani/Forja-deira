@@ -4,6 +4,7 @@ import { G } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { GEO } from '../art/geometry.js';
+import { shockRing } from '../engine/combatfx.js';
 import { emit, spawnRing } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { shake } from '../engine/renderer.js';
@@ -104,6 +105,7 @@ const EFFECTS = {
       if (!p.alive) return;
       const x = p.x, z = p.z;
       for (let k = 0; k < 3; k++) G.delayed.push({ t: k * 0.12, fn: () => { spawnRing(x, z, 0.6, sk.radius * (0.6 + k * 0.2), 0xffb070, 0.45); emit(x, 0.3, z, { n: 30, color: 0xc8a070, speed: 8, up: 0.6, life: 0.6, size: 1.2, spread: 2 }); } });
+      shockRing(x, z, sk.radius * 1.2, 0xffc080, 0.4);
       cracks(x, z, sk.radius * 0.9, 10, 0xff9a4a, 0.9);
       shards(x, z, 1.2, sk.radius * 0.8, 10, 0xc89a60, 0.7, { h: 1, stagger: 0.15 });
       scorch(x, z, sk.radius * 0.5, 3);
@@ -124,6 +126,7 @@ const EFFECTS = {
       emit(tx, 0.5, tz, { n: 90, color: 0xff7a3a, speed: 12, up: 1, life: 0.8, size: 1.6, spread: 1, jitter: true });
       emit(tx, 0.5, tz, { n: 40, color: 0xffe0a0, speed: 5, up: 3, life: 0.6, size: 1.2 });
       spawnRing(tx, tz, 0.5, sk.radius * 1.1, 0xffa050, 0.5);
+      shockRing(tx, tz, sk.radius * 1.3, 0xffb070, 0.4);
       pillar(tx, tz, sk.radius * 0.35, 7, 0xff5a2a, 0.7, { grow: 1 });
       pillar(tx, tz, sk.radius * 0.16, 9, 0xffe0a0, 0.5, { grow: 0.5 });
       cracks(tx, tz, sk.radius, 12, 0xff6a2a, 1);
@@ -198,6 +201,7 @@ const EFFECTS = {
     G.delayed.push({ t: 0.5, fn: () => {
       emit(tx, 0.4, tz, { n: isRain ? 30 : 70, color: col, speed: isRain ? 5 : 10, up: 1, life: 0.7, size: 1.3, spread: sk.radius * (isRain ? 1.4 : 0.5), jitter: true });
       spawnRing(tx, tz, 0.5, sk.radius * 1.1, col, 0.45);
+      if (!isRain) shockRing(tx, tz, sk.radius * 1.3, col, 0.4);
       if (!isRain) {
         pillar(tx, tz, sk.radius * 0.35, 5, 0xff7a2a, 0.55, { grow: 1.2 });
         shards(tx, tz, 0.8, sk.radius * 0.8, 9, 0xff8a4a, 0.8, { h: 1.1, stagger: 0.1 });
@@ -215,6 +219,7 @@ const EFFECTS = {
     const fire = id === 'hell';
     const c = fire ? 0xff6a2a : 0x9ae0ff;
     spawnRing(p.x, p.z, 0.5, sk.radius, c, 0.5, { op: 0.9 });
+    shockRing(p.x, p.z, sk.radius * 1.1, c, 0.45);
     for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; emit(p.x + Math.cos(a), 0.6, p.z + Math.sin(a), { n: 1, color: c, speed: sk.radius * 2, dir: [Math.cos(a), 0.05, Math.sin(a)], life: 0.5, size: 1.4, grav: 0, drag: 0.5 }); }
     shards(p.x, p.z, 1.5, sk.radius * 0.95, fire ? 24 : 18, fire ? 0xff7a3a : 0xbfeeff, 0.9, { h: fire ? 2.2 : 1.6, stagger: 0.25 });
     pillar(p.x, p.z, 1.2, fire ? 8 : 4, c, 0.7, { grow: fire ? 1.5 : 0.8 });

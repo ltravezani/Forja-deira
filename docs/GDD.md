@@ -278,4 +278,31 @@ Biomas: Aldrena (vila à noite com casas, mercado, forja, cemitério e paliçada
 
 Desempenho medido (1280×800, v0.8): 170–580 chamadas de desenho e 100–320 mil triângulos por quadro, contando as sombras e as miudezas (antes da v0.8: 210–590 e 80–350 mil). O contorno custa um passe de tela cheia. Na qualidade "baixa" as sombras são desligadas.
 
+### 11.1 Melhorias gráficas (cartoon/anime)
+
+Roteiro em fases (capturas antes/depois com `python3 tools/shots.py --tag <nome> --perf` e `--comparar A B`).
+
+| Fase | Data | O que mudou |
+|---|---|---|
+| 1. Sombras coloridas e brilho | 30/09/2026 | Uniforms compartilhados `STYLE_U` em `stylize.js`: as áreas pouco iluminadas pelo sol ganham o tom do bioma (`BIOMES[x].shadow`: azul na cidade, roxo nas cavernas e ruínas, vinho no Abismo), normalizado para não escurecer. Brilhos sólidos (`glowMat` com opacidade ≥ 0,8) saem em HDR (`CONFIG.style.glowCore`) e acendem no bloom; feixes de loot Ancestral/Lendário também. Opção "Brilho (bloom)" em Opções → Gráficos (segue a qualidade até ser escolhida; desligado sem alvo HalfFloat) |
+| 2. Contorno de anime | 30/09/2026 | No mesmo passe final: normais reconstruídas da profundidade (quatro quadrantes em volta do pixel) traçam quinas de paredes, degraus, blocos e canteiros (`CONFIG.style.normalEdge`, ~25°); silhuetas com amostras num raio maior (`silhouetteWidth`, 1,9 px) ficam mais grossas. Chão plano e superfícies curvas lisas não geram traço. Custo: 9 leituras extras de profundidade, sem passe novo. "Contorno cartoon" continua desligando tudo |
+| 3. Efeitos de combate | 30/09/2026 | Novo `engine/combatfx.js` com pools fixos (16 rastros, 24 estrelas, 8 anéis; nada alocado por golpe): rastro em meia-lua com degradê em canvas (ponta branca → cor da raridade da arma → transparente), alternando o lado a cada golpe do Dark Knight e menor no pet; faísca em estrela de 4 pontas em todo acerto (maior e dourada em crítico, verde em excelente); anel de choque no chão em críticos e nas habilidades de área. Quadro de impacto: clarão branco de 2 quadros no passe final em crítico/excelente, desligado junto com a pausa de impacto e com "reduzir movimento". Números de dano na fonte do título, contorno grosso em 8 direções, pulo de escala; críticos maiores e dourados |
+| 4. Cenário vivo | 30/09/2026 | `kitWindMat` (variante do material do kit): tufos, capim, samambaias, flores, arbustos e copas de pinheiros e árvores frondosas balançam no vertex shader, com peso pela altura (atributo `wind`, zero na base), fase pela posição da instância e rajadas lentas; tempo compartilhado com os brilhos do kit. Copas "fofas": normais para fora do centro da copa (`fluffNormals`) em árvores frondosas e arbustos, e suavizadas nos pinheiros. A floresta ganhou árvores frondosas ao lado dos pinheiros. Lava das poças com material próprio (`lavaMat`): ruído rolando em faixas de cor, pontos quentes, borda de espuma e crosta, em HDR para o bloom. Água da fonte em faixas de cor. Tudo continua instanciado; medido na cidade: 611 chamadas e 288 mil triângulos |
+| 5. Cor e atmosfera | 30/09/2026 | Gradação por bioma no passe final, antes do tone mapping (`BIOMES[x].look`): contraste só na luminância, lift nas sombras, gamma por canal e gain. Névoa de altura no mesmo passe (`BIOMES[x].hfog`, posição de mundo reconstruída da profundidade, ondulando devagar): neblina rasteira na floresta e ruínas, cinzas no Abismo; soma-se à névoa de planos. Cones de luz aditivos e instanciados (1 chamada por nível) sob os lampiões da cidade e sobre braseiros e cristais grandes, com cintilação. A tela de título usa a gradação da cidade. Sem passe extra. Vinheta já existia |
+
+Desempenho medido depois das 5 fases (1280×800, qualidade média, Chromium com renderização por software; monstros com a mesma seed, mas a IA ainda se move): chamadas de desenho / triângulos por quadro, contando sombras, bloom e passe final.
+
+| Zona | Antes | Depois |
+|---|---|---|
+| Título | 373 / 247 mil | 374 / 247 mil |
+| Cidade | 599 / 286 mil | 601 / 287 mil |
+| Floresta | 522 / 260 mil | 492 / 262 mil |
+| Cavernas | 411 / 150 mil | 374 / 145 mil |
+| Ruínas | 445 / 176 mil | 419 / 174 mil |
+| Castelo | 732 / 349 mil | 810 / 360 mil |
+| Abismo | 320 / 278 mil | 258 / 276 mil |
+
+O cenário ganhou no máximo 3 chamadas por nível (lava, cones de luz e os pools de combate, que só desenham quando ativos); a variação restante vem de quantos monstros entram na câmera. O Castelo já passava do orçamento de ~650 chamadas antes destas fases, por causa dos monstros (cavaleiros e gárgulas têm muitas partes). Passes de tela cheia extras: nenhum novo (o bloom em resolução reduzida já existia).
+
+
 A antiga opção de carregar arte de um cliente externo foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).

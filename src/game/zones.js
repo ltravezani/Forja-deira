@@ -1,6 +1,7 @@
 // ---------- limpeza / carregamento de zonas ----------
 import { G, persist } from '../core/state.js';
 import { R, rand, TILE } from '../core/util.js';
+import { clearCombatFx } from '../engine/combatfx.js';
 import { clearEffects } from '../engine/effects.js';
 import { Music } from '../engine/music.js';
 import { clearFx } from '../engine/skillfx.js';
@@ -39,6 +40,7 @@ export function clearWorld() {
   clearAllies(true);
   clearEffects();
   clearFx();
+  clearCombatFx();
   resetFloatText();
 }
 function placePlayer(L) {
