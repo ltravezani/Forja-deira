@@ -24,10 +24,10 @@ import { confirmDescend, showDeath } from '../ui/npcDialogs.js';
 import { walkableR } from '../world/grid.js';
 
 /** Alcance do ataque básico por classe (m), somado ao raio do alvo. */
-const RANGE = { dk: 2.3, dw: 13, elf: 15 };
+const RANGE = { dk: 2.3, dw: 13, elf: 15, de: 2.4, nc: 12 };
 export function attackRange(m) { return RANGE[G.ch.cls] + (m ? m.radius : 0); }
 
-/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ}. Devolve o dano. */
+/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain}. Devolve o dano. */
 export function hitMonster(m, mult, skillId, opts) {
   if (!m || m.dead) return 0;
   opts = opts || {};
@@ -41,6 +41,12 @@ export function hitMonster(m, mult, skillId, opts) {
   const h = m.model.height;
   floatText(m.x, h + 0.3, m.z, fmt(r.dmg), r.type === 'exc' ? 'exc' : r.type === 'crit' ? 'crit' : '');
   if (G.st.lifeSteal) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
+  // drenagem das habilidades (Necromancer): cura uma fração do dano e o sangue voa até o herói
+  if (opts.drain && G.player.alive) {
+    G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * opts.drain / 100);
+    const p = G.player, dx = p.x - m.x, dz = p.z - m.z, dd = Math.hypot(dx, dz) || 1;
+    emit(m.x, h * 0.6, m.z, { n: 6, color: 0xff2a3a, speed: Math.min(14, dd * 2.4), dir: [dx / dd, 0.25, dz / dd], life: 0.4, size: 0.8, grav: 0, drag: 0 });
+  }
   if (opts.slow) m.slowUntil = G.time + 2.5;
   if (opts.kb) {
     const dx = m.x - (opts.fromX != null ? opts.fromX : G.player.x), dz = m.z - (opts.fromZ != null ? opts.fromZ : G.player.z), d = Math.hypot(dx, dz) || 1;
@@ -285,6 +291,28 @@ export function basicAttack(m) {
     p.slashFlip = !p.slashFlip;
     slashArc(p.x, p.z, ang, wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xfff0d0, { radius: 2.3, flip: p.slashFlip });
     Sfx.swing();
+  } else if (cls === 'de') {
+    // duas espadas: dois cortes rápidos (um de cada mão) no alvo e em quem estiver colado nele
+    const ang = Math.atan2(m.x - p.x, m.z - p.z);
+    const wpn = G.ch.equip && G.ch.equip.weapon;
+    const col = wpn ? parseInt(R.RARITY[wpn.rarity].color.slice(1), 16) : 0xffd0e0;
+    const cut = (flip) => {
+      if (!p.alive) return;
+      for (const o of monstersIn(p.x, p.z, 2.7)) {
+        let da = Math.atan2(o.x - p.x, o.z - p.z) - ang;
+        while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+        if (o === m || Math.abs(da) < 0.7) hitMonster(o, o === m ? 0.62 : 0.4, null);
+      }
+      slashArc(p.x, p.z, ang, flip ? 0xff5a8a : col, { radius: 2.2, flip });
+      Sfx.swing();
+    };
+    cut(false);
+    G.delayed.push({ t: Math.min(0.16, G.st.attackInterval * 0.4), fn: () => cut(true) });
+  } else if (cls === 'nc') {
+    // orbe sombrio que drena um pouco de vida
+    const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
+    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: (m.x - p.x) / d, dz: (m.z - p.z) / d, speed: 20, range: 15, mult: 0.85, color: 0xb04aff, size: 0.35, spiral: 0xff3a5a, drain: 8 });
+    Sfx.zap();
   } else if (cls === 'dw') {
     const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
     spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: (m.x - p.x) / d, dz: (m.z - p.z) / d, speed: 22, range: 16, mult: 0.85, color: 0xa8c8ff, size: 0.35 });

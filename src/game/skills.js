@@ -37,9 +37,9 @@ function autoTargetPoint(range, fx, fz) {
   if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
 }
-const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0 };
+const CLASS_COLOR = { dk: 0xff8a4a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff3a6a, nc: 0xb04aff };
 /** Habilidades que seguram o herói no lugar; as demais deixam andar devagar enquanto saem. */
-const HEAVY = { dash: 1, quake: 1, nuke: 1, blink: 1 };
+const HEAVY = { dash: 1, quake: 1, nuke: 1, blink: 1, eclipse: 1 };
 /** Faíscas na mão/arma do herói no instante do lançamento. */
 function castGlow(p, dx, dz, color, n) {
   emit(p.x + dx * 0.7, 1.3, p.z + dz * 0.7, { n: n || 10, color, speed: 2.5, life: 0.25, size: 0.9, grav: 0 });
@@ -47,6 +47,14 @@ function castGlow(p, dx, dz, color, n) {
 /** Recuo ou avanço curto do herói (ver updateShove em player.js). */
 function shove(p, dx, dz, dist, dur) {
   if (dist > 0.01) p.shove = { dx, dz, dist, t: 0, dur };
+}
+/** Aparição de um aliado: luz verde (espírito) ou chão que se abre (mortos-vivos). */
+function raiseFx(x, z, c, grave) {
+  emit(x, 0.5, z, { n: grave ? 30 : 50, color: c, speed: 3, up: 2, life: 0.8, size: 1.2 });
+  if (grave) { emit(x, 0.2, z, { n: 20, color: 0x3a2a24, speed: 4, up: 1.2, life: 0.6, size: 1 }); cracks(x, z, 1.4, 6, c, 0.8); }
+  pillar(x, z, 1, 6, c, 0.9, { grow: 0.6 });
+  spawnRing(x, z, 0.3, 2.4, c, 0.6);
+  flash(x, 1.5, z, c, 40, 0.5);
 }
 /**
  * Efeito de cada tipo de habilidade (campo `kind` em rules.js → SKILLS).
@@ -59,9 +67,12 @@ const EFFECTS = {
     p.attackAnim = 0.001;
     p.spin = { t: 0, dur: 0.3 };
     slash(p.x, p.z, p.rot, sk.radius * 0.95, 0xffe8c8, { wide: true, sweep: Math.PI * 2, dur: 0.3, y: 1 });
-    slash(p.x, p.z, p.rot + 1.2, sk.radius * 0.72, 0xff8a4a, { wide: true, sweep: Math.PI * 2, dur: 0.34, y: 0.65, op: 0.6 });
-    spawnRing(p.x, p.z, 0.5, sk.radius, 0xffe0c0, 0.3);
-    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: 0xffc080, speed: 3, dir: [-Math.sin(a), 0.2, Math.cos(a)], life: 0.3, size: 1, grav: 0 }); }
+    const c = sk.color || 0xff8a4a;
+    slash(p.x, p.z, p.rot + 1.2, sk.radius * 0.72, c, { wide: true, sweep: Math.PI * 2, dur: 0.34, y: 0.65, op: 0.6 });
+    // lâminas duplas: um segundo anel de corte, na altura da outra mão
+    if (G.ch.cls === 'de') slash(p.x, p.z, p.rot - 1.2, sk.radius * 0.86, 0xffd0e0, { wide: true, sweep: Math.PI * 2, dur: 0.3, y: 1.3, op: 0.7 });
+    spawnRing(p.x, p.z, 0.5, sk.radius, sk.color ? c : 0xffe0c0, 0.3);
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; emit(p.x + Math.cos(a) * sk.radius * 0.8, 1, p.z + Math.sin(a) * sk.radius * 0.8, { n: 1, color: sk.color || 0xffc080, speed: 3, dir: [-Math.sin(a), 0.2, Math.cos(a)], life: 0.3, size: 1, grav: 0 }); }
     monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.4 }));
     Sfx.swing(); shake(0.2);
     return true;
@@ -72,17 +83,25 @@ const EFFECTS = {
     let ex = p.x, ez = p.z;
     for (let i = 1; i <= steps; i++) { const nx = p.x + dx * i * 0.3, nz = p.z + dz * i * 0.3; if (!walkableR(G.L, nx, nz, 0.4)) break; ex = nx; ez = nz; if ((nx - tx) ** 2 + (nz - tz) ** 2 < 0.2) break; }
     emit(p.x, 0.2, p.z, { n: 14, color: 0xc8a070, speed: 3, up: 0.4, life: 0.45, size: 1.1, spread: 0.6 });
-    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.2, hit: new Set(), mult, id, color: 0xffb070, onEnd: () => {
-      slash(p.x, p.z, p.rot, 2.8, 0xffe0b0, { sweep: 0.5, dur: 0.2 });
-      emit(p.x + dx * 1.2, 1.1, p.z + dz * 1.2, { n: 16, color: 0xffd0a0, speed: 6, dir: [dx, 0.1, dz], life: 0.3, size: 0.9, grav: 0 });
-      flash(p.x + dx, 1.2, p.z + dz, 0xffa050, 30, 0.22);
+    const c = sk.color || 0xffb070;
+    p.dash = { fx: p.x, fz: p.z, tx: ex, tz: ez, t: 0, dur: 0.2, hit: new Set(), mult, id, color: c, onEnd: () => {
+      slash(p.x, p.z, p.rot, 2.8, sk.color ? 0xffd0f0 : 0xffe0b0, { sweep: 0.5, dur: 0.2 });
+      emit(p.x + dx * 1.2, 1.1, p.z + dz * 1.2, { n: 16, color: sk.color || 0xffd0a0, speed: 6, dir: [dx, 0.1, dz], life: 0.3, size: 0.9, grav: 0 });
+      flash(p.x + dx, 1.2, p.z + dz, sk.color || 0xffa050, 30, 0.22);
+      // Passo Sombrio: explode em lâminas onde termina
+      if (sk.radius) {
+        slash(p.x, p.z, p.rot, sk.radius, c, { wide: true, sweep: Math.PI * 2, dur: 0.28, y: 0.9 });
+        spawnRing(p.x, p.z, 0.4, sk.radius, c, 0.35);
+        monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult * 0.6, id, { kb: 0.6 }));
+      }
     } };
     p.attackAnim = 0.001;
     Sfx.swing();
     return true;
   },
   buff(ctx) {
-    const { p, sk, id, col } = ctx;
+    const { p, sk, id } = ctx;
+    const col = sk.color || ctx.col;
     G.buffs = G.buffs.filter((b) => b.id !== id);
     G.buffs.push({ id, name: sk.name, until: G.time + sk.dur, stats: sk.buff });
     recalc();
@@ -246,12 +265,13 @@ const EFFECTS = {
   },
   pierce(ctx) {
     const { p, sk, id, dx, dz, mult } = ctx;
-    p.attackAnim = 0.001;
-    castGlow(p, dx, dz, 0x8affb0, 16);
+    const c = sk.color || 0x8affb0;
+    if (sk.color) p.castAnim = 0.001; else p.attackAnim = 0.001;
+    castGlow(p, dx, dz, c, 16);
     shove(p, -dx, -dz, 0.55, 0.16);
-    spawnRing(p.x + dx, p.z + dz, 0.3, 1.6, 0x8affb0, 0.25);
-    flash(p.x + dx, 1.3, p.z + dz, 0x8affb0, 25, 0.2);
-    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: 0x8affb0, size: 0.45, pierce: true, big: true, spiral: 0xd8ffe0 });
+    spawnRing(p.x + dx, p.z + dz, 0.3, 1.6, c, 0.25);
+    flash(p.x + dx, 1.3, p.z + dz, c, 25, 0.2);
+    spawnProjectile({ from: 'p', x: p.x, z: p.z, dx, dz, speed: 34, range: sk.range, mult, skill: id, color: c, size: 0.45, pierce: true, big: true, spiral: sk.color ? 0x9a4aff : 0xd8ffe0 });
     Sfx.tone(900, 0.12, 'sawtooth', 0.03, 0.5);
     return true;
   },
@@ -270,13 +290,113 @@ const EFFECTS = {
   },
   summon(ctx) {
     const { p, sk, dx, dz } = ctx;
-    const sx = p.x + dx * 1.5, sz = p.z + dz * 1.5;
-    spawnAlly('spirit', sx, sz, sk.dur);
+    const c = sk.color || 0x8affb0, n = sk.count || 1;
+    for (let i = 0; i < n; i++) {
+      // vários aliados saem lado a lado, à frente do herói
+      const off = (i - (n - 1) / 2) * 1.4;
+      const sx = p.x + dx * 1.5 + dz * off, sz = p.z + dz * 1.5 - dx * off;
+      raiseFx(sx, sz, c, !!sk.ally);
+      spawnAlly(sk.ally || 'spirit', sx, sz, sk.dur);
+    }
     p.castAnim = 0.001;
-    emit(sx, 0.5, sz, { n: 50, color: 0x8affb0, speed: 3, up: 2, life: 0.8, size: 1.2 });
-    pillar(sx, sz, 1, 6, 0x8affb0, 0.9, { grow: 0.6 });
-    spawnRing(sx, sz, 0.3, 2.4, 0x8affb0, 0.6);
-    flash(sx, 1.5, sz, 0x8affb0, 40, 0.5);
+    return true;
+  },
+  bladefan(ctx) {
+    const { p, sk, id, dx, dz, mult } = ctx;
+    p.attackAnim = 0.001;
+    castGlow(p, dx, dz, sk.color, 12);
+    slash(p.x + dx * 0.5, p.z + dz * 0.5, p.rot, 2.4, sk.color, { sweep: 1.6, dur: 0.2 });
+    const n = sk.blades + (G.ch.tier >= 1 ? 2 : 0), base = Math.atan2(dx, dz);
+    for (let k = 0; k < n; k++) {
+      const a = base + (k - (n - 1) / 2) * 0.2;
+      spawnProjectile({ from: 'p', x: p.x, z: p.z, dx: Math.sin(a), dz: Math.cos(a), speed: 26, range: sk.range, mult, skill: id, color: sk.color, size: 0.3, pierce: true, spiral: 0x3a0a2a });
+    }
+    Sfx.swing(); Sfx.tone(820, 0.1, 'sawtooth', 0.025, 0.6);
+    return true;
+  },
+  whirl(ctx) {
+    const { p, sk, id, mult } = ctx;
+    const gap = 0.17, n = sk.hits;
+    p.attackAnim = 0.001;
+    p.spin = { t: 0, dur: gap * n, turns: n };
+    for (let k = 0; k < n; k++) G.delayed.push({ t: k * gap, fn: () => {
+      if (!p.alive) return;
+      slash(p.x, p.z, p.rot + k * 1.3, sk.radius * 0.95, k % 2 ? 0xffd0e0 : sk.color, { wide: true, sweep: Math.PI * 2, dur: 0.22, y: k % 2 ? 1.3 : 0.8, op: 0.8 });
+      spawnRing(p.x, p.z, 0.5, sk.radius, sk.color, 0.25);
+      emit(p.x, 0.9, p.z, { n: 14, color: 0xff2a4a, speed: 7, up: 0.3, life: 0.4, size: 0.9, grav: 0, spread: 0.6 });
+      monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.25 }));
+      Sfx.swing();
+    } });
+    shake(0.3);
+    return true;
+  },
+  eclipse(ctx) {
+    const { p, sk, id, mult } = ctx;
+    p.attackAnim = 0.001;
+    p.hop = { t: 0, dur: 0.3, h: 1.4 };
+    bubble(p.x, p.z, sk.radius * 0.35, 0x2a0a3a, 0.35, p);
+    G.delayed.push({ t: 0.28, fn: () => {
+      if (!p.alive) return;
+      const x = p.x, z = p.z;
+      for (let i = 0; i < 8; i++) slash(x, z, i * 0.8, sk.radius * (0.55 + (i % 3) * 0.2), i % 2 ? 0xffd0f0 : sk.color, { wide: true, sweep: Math.PI * 1.4, dur: 0.3 + i * 0.03, y: 0.5 + (i % 4) * 0.35, op: 0.85 });
+      shockRing(x, z, sk.radius * 1.2, sk.color, 0.45);
+      spawnRing(x, z, 0.5, sk.radius, 0xff2a6a, 0.5, { op: 0.9 });
+      shards(x, z, 1.2, sk.radius * 0.9, 16, 0xd0a0ff, 0.8, { h: 1.6, stagger: 0.2 });
+      pillar(x, z, 1.4, 8, sk.color, 0.6, { grow: 1.2 });
+      flash(x, 1.4, z, sk.color, 80, 0.5);
+      monstersIn(x, z, sk.radius).forEach((m) => hitMonster(m, mult, id, { slow: true, kb: 1 }));
+      // a fúria cresce: bônus curto de dano
+      G.buffs = G.buffs.filter((b) => b.id !== id);
+      G.buffs.push({ id, name: sk.name, until: G.time + sk.dur, stats: sk.buff });
+      recalc();
+      shake(0.9); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
+    } });
+    Sfx.swing();
+    return true;
+  },
+  drain(ctx) {
+    const { p, sk, id, dx, dz, mult } = ctx;
+    p.castAnim = 0.001;
+    castGlow(p, dx, dz, sk.color);
+    spawnProjectile({ from: 'p', x: p.x + dx * 0.8, z: p.z + dz * 0.8, dx, dz, speed: 22, range: sk.range + 2, mult, skill: id, color: sk.color, size: 0.5, spiral: 0x5a0a1a, drain: sk.drain });
+    Sfx.zap();
+    return true;
+  },
+  drainnova(ctx) {
+    const { p, sk, id, mult } = ctx;
+    p.castAnim = 0.001;
+    const c = sk.color;
+    spawnRing(p.x, p.z, 0.5, sk.radius, c, 0.5, { op: 0.9 });
+    shockRing(p.x, p.z, sk.radius * 1.1, 0xff3a5a, 0.45);
+    // almas: espirais que saem do herói e sobem
+    for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2; emit(p.x + Math.cos(a), 0.8, p.z + Math.sin(a), { n: 1, color: i % 3 ? c : 0xe8fff0, speed: sk.radius * 1.8, dir: [Math.cos(a), 0.25, Math.sin(a)], life: 0.6, size: 1.3, grav: -1.5, drag: 0.6 }); }
+    shards(p.x, p.z, 1.2, sk.radius * 0.9, 14, 0xe8e0c8, 0.8, { h: 1.3, stagger: 0.2 });
+    pillar(p.x, p.z, 1.1, 6, c, 0.6, { grow: 1 });
+    flash(p.x, 1.5, p.z, c, 55, 0.45);
+    monstersIn(p.x, p.z, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 0.6, drain: sk.drain }));
+    shake(0.5); Sfx.noise(0.5, 0.1, 1400);
+    return true;
+  },
+  army(ctx) {
+    const { p, sk, id, tx, tz, mult } = ctx;
+    p.castAnim = 0.001;
+    spawnRing(tx, tz, sk.radius, sk.radius, sk.color, 0.5, { hold: true, op: 0.5 });
+    cracks(tx, tz, sk.radius, 12, 0x7affb0, 1.1);
+    G.delayed.push({ t: 0.4, fn: () => {
+      emit(tx, 0.3, tz, { n: 70, color: 0x3a2a24, speed: 8, up: 1.4, life: 0.8, size: 1.4, spread: sk.radius * 0.6, jitter: true });
+      shards(tx, tz, 0.8, sk.radius, 18, 0xe8e0c8, 0.9, { h: 1.8, stagger: 0.25 });
+      pillar(tx, tz, sk.radius * 0.3, 7, sk.color, 0.6, { grow: 1 });
+      shockRing(tx, tz, sk.radius * 1.2, 0x7affb0, 0.45);
+      flash(tx, 1.4, tz, sk.color, 70, 0.5);
+      monstersIn(tx, tz, sk.radius).forEach((m) => hitMonster(m, mult, id, { kb: 1, fromX: tx, fromZ: tz, drain: 10 }));
+      for (let i = 0; i < sk.count; i++) {
+        const a = (i / sk.count) * Math.PI * 2 + 0.4, ax = tx + Math.cos(a) * 1.8, az = tz + Math.sin(a) * 1.8;
+        if (!walkableR(G.L, ax, az, 0.3)) continue;
+        raiseFx(ax, az, 0x7affb0, true);
+        spawnAlly(sk.ally, ax, az, sk.dur);
+      }
+      shake(0.9); Sfx.boom(); hitStop(CONFIG.feel.hitStop);
+    } });
     return true;
   },
 };

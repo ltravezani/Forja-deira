@@ -18,7 +18,7 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 |---|---|---|---|
 | 1 | Nomes de mapas e classes | Nomes de mapas, NPCs e chefes são **originais** (Aldrena, Floresta Sussurrante, Rainha Aracnídea…). Nomes de classe ficam como **provisórios** | Antes do lançamento público, revisar também os nomes de classe (ver §10). |
 | 2 | Fórmulas de atributos | As classes seguem um modelo de *relações de atributo* (`alvo = multiplicador × fonte`) | Deixa o balanceamento de cada classe declarativo e fácil de testar. |
-| 3 | 9–15 classes | Elenco de 15 definido, **3 jogáveis no MVP** (DK, DW, Elf), como a própria Fase 1 pede | Cada classe exige ~6 habilidades, árvore, modelo e balanceamento. |
+| 3 | 9–15 classes | Elenco de 15 definido, **5 jogáveis** (DK, DW, Elf, Dark Elf, Necromancer) | Cada classe exige ~6 habilidades, árvore, modelo e balanceamento. |
 | 4 | Nível 800–1100+ e resets | **Nível máximo 1000**, **reset a partir do 400**, pontos fixos por reset + bônus por nível acima de 400 | Resolve a tensão entre "cap alto" e "reset": quem gosta de grind vai até 1000; quem gosta de reset reinicia no 400. |
 | 8 | Magic Find visível | Tabela de drop **visível no jogo** (painel Drops), MF com **teto suave** (retorno decrescente) e **seed por drop** | Transparência: a mesma seed sempre gera o mesmo item. |
 | 9 | Aprimoramento de itens | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Gold | Perder um item de horas de farm por azar frustra mais do que desafia. |
@@ -44,7 +44,7 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 
 | Fase | Classes |
 |---|---|
-| 1 (MVP) | Dark Knight → Blade Knight → Blade Master · Dark Wizard → Soul Master → Grand Master · Fairy Elf → Muse Elf → High Elf |
+| 1 (MVP) | Dark Knight → Blade Knight → Blade Master · Dark Wizard → Soul Master → Grand Master · Fairy Elf → Muse Elf → High Elf · Dark Elf → Bloody Elf → Shadowblade · Necromancer → Death Knight → Bloody Knight |
 | 2 | Summoner, Magic Gladiator, Dark Lord, Rage Fighter, Grow Lancer, Rune Wizard, Slayer, Gun Crusher |
 | 3 | Light Wizard, Lemuria Mage, Illusion Knight, Alchemist |
 
@@ -60,6 +60,16 @@ Base: STR / AGI / VIT / ENE; 5 pontos por nível.
 | AG | ENE + 0,3VIT + 0,2AGI + 0,15STR | 0,2ENE + 0,3VIT + 0,4AGI + 0,2STR | 0,2ENE + 0,3VIT + 0,2AGI + 0,3STR |
 | Dano | STR/6 ~ STR/4 | mágico ENE/9 ~ ENE/4 × (1 + aumento do cajado) | STR/14+AGI/7 ~ STR/8+AGI/4 |
 | Defesa | AGI/3 | AGI/4 | AGI/10 |
+
+**Dark Elf** (feminina): 24/26/20/12; HP 40 + 1,5·Nv + 2,5·VIT; dano STR/8+AGI/12 ~ STR/5+AGI/8; defesa AGI/5; velocidade AGI/12.
+Usa as **espadas do Dark Knight** e as **armaduras da Fairy Elf**. Mostra uma espada em cada mão, mas só a da
+direita é o item equipado (mesma ideia do escudo do Dark Knight); o ataque básico são dois cortes seguidos.
+Habilidades de área e fúria: Dança das Lâminas, Leque de Lâminas, Fúria Sombria, Passo Sombrio, Tempestade Sangrenta, Eclipse das Lâminas.
+
+**Necromancer** (masculino): 20/16/22/26; HP 55 + 1,5·Nv + 2,5·VIT; dano mágico ENE/10 ~ ENE/4,5; roubo de vida próprio de 2%.
+Usa os **cajados e armaduras do Dark Wizard**, com um cajado em cada mão (só o da direita é o equipado). Como Death Knight
+e Bloody Knight passa a vestir armadura com elmo. Habilidades de roubo de vida, dano e necromancia: Toque Vampírico,
+Lança de Ossos, Erguer Esqueleto, Pacto de Sangue, Explosão de Almas, Exército dos Mortos.
 
 Todas as fórmulas estão em `shared/rules.js → CLASSES[*].rel`.
 
@@ -201,7 +211,7 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 
 - O último personagem jogado aparece **no centro**, em 3D, na praça de Aldrena, com nome, classe, nível, Gold e CP. Um botão grande **Entrar no jogo** (ou Enter).
 - Com mais de um personagem, setas ‹ › (ou ← →) trocam o personagem mostrado; pontos indicam a posição.
-- **Criar novo personagem** é opção secundária (link abaixo do botão): abre um painel lateral com as 3 classes jogáveis, prévia 3D da classe escolhida e o campo de nome. Sem personagens salvos, esse painel abre direto.
+- **Criar novo personagem** é opção secundária (link abaixo do botão): abre um painel lateral com as 5 classes jogáveis, prévia 3D da classe escolhida e o campo de nome. Sem personagens salvos, esse painel abre direto.
 - Até 5 personagens por navegador; excluir pede confirmação.
 
 ---
