@@ -30,7 +30,8 @@ const WATER_FS = `uniform float uTime; uniform vec3 uDeep; uniform vec3 uLight; 
     float n1 = sin(vW.x * 3.1 + uTime * 1.3) * sin(vW.z * 2.7 - uTime * 1.1);
     float n2 = sin((vW.x + vW.z) * 5.3 - uTime * 2.0) * sin((vW.x - vW.z) * 4.1 + uTime * 1.7);
     float h = rip * 0.35 + n1 * 0.3 + n2 * 0.35;
-    vec3 col = mix(uDeep, uLight, clamp(0.35 + 0.45 * h, 0.0, 1.0));
+    // faixas de cor em degraus (toon), como o resto do cenário
+    vec3 col = mix(uDeep, uLight, floor(clamp(0.35 + 0.45 * h, 0.0, 1.0) * 4.0 + 0.5) / 4.0);
     // cintilado do luar e dos lampiões nas cristas
     float sp = smoothstep(0.86, 0.99, n2 * 0.5 + 0.5 + rip * 0.12 + n1 * 0.08);
     col += vec3(0.8, 0.9, 1.0) * sp * 0.8;

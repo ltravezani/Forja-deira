@@ -4,7 +4,7 @@
 // =============================================================================
 import { GEO } from '../art/geometry.js';
 import { cutaway } from '../art/cutaway.js';
-import { toonMaterial } from '../art/stylize.js';
+import { stylize, toonMaterial } from '../art/stylize.js';
 import { texGrime, texShingles } from '../art/textures.js';
 import { V3 } from '../core/util.js';
 
@@ -17,7 +17,33 @@ export function setInstance(mesh, i, x, y, z, rx, ry, rz, sx, sy, sz) {
   mesh.setMatrixAt(i, _km);
 }
 /** Parte de adereço: geometria, cor, posição, escala, rotação. */
+/** Marca uma parte como copa "fofa" (normais para fora de `c`, ver fluffNormals). */
+const fluff = (p, c, k) => Object.assign(p, { fc: c, fk: k });
 const KP = (geo, color, x, y, z, sx, sy, sz, rx, ry, rz) => ({ geo, color, x, y, z, sx, sy: sy == null ? sx : sy, sz: sz == null ? sx : sz, rx: rx || 0, ry: ry || 0, rz: rz || 0 });
+/**
+ * Copa "fofa": normais apontando para fora do centro `c` da copa (não de cada
+ * bola), misturadas (k) com as originais. As faixas de luz do toon passam a
+ * desenhar um volume único e macio em vez de várias esferas.
+ */
+function fluffNormals(g, c, k) {
+  const pos = g.attributes.position, nor = g.attributes.normal, v = new V3(), n = new V3();
+  k = k == null ? 0.85 : k;
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i) - c[0], pos.getY(i) - c[1], pos.getZ(i) - c[2]).normalize();
+    n.set(nor.getX(i), nor.getY(i), nor.getZ(i)).multiplyScalar(1 - k).addScaledVector(v, k).normalize();
+    nor.setXYZ(i, n.x, n.y, n.z);
+  }
+}
+/** Vento: [y inicial, y final, amplitude em m] — vértices acima de y0 balançam, até a amplitude em y1 (bases fixas). */
+const WIND = {
+  tuft: [0.02, 0.5, 0.07], grassEdge: [0.02, 0.7, 0.09], fern: [0.02, 0.3, 0.06], flowers: [0.05, 0.35, 0.05],
+  bush: [0.25, 1.2, 0.07], pine: [1.3, 5.6, 0.2], oak: [2.2, 5.6, 0.22],
+};
+function windAttr(geo, w) {
+  const pos = geo.attributes.position, a = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) { const t = Math.min(1, Math.max(0, (pos.getY(i) - w[0]) / (w[1] - w[0]))); a[i] = w[2] * t * t * (3 - 2 * t); }
+  geo.setAttribute('wind', new THREE.BufferAttribute(a, 1));
+}
 function mergeParts(parts) {
   const geos = [];
   let n = 0;
@@ -26,6 +52,7 @@ function mergeParts(parts) {
     _ke.set(p.rx, p.ry, p.rz); _kq.setFromEuler(_ke); _kp.set(p.x, p.y, p.z); _ks.set(p.sx, p.sy, p.sz);
     _km.compose(_kp, _kq, _ks);
     g.applyMatrix4(_km);
+    if (p.fc) fluffNormals(g, p.fc, p.fk);
     geos.push([g, new THREE.Color(p.color)]);
     n += g.attributes.position.count;
   }
@@ -260,13 +287,13 @@ export function kit(name) {
       P.push(KP(GEO.taper, 0x6a4226, 0, 0.7, 0, 0.55, 1.4, 0.55, Math.PI, 0, 0));
       for (let i = 0; i < 3; i++) {
         const w = 3.3 - i * 0.85, y = 1.5 + i * 1.15;
-        P.push(KP(GEO.cone, [0x2e6a34, 0x367a3a, 0x3e8a40][i], 0, y + 0.55, 0, w, 1.7, w));
+        P.push(fluff(KP(GEO.cone, [0x2e6a34, 0x367a3a, 0x3e8a40][i], 0, y + 0.55, 0, w, 1.7, w), [0, y - 0.2, 0], 0.5));
         P.push(KP(GEO.cyl, [0x285e2e, 0x2e6a34, 0x367a3a][i], 0, y - 0.25, 0, w * 0.98, 0.2, w * 0.98)); // barra da saia
       }
       P.push(KP(GEO.cone, 0x4a9a48, 0.05, 5.1, 0, 0.5, 0.8, 0.5, 0, 0, -0.35));
       break;
     case 'bush':
-      for (let i = 0; i < 5; i++) { const a = i * 1.25; P.push(KP(GEO.sph, i % 2 ? 0x3a7a34 : 0x46883a, Math.cos(a) * 0.36 * (i ? 1 : 0), 0.38 + (i ? 0 : 0.22), Math.sin(a) * 0.36 * (i ? 1 : 0), 0.78 + (i % 2) * 0.2)); }
+      for (let i = 0; i < 5; i++) { const a = i * 1.25; P.push(fluff(KP(GEO.sph, i % 2 ? 0x3a7a34 : 0x46883a, Math.cos(a) * 0.36 * (i ? 1 : 0), 0.38 + (i ? 0 : 0.22), Math.sin(a) * 0.36 * (i ? 1 : 0), 0.78 + (i % 2) * 0.2), [0, 0.3, 0])); }
       for (let i = 0; i < 6; i++) { const a = i * 2.2 + 0.4; P.push(KP(GEO.sphLow, i % 2 ? 0xd84a3a : 0xf0d060, Math.cos(a) * 0.52, 0.55 + (i % 3) * 0.14, Math.sin(a) * 0.52, 0.1)); }
       break;
     case 'rock':
@@ -302,8 +329,7 @@ export function kit(name) {
     case 'lavapool':
       P.push(KP(GEO.cyl, 0x140a08, 0, 0.03, 0, 2.4, 0.06, 2.0));
       for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; P.push(KP(GEO.dod, 0x1e1010, Math.cos(a) * 1.15, 0.1, Math.sin(a) * 0.95, 0.5, 0.3, 0.5, a, a, 0)); }
-      Gl.push(KP(GEO.cyl, 0xff5a10, 0, 0.07, 0, 2.0, 0.02, 1.6));
-      Gl.push(KP(GEO.cyl, 0xffc040, 0.2, 0.08, 0.1, 0.9, 0.02, 0.6));
+      // a superfície da lava é desenhada à parte, com material animado (lavaMat)
       break;
     case 'crystal':
       P.push(KP(GEO.dod, 0x2a2c3a, 0, 0.15, 0, 0.9, 0.35, 0.8));
@@ -671,7 +697,7 @@ export function kit(name) {
       for (let i = 0; i < 3; i++) { const a = i * 2.1; P.push(KP(GEO.cone, 0x5a3a22, Math.cos(a) * 0.45, 0.2, Math.sin(a) * 0.45, 0.4, 0.8, 0.4, Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2)); }
       for (let i = 0; i < 8; i++) {
         const a = i * 0.8, r = i ? 1.3 : 0, y = i ? 3.3 + (i % 3) * 0.45 : 4.3;
-        P.push(KP(GEO.sph, [0x3a7a30, 0x4a8a38, 0x5a9a3e][i % 3], Math.cos(a) * r, y, Math.sin(a) * r, 2.2 - (i % 2) * 0.4, 1.8, 2.2 - (i % 2) * 0.4));
+        P.push(fluff(KP(GEO.sph, [0x3a7a30, 0x4a8a38, 0x5a9a3e][i % 3], Math.cos(a) * r, y, Math.sin(a) * r, 2.2 - (i % 2) * 0.4, 1.8, 2.2 - (i % 2) * 0.4), [0, 3.4, 0]));
       }
       for (let i = 0; i < 6; i++) { const a = i * 1.1 + 0.3; P.push(KP(GEO.sphLow, 0xd83a2a, Math.cos(a) * 1.6, 3.2 + (i % 2) * 0.6, Math.sin(a) * 1.6, 0.2)); } // maçãs
       break;
@@ -687,6 +713,7 @@ export function kit(name) {
       P.push(KP(GEO.box, 0xff00ff, 0, 0.5, 0, 1));
   }
   const k = { geo: mergeParts(P), glow: Gl.length ? mergeParts(Gl) : null, roof };
+  if (WIND[name]) windAttr(k.geo, WIND[name]);
   for (const g of [k.geo, k.glow, k.roof]) if (g) g.userData.shared = true; // cache: nunca liberar com o nível
   KITS[name] = k;
   return k;
@@ -727,6 +754,90 @@ export function kitGlowMat() {
     cutaway(_kitGlow);
   }
   return _kitGlow;
+}
+/**
+ * Variante do material do kit com vento: desloca no vertex shader os vértices
+ * com atributo `wind` (amplitude em m, zero na base), com fase pela posição da
+ * instância e rajadas lentas. Mesmo toon estilizado e recorte do kit.
+ */
+let _kitWind = null;
+export function kitWindMat() {
+  if (!_kitWind) {
+    const g = texGrime();
+    const m = new THREE.MeshToonMaterial({ vertexColors: true, map: g.map, normalMap: g.normalMap });
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = glowTime;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime; attribute float wind;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          {
+            vec2 wBase = modelMatrix[3].xz;
+            #ifdef USE_INSTANCING
+              wBase += instanceMatrix[3].xz;
+            #endif
+            float wPh = dot(wBase, vec2(0.37, 0.53));
+            float wGust = 0.55 + 0.45 * sin(uTime * 0.31 + wBase.x * 0.045 + wBase.y * 0.03);
+            vec2 wS = vec2(sin(uTime * 1.6 + wPh) + 0.35 * sin(uTime * 3.7 + wPh * 2.1), 0.6 * cos(uTime * 1.25 + wPh * 1.3));
+            transformed.xz += wS * wind * wGust;
+            transformed.y -= 0.25 * wind * abs(wS.x) * wGust;
+          }`);
+    };
+    _kitWind = stylize(m, { rim: 0.22 });
+    _kitWind.normalScale.setScalar(0.6);
+    _kitWind.userData.shared = true;
+    cutaway(_kitWind);
+  }
+  return _kitWind;
+}
+
+/**
+ * Lava das poças: ruído rolando no tempo em faixas de cor (degraus, estilo toon),
+ * pontos quentes e uma borda de "espuma" clara antes da crosta escura. Cores em
+ * HDR (acima do limiar do bloom). Desenhada num disco de raio 1 com instancing.
+ */
+let _lava = null;
+export function lavaMat() {
+  if (!_lava) {
+    _lava = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
+      vertexShader: `uniform float uTime; varying vec2 vL; varying vec3 vW;
+        #include <fog_pars_vertex>
+        void main() {
+          vL = position.xz;
+          vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = wp.xyz;
+          vec4 mvPosition = viewMatrix * wp;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `uniform float uTime; varying vec2 vL; varying vec3 vW;
+        #include <fog_pars_fragment>
+        float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+        void main() {
+          float r = length(vL);
+          if (r > 1.0) discard;
+          vec2 p = vW.xz * 0.9;
+          float n = vn(p + vec2(uTime * 0.18, uTime * 0.11)) * 0.6 + vn(p * 2.3 - vec2(uTime * 0.27, -uTime * 0.2)) * 0.4;
+          float h = n * 0.85 + (1.0 - r) * 0.35;
+          float band = floor(h * 4.0) / 3.0;
+          vec3 col = mix(vec3(0.55, 0.05, 0.015), vec3(1.9, 0.5, 0.06), clamp(band, 0.0, 1.0));
+          col = mix(col, vec3(2.4, 1.2, 0.25), step(0.92, h));
+          // espuma: anel claro ondulando antes da crosta
+          float a = atan(vL.y, vL.x);
+          float fr = 0.8 + 0.04 * sin(a * 7.0 + uTime * 1.5);
+          float foam = smoothstep(fr - 0.09, fr - 0.02, r) * (1.0 - smoothstep(fr, fr + 0.05, r));
+          col = mix(col, vec3(2.4, 1.3, 0.35), foam * (0.65 + 0.35 * sin(a * 13.0 - uTime * 2.4)));
+          col = mix(col, vec3(0.07, 0.03, 0.025), smoothstep(fr + 0.02, fr + 0.08, r));
+          gl_FragColor = vec4(col, 1.0);
+          #include <fog_fragment>
+        }`,
+      fog: true, polygonOffset: true, polygonOffsetFactor: -2,
+    });
+    _lava.uniforms.uTime = glowTime;
+    _lava.userData.shared = true;
+  }
+  return _lava;
 }
 export function roofMat() {
   if (!_roofMat) { const t = texShingles('shingles3', { a: 0xa04632, b: 0x7a3426 }); _roofMat = toonMaterial({ map: t.map, normalMap: t.normalMap, side: THREE.DoubleSide }, { rim: 0.2 }); _roofMat.userData.shared = true; }

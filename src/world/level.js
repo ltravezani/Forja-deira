@@ -10,9 +10,11 @@ import { emit } from '../engine/effects.js';
 import { camera, hemi, heroLight, renderer, scene, setGrade, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
-import { kit, kitGlowMat, kitMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
+import { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
 import { buildTownFx, clearTownFx, updateTownFx } from './townfx.js';
 
+const LAVA_DISC = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+LAVA_DISC.userData.shared = true;
 let levelMeshes = [];
 /** Malhas do nível atual (diagnóstico/testes). */
 export function getLevelMeshes() { return levelMeshes; }
@@ -34,7 +36,7 @@ function placeKit(name, list, fn, opt) {
     m.computeBoundingSphere();
     return addLevel(m);
   };
-  mk(k.geo, kitMat(), !(opt && opt.noShadow));
+  mk(k.geo, k.geo.attributes.wind ? kitWindMat() : kitMat(), !(opt && opt.noShadow));
   if (k.glow) { const g = mk(k.glow, kitGlowMat(), false); g.renderOrder = 3; }
   if (k.roof) mk(k.roof, roofMat(), true);
 }
@@ -518,7 +520,8 @@ function buildProps(L, B, rnd) {
     for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
   }
   if (deco === 'forest') {
-    placeKit('pine', by(tall, (p) => p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
+    placeKit('pine', by(tall, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
+    placeKit('oak', by(tall, (p) => p.v >= 0.3 && p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.75 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('deadTree', by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('bush', by(low, (p) => p.v < 0.4), (p) => ({ ...pos(p, 0.8), s: 0.7 + p.v, ry: p.v * 9 }));
     placeKit('rock', by(low, (p) => p.v >= 0.4 && p.v < 0.6), (p) => ({ ...pos(p, 0.8), s: 0.6 + p.v * 0.5, ry: p.v * 9 }));
@@ -556,6 +559,12 @@ function buildProps(L, B, rnd) {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
     placeKit('lavapool', pools, (p) => ({ ...pos(p, 0.5), ry: p.v * 9, s: 0.7 + p.v * 0.5 }), { noShadow: true });
+    if (pools.length) { // superfície animada da lava (disco de raio 1 → elipse da poça)
+      const lava = new THREE.InstancedMesh(LAVA_DISC, lavaMat(), pools.length);
+      pools.forEach((p, i) => { const q = pos(p, 0.5), s = 0.7 + p.v * 0.5; setInstance(lava, i, q.x, 0.08, q.z, 0, p.v * 9, 0, s * 1.0, 1, s * 0.8); });
+      lava.computeBoundingSphere();
+      addLevel(lava);
+    }
     pools.forEach((p) => torches.push({ x: p.x * T, y: 0.8, z: p.z * T, lava: true }));
     const br = by(low, (p) => p.v >= 0.35 && p.v < 0.55);
     placeKit('brazier', br, (p) => ({ ...pos(p, 0.3) }));
