@@ -4,7 +4,7 @@
 // que segue o herói, gatos, galinhas no cercado, pombos que voam quando alguém
 // chega perto e um cavalo na carroça). Só visual: ninguém bloqueia o caminho.
 // =============================================================================
-import { animateModel, buildModel } from '../art/models.js';
+import { animateModel, buildModel, disposeModel } from '../art/models.js';
 import { animateCritter, buildCritter, buildVillager, mergeModelParts } from '../art/townfolk.js';
 import { disposeObject } from '../art/materials.js';
 import { G } from '../core/state.js';
@@ -27,7 +27,7 @@ const FOLK = [
   { look: { skin: 0xb07a50, cloth: 0x5a3a2a, cloth2: 0x3a2a20, hair: 0x1a1210, apron: true, beard: true }, says: ['O mestre Hanzo não dorme nunca.', 'Carvão para a forja!', 'Essa lâmina aí precisa de um reparo.'] },
   { look: { skin: 0xf0c8a0, cloth: 0x4a7a6a, cloth2: 0x3a3a2a, hair: 0xa04a2a, hairStyle: 'bun', dress: true, carry: 'basket' }, says: ['Pão quentinho!', 'Já foi à arena da Kora?', 'Boa noite!'] },
 ];
-const GUARD = { look: { skin: 0xd0a080, cloth: 0x2a4a7a, armor: 0x6a6e7a, trim: 0xb0903a, head: 'helm', weapon: 'sword', shield: true, shieldColor: 0x2a4a7a, scale: 1.0 }, says: ['Ronda da noite. Tudo em ordem.', 'Circulando, circulando.', 'Nenhum monstro passa da paliçada.'] };
+const GUARD = { look: { gltf: 'knight', skin: 0xd0a080, cloth: 0x2a4a7a, armor: 0x6a6e7a, trim: 0xb0903a, head: 'helm', weapon: 'sword', shield: true, shieldColor: 0x2a4a7a, scale: 1.0 }, says: ['Ronda da noite. Tudo em ordem.', 'Circulando, circulando.', 'Nenhum monstro passa da paliçada.'] };
 
 let LIFE = null;
 const T = TILE;
@@ -52,7 +52,7 @@ export function spawnTownLife(L) {
   // guarda de ronda: circuito fixo em volta da praça até o portal e a torre
   const route = [[L.town.cx - 6, L.town.cz], [L.town.cx - 1, L.town.cz - 8], [L.town.cx + 7, L.town.cz - 1], [L.town.cx + 5, L.town.cz + 5], [L.town.cx - 2, L.town.cz + 8]];
   const g = buildModel('humanoid', GUARD.look);
-  mergeModelParts(g.root);
+  if (g.kind !== 'gltf') mergeModelParts(g.root);
   LIFE.folk.push(add({ m: g, def: GUARD, guard: true, route, ri: 0, x: route[0][0] * T, z: route[0][1] * T, ry: 0, speed: 1.7, state: 'idle', wait: 1, path: null, phase: 0, greet: 0 }));
   // bichos
   const cx = L.town.cx * T, cz = L.town.cz * T;
@@ -76,7 +76,7 @@ export function spawnTownLife(L) {
 
 export function clearTownLife() {
   if (!LIFE) return;
-  for (const o of LIFE.folk.concat(LIFE.critters)) { world.remove(o.m.root); disposeObject(o.m.root, true); if (o.bubble) o.bubble.el.remove(); }
+  for (const o of LIFE.folk.concat(LIFE.critters)) { world.remove(o.m.root); if (o.m.mixer) disposeModel(o.m); else disposeObject(o.m.root, true); if (o.bubble) o.bubble.el.remove(); }
   LIFE = null;
 }
 

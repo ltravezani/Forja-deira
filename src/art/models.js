@@ -1,6 +1,7 @@
 // ---------- armas ----------
 /** Arma presa à mão. Retorna o grupo da arma (com orbe marcado em userData.orb). */
 import { GEO, part, pivot } from './geometry.js';
+import { animateGltf, buildGltfHumanoid, hasGltf } from './gltfModels.js';
 import { disposeObject, glowMat, toon, toonOwn } from './materials.js';
 import { toonMaterial } from './stylize.js';
 import { texDetail, texRock } from './textures.js';
@@ -76,6 +77,7 @@ function buildWeapon(hand, arms, o, M) {
  * o: {skin, cloth, armor, trim, head, weapon, robe, bulky, thin, scale, crown, horns, cape, hair, eye, shield, trimGlow, plume}
  */
 export function buildHumanoid(o) {
+  if (hasGltf(o)) return buildAnimatedHumanoid(o);
   const root = new THREE.Group();
   const body = pivot(root, 0, 0, 0);
   const mats = [];
@@ -291,6 +293,20 @@ export function buildHumanoid(o) {
   return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
+/** Humanoide com esqueleto e clipes (art/gltfModels.js) mais os enfeites procedurais que o modelo não tem. */
+function buildAnimatedHumanoid(o) {
+  const m = buildGltfHumanoid(o, CARTOON.humanoid);
+  if (o.crown) {
+    const cm = toon(0xd8a830, 0x8a5a00, 0.4, { metal: 0.95, rough: 0.3, env: 1.3 });
+    const c = pivot(m.head, 0, 0.9, 0.02); // cabeça grande do modelo: coroa maior e mais alta
+    c.scale.setScalar(1.35);
+    part(GEO.cyl, cm, 0.62, 0.12, 0.62, 0, 0, 0, c);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; part(GEO.cone4, cm, 0.1, 0.3, 0.1, Math.sin(a) * 0.3, 0.18, Math.cos(a) * 0.3, c); }
+    part(GEO.oct, glowMat(o.eye || 0xff3a3a, 0.9), 0.12, 0.14, 0.12, 0, 0.06, 0.32, c, false);
+  }
+  return m;
+}
+
 // ---------- aranha ----------
 function buildSpider(o) {
   const root = new THREE.Group();
@@ -500,7 +516,7 @@ function buildGolem(o) {
 
 const BUILD = { spider: buildSpider, beast: buildBeast, floater: buildFloater, bat: buildBat, golem: buildGolem };
 /** Raio (unidades do modelo) e força da sombra de contato por tipo; quem flutua recebe uma mais fraca. */
-const BLOB = { humanoid: [0.62, 0.6], spider: [1.25, 0.6], beast: [0.8, 0.6], floater: [0.62, 0.35], bat: [0.55, 0.3], golem: [1.15, 0.65] };
+const BLOB = { humanoid: [0.62, 0.6], gltf: [0.62, 0.6], spider: [1.25, 0.6], beast: [0.8, 0.6], floater: [0.62, 0.35], bat: [0.55, 0.3], golem: [1.15, 0.65] };
 export function buildModel(kind, o) {
   const m = (BUILD[kind] || buildHumanoid)(o);
   addContactShadow(m, BLOB[m.kind]);
@@ -560,9 +576,10 @@ export function attachWings(model, color, size) {
   return holder;
 }
 
-/** Anima qualquer modelo. s: {t, moving, attack (0..1), dead, speed, cast} */
+/** Anima qualquer modelo. s: {t, dt, moving, run, attack (0..1), dead, speed, cast}; nos animados escolhe o clipe. */
 export function animateModel(m, s) {
   const t = s.t;
+  if (m.kind === 'gltf') animateGltf(m, s);
   const mv = s.moving ? 1 : 0;
   const ph = t * (s.speed || 9);
   if (m.kind === 'humanoid') {
@@ -634,6 +651,12 @@ export function flashModel(m, color, k) {
 /** Libera os materiais próprios do modelo (as geometrias são compartilhadas via GEO). */
 export function disposeModel(m) {
   disposeObject(m.root, false);
+  if (m.mixer) {
+    // animados: cada clone tem esqueleto próprio (textura de ossos na GPU) e ações no mixer
+    m.mixer.stopAllAction();
+    m.mixer.uncacheRoot(m.scene);
+    m.scene.traverse((c) => { if (c.isSkinnedMesh) c.skeleton.dispose(); });
+  }
 }
 
 // ---------- selo de chefe no chão ----------

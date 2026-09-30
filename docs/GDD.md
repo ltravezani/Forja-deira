@@ -257,7 +257,7 @@ A redução vem de paredes, chão e objetos em `InstancedMesh`, orçamento fixo 
 
 ## 11. Arte e assets
 
-Direção (v0.8): **cartoon de fantasia sombria**: proporções exageradas, formas grandes, cores saturadas e contorno escuro, com o clima sombrio dado pela luz e pela paleta de cada bioma. Terreno, cenário, NPCs, heróis e monstros usam o mesmo sombreamento, para não haver diferença de estilo entre eles. Todos os modelos, texturas e efeitos são gerados em código (`src/art/` e `src/world/`); o jogo não carrega nenhum arquivo externo de arte.
+Direção (v0.8): **cartoon de fantasia sombria**: proporções exageradas, formas grandes, cores saturadas e contorno escuro, com o clima sombrio dado pela luz e pela paleta de cada bioma. Terreno, cenário, NPCs, heróis e monstros usam o mesmo sombreamento, para não haver diferença de estilo entre eles. Modelos, texturas e efeitos são gerados em código (`src/art/` e `src/world/`), exceto os humanoides animados da fase 6 (§11.1), que vêm de modelos glTF CC0 embutidos no próprio HTML; o jogo continua sem carregar nenhum arquivo externo.
 
 | Camada | Como é feito |
 |---|---|
@@ -289,6 +289,7 @@ Roteiro em fases (capturas antes/depois com `python3 tools/shots.py --tag <nome>
 | 3. Efeitos de combate | 30/09/2026 | Novo `engine/combatfx.js` com pools fixos (16 rastros, 24 estrelas, 8 anéis; nada alocado por golpe): rastro em meia-lua com degradê em canvas (ponta branca → cor da raridade da arma → transparente), alternando o lado a cada golpe do Dark Knight e menor no pet; faísca em estrela de 4 pontas em todo acerto (maior e dourada em crítico, verde em excelente); anel de choque no chão em críticos e nas habilidades de área. Quadro de impacto: clarão branco de 2 quadros no passe final em crítico/excelente, desligado junto com a pausa de impacto e com "reduzir movimento". Números de dano na fonte do título, contorno grosso em 8 direções, pulo de escala; críticos maiores e dourados |
 | 4. Cenário vivo | 30/09/2026 | `kitWindMat` (variante do material do kit): tufos, capim, samambaias, flores, arbustos e copas de pinheiros e árvores frondosas balançam no vertex shader, com peso pela altura (atributo `wind`, zero na base), fase pela posição da instância e rajadas lentas; tempo compartilhado com os brilhos do kit. Copas "fofas": normais para fora do centro da copa (`fluffNormals`) em árvores frondosas e arbustos, e suavizadas nos pinheiros. A floresta ganhou árvores frondosas ao lado dos pinheiros. Lava das poças com material próprio (`lavaMat`): ruído rolando em faixas de cor, pontos quentes, borda de espuma e crosta, em HDR para o bloom. Água da fonte em faixas de cor. Tudo continua instanciado; medido na cidade: 611 chamadas e 288 mil triângulos |
 | 5. Cor e atmosfera | 30/09/2026 | Gradação por bioma no passe final, antes do tone mapping (`BIOMES[x].look`): contraste só na luminância, lift nas sombras, gamma por canal e gain. Névoa de altura no mesmo passe (`BIOMES[x].hfog`, posição de mundo reconstruída da profundidade, ondulando devagar): neblina rasteira na floresta e ruínas, cinzas no Abismo; soma-se à névoa de planos. Cones de luz aditivos e instanciados (1 chamada por nível) sob os lampiões da cidade e sobre braseiros e cristais grandes, com cintilação. A tela de título usa a gradação da cidade. Sem passe extra. Vinheta já existia |
+| 6. Personagens animados | 30/09/2026 | Humanoides com esqueleto e clipes (`art/gltfModels.js`): modelos low-poly KayKit (CC0) preparados por `tools/prep_models.mjs` e embutidos em base64 pelo `tools/build.py` (GLTFLoader r160 em `vendor/gltf.js`). Heróis (Dark Knight = cavaleiro com espada e escudo, Dark Wizard = mago com cajado e orbe, Elfa = encapuzada com besta), goblins/kobolds, esqueletos (guerreiro e besteiro), Cavaleiro Profano, Feiticeiro Rubro, Rei Esqueleto (com coroa), Lorde Carmesim, NPCs de serviço e a guarda da cidade. Cada instância clona o rig, divide um só esqueleto entre as partes, recebe materiais toon próprios (a textura de paleta é dessaturada e tingida pelas cores do visual e da raridade do equipamento) e um `AnimationMixer`: parado, andando, correndo, golpes alternados, disparo, magia e queda, com transições curtas; os golpes percorrem o clipe pelo mesmo progresso que o jogo já usava. Asas, coroa e brilho de refino presos aos ossos. Opção "Personagens: animados/simples" em Opções → Gráficos (simples na qualidade baixa); se os modelos não carregarem, o jogo usa os procedurais |
 
 Desempenho medido depois das 5 fases (1280×800, qualidade média, Chromium com renderização por software; monstros com a mesma seed, mas a IA ainda se move): chamadas de desenho / triângulos por quadro, contando sombras, bloom e passe final.
 
@@ -303,6 +304,17 @@ Desempenho medido depois das 5 fases (1280×800, qualidade média, Chromium com 
 | Abismo | 320 / 278 mil | 258 / 276 mil |
 
 O cenário ganhou no máximo 3 chamadas por nível (lava, cones de luz e os pools de combate, que só desenham quando ativos); a variação restante vem de quantos monstros entram na câmera. O Castelo já passava do orçamento de ~650 chamadas antes destas fases, por causa dos monstros (cavaleiros e gárgulas têm muitas partes). Passes de tela cheia extras: nenhum novo (o bloom em resolução reduzida já existia).
+
+Fase 6 medida com 40 humanoides em volta do herói no Castelo (goblins, kobolds, esqueletos, besteiros, cavaleiros e feiticeiros, todos em combate), mesmo navegador:
+
+| | Simples (procedurais) | Animados (glTF) |
+|---|---|---|
+| Chamadas de desenho por quadro | 4.001 | 898 |
+| Triângulos por quadro | 620 mil | 647 mil |
+| Texturas na GPU | 54 | 91 (uma de ossos por personagem) |
+| Heap JS | 34 MB | 47 MB |
+
+O humanoide procedural tem dezenas de peças e cada uma é uma chamada; o animado tem 6 a 9 malhas. HTML: 1,36 MB → 4,6 MB (modelos 2,4 MB, +33% do base64). Decodificar os modelos leva ~0,2 s; do início da página ao jogo pronto, ~2,2 s com renderização por software.
 
 
 A antiga opção de carregar arte de um cliente externo foi removida em 27/09/2026. Para o lançamento, a arte procedural pode ser substituída por modelos da equipe de arte (§9) mantendo a mesma interface (`buildModel`, `kit`).

@@ -94,7 +94,8 @@ function die() {
   p.alive = false;
   G.hp = 0;
   p.diedAt = G.time;
-  p.model.root.rotation.x = -Math.PI / 2; p.model.root.position.y = 0.4;
+  if (p.model.kind === 'gltf') p.model.dead = true; // o clipe de queda faz o resto
+  else { p.model.root.rotation.x = -Math.PI / 2; p.model.root.position.y = 0.4; }
   if (p.model.blob) p.model.blob.visible = false;
   const ch = G.ch;
   const loss = Math.floor(R.expToNext(ch.level) * 0.02);
@@ -121,6 +122,8 @@ export function revive() {
   p.target = null; p.path = null; p.dash = null;
   p.model.root.rotation.x = 0;
   p.model.root.position.y = 0;
+  p.model.dead = false;
+  if (p.model.blob) p.model.blob.visible = true;
   recalc();
   G.hp = G.st.maxHp; G.mp = G.st.maxMp;
   p.invulnUntil = G.time + CONFIG.player.reviveInvuln;
@@ -138,6 +141,7 @@ export function respawn() {
   p.target = null; p.path = null; p.dash = null;
   p.model.root.rotation.x = 0;
   p.model.root.position.y = 0;
+  p.model.dead = false;
   if (p.model.blob) p.model.blob.visible = true;
   G.buffs = []; recalc();
   enterTown();

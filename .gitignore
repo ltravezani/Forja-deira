@@ -5,3 +5,4 @@ dist/dev.html
 *.zip
 .DS_Store
 shots/
+dist/models.js

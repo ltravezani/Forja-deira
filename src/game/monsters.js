@@ -1,4 +1,5 @@
 // ---------- monstros ----------
+import { deathTime } from '../art/gltfModels.js';
 import { animateModel, attachBossSigil, buildModel, disposeModel, flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
@@ -122,9 +123,12 @@ function updateCorpse(m, dt) {
   m.deadT += dt;
   const r = m.model.root;
   if (m.model.blob) m.model.blob.visible = false; // a mancha tombaria junto com o corpo
-  r.rotation.z = Math.min(Math.PI / 2, m.deadT * 5) * (m.id % 2 ? 1 : -1);
-  r.position.y = gy(m.x, m.z) - (m.deadT > 0.6 ? (m.deadT - 0.6) * 1.2 : 0);
-  if (m.deadT <= 1.6) return false;
+  // modelo animado: toca a queda e só depois afunda; o procedural tomba inteiro
+  const fall = m.model.kind === 'gltf' ? Math.min(1.4, deathTime(m.model)) : 0.6;
+  if (m.model.kind === 'gltf') animateModel(m.model, { t: G.time, dt, dead: true });
+  else r.rotation.z = Math.min(Math.PI / 2, m.deadT * 5) * (m.id % 2 ? 1 : -1);
+  r.position.y = gy(m.x, m.z) - (m.deadT > fall ? (m.deadT - fall) * 1.2 : 0);
+  if (m.deadT <= fall + 1) return false;
   removeMonsterVisual(m);
   return true;
 }

@@ -1,7 +1,7 @@
 // ---------- NPCs e cidade ----------
 import { GEO } from '../art/geometry.js';
 import { disposeObject, glowMat } from '../art/materials.js';
-import { animateModel, buildHumanoid } from '../art/models.js';
+import { animateModel, buildHumanoid, disposeModel } from '../art/models.js';
 import { mergeModelParts } from '../art/townfolk.js';
 import { G } from '../core/state.js';
 import { esc, rand, TILE } from '../core/util.js';
@@ -21,7 +21,7 @@ export function spawnNpcs(L) {
   L.npcs.forEach((n) => {
     const D = NPCS[n.id];
     const model = buildHumanoid(Object.assign({ scale: 1.05 }, D.look));
-    mergeModelParts(model.root); // NPCs não piscam nem trocam equipamento: peças fundidas por material
+    if (model.kind !== 'gltf') mergeModelParts(model.root); // NPCs não piscam nem trocam equipamento: peças fundidas por material
     const x = n.x * TILE, z = n.z * TILE;
     model.root.position.set(x, gy(x, z), z);
     const cx = L.town ? L.town.cx * TILE : 23 * TILE, cz = L.town ? L.town.cz * TILE : 23 * TILE;
@@ -174,7 +174,7 @@ export function updatePortals(dt) {
 }
 /** Remove NPCs e portais (troca de zona), liberando modelos, materiais e rótulos. */
 export function clearNpcs() {
-  for (const n of G.npcs) { world.remove(n.model.root); disposeObject(n.model.root, true); n.label.remove(); }
+  for (const n of G.npcs) { world.remove(n.model.root); if (n.model.mixer) disposeModel(n.model); else disposeObject(n.model.root, true); n.label.remove(); }
   G.npcs.length = 0;
   removePortal(G.exitPortal);
   removePortal(G.townPortal);

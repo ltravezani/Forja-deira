@@ -2,6 +2,7 @@
 // Forja-deira — ponto de entrada. Valida o ambiente, carrega o save, monta a cidade
 // da tela de título, registra a entrada e inicia o laço único do jogo.
 // =============================================================================
+import { applyCharSetting, loadGltfModels } from './art/gltfModels.js';
 import { applyFeelSettings } from './core/config.js';
 import { loopStats, reportError, startLoop } from './core/loop.js';
 import { G, loadSave, S } from './core/state.js';
@@ -39,7 +40,6 @@ function frame(dt) {
 }
 
 function boot() {
-  loadSave();
   applyFeelSettings(S.settings);
   setBloom(S.settings.bloom);
   applyQuality(S.settings.quality || 'media');
@@ -67,4 +67,7 @@ function boot() {
   window.__FORJA_BOOTED = true;
 }
 
-boot();
+// os personagens animados vêm embutidos em base64; se não carregarem, o jogo usa os modelos simples
+loadSave();
+applyCharSetting(S.settings);
+loadGltfModels().then(boot, boot);

@@ -3,6 +3,7 @@
 Monta o jogo a partir de src/ (módulos ES) em dois formatos:
 
   dist/forja-deira.html  arquivo único e offline (Three.js, regras e módulos embutidos)
+  (os modelos glTF de assets/models/ vão embutidos em base64; em dev ficam em dist/models.js)
   dist/dev.html     carrega src/main.js como módulo ES nativo (desenvolvimento;
                     servir a pasta do projeto por HTTP, ex.: python3 -m http.server)
 
@@ -14,7 +15,7 @@ remove import/export e põe cada módulo numa função com escopo próprio
   - dois módulos exportam o mesmo nome, ou um módulo exporta `let`;
   - o resultado tem erro de sintaxe (checado com Node, se disponível).
 """
-import os, re, sys, json, subprocess
+import base64, os, re, sys, json, subprocess
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 SRC = os.path.join(ROOT, 'src')
@@ -115,18 +116,33 @@ def bundle():
     return js, order
 
 
+def models_js():
+    """Modelos glTF (assets/models/*.glb, preparados por tools/prep_models.mjs) em base64: o jogo continua um arquivo só."""
+    d = os.path.join(ROOT, 'assets', 'models')
+    names = sorted(f for f in os.listdir(d) if f.endswith('.glb')) if os.path.isdir(d) else []
+    parts = []
+    for f in names:
+        with open(os.path.join(d, f), 'rb') as fh: parts.append('%s:"%s"' % (json.dumps(f[:-4]), base64.b64encode(fh.read()).decode()))
+    # o elemento sai do DOM depois de lido (o texto base64 é grande)
+    return 'window.__FORJA_GLB = {' + ',\n'.join(parts) + '};\nif (document.currentScript) document.currentScript.remove();'
+
+
 def main():
     shell = rd(os.path.join(SRC, 'shell.html'))
     if '<!--@@SCRIPTS@@-->' not in shell: fail('src/shell.html sem o marcador <!--@@SCRIPTS@@-->')
     js, order = bundle()
     three, rules = rd(os.path.join(ROOT, 'vendor/three.js')), rd(os.path.join(SRC, 'rules.js'))
-    for name, s in (('three.js', three), ('rules.js', rules), ('jogo', js)):
+    gltf, models = rd(os.path.join(ROOT, 'vendor/gltf.js')), models_js()
+    for name, s in (('three.js', three), ('gltf.js', gltf), ('rules.js', rules), ('jogo', js)):
         if '</script' in s: fail(name + ' contém "</script" e quebraria o HTML embutido')
-    scripts = '<script>\n' + three + '\n</script>\n<script>\n' + rules + '\n</script>\n<script>\n' + js + '</script>\n'
+    scripts = ('<script>\n' + three + '\n</script>\n<script>\n' + gltf + '\n</script>\n<script>\n' + models + '\n</script>\n'
+               '<script>\n' + rules + '\n</script>\n<script>\n' + js + '</script>\n')
     os.makedirs(os.path.join(ROOT, 'dist'), exist_ok=True)
     out = shell.replace('<!--@@SCRIPTS@@-->', scripts)
     with open(os.path.join(ROOT, 'dist/forja-deira.html'), 'w', encoding='utf-8') as f: f.write(out)
-    dev = shell.replace('<!--@@SCRIPTS@@-->', '<script src="../vendor/three.js"></script>\n<script src="../src/rules.js"></script>\n<script type="module" src="../src/main.js"></script>\n')
+    with open(os.path.join(ROOT, 'dist/models.js'), 'w', encoding='utf-8') as f: f.write(models)
+    dev = shell.replace('<!--@@SCRIPTS@@-->', '<script src="../vendor/three.js"></script>\n<script src="../vendor/gltf.js"></script>\n<script src="models.js"></script>\n'
+                        '<script src="../src/rules.js"></script>\n<script type="module" src="../src/main.js"></script>\n')
     with open(os.path.join(ROOT, 'dist/dev.html'), 'w', encoding='utf-8') as f: f.write(dev)
     print('dist/forja-deira.html %d KB · %d módulos' % (len(out.encode()) // 1024, len(order)))
     # checagem de sintaxe com o Node (opcional: o build não depende dele)
