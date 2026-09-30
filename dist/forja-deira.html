@@ -8901,8 +8901,7 @@ function enterDungeon(biome, floor) {
       for (let i = 0; i < 3; i++) spawnMonster(B.monsters[i % 3], wx + (rand() - 0.5) * 5, wz + (rand() - 0.5) * 5, lvl + 2, { pack });
     } else {
       const kind = B.monsters[Math.floor(rand() * B.monsters.length)];
-      const n = s.size * R.TOWER.monsterMult; // grupos em dobro na torre
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < s.size; i++) {
         let x = wx + (rand() - 0.5) * 5, z = wz + (rand() - 0.5) * 5;
         if (!walkable(G.L, x, z)) { x = wx; z = wz; }
         const k2 = rand() < 0.75 ? kind : B.monsters[Math.floor(rand() * B.monsters.length)];
@@ -9070,8 +9069,6 @@ function paneOpts() {
     '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button></div>' +
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
   h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
-  h += '<h4>Modo de teste</h4><p class="note">Atalhos para avaliar sistemas de fim de jogo sem grind.</p><div class="row">' +
-    '<button class="btn sm" data-act="t-lvl">+100 níveis</button><button class="btn sm" data-act="t-gold">+5.000.000 Gold</button><button class="btn sm" data-act="t-leg">Gerar item lendário</button><button class="btn sm" data-act="t-jew">+10 de cada Jewel</button><button class="btn sm" data-act="t-boss">+5 chefes</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
   h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador.</p>';
   return h;
@@ -10828,11 +10825,6 @@ function paneAction(e) {
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
-    case 't-lvl': { const before = ch.level; const tgt = Math.min(R.RATES.maxLevel, ch.level + 100); while (ch.level < tgt) R.gainExp(ch, R.expToNext(ch.level) - ch.exp); onLevelUp(before); break; }
-    case 't-gold': ch.gold += 5e6; break;
-    case 't-leg': { const x = R.makeEquip(R.hash32('teste', Date.now()), Math.max(20, ch.level), 'lendario', ch.cls, 0, 'boss'); addToBag(x); log('Gerado: ' + R.itemName(x), 'loot'); break; }
-    case 't-jew': ['bless', 'soul', 'chaos', 'life'].forEach((j) => addToBag({ kind: 'jewel', id: j, qty: 10, uid: 'j' + j })); break;
-    case 't-boss': ch.bossKills += 5; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
     case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } location.reload(); return;
