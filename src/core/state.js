@@ -91,6 +91,11 @@ export function sanitizeCharacter(ch) {
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   ch.edenLast = Math.max(0, num(ch.edenLast, 0));
+  // automação (Habilidades e Drops); saves antigos começam tudo desligado
+  if (!Array.isArray(ch.autoSkills)) ch.autoSkills = [];
+  ch.autoSkills = ch.autoSkills.filter((id, i, a) => R.SKILLS[id] && R.SKILLS[id].cls === ch.cls && a.indexOf(id) === i);
+  ch.autoLoot = ch.autoLoot === true;
+  ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
   ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));

@@ -401,7 +401,8 @@ const EFFECTS = {
   },
 };
 
-export function castSkill(id, tx, tz) {
+/** opts.auto: lançada pela automação; não cancela o caminho que o jogador mandou andar. */
+export function castSkill(id, tx, tz, opts) {
   const p = G.player, ch = G.ch, st = G.st;
   if (!p.alive || inSafe()) { if (p.alive) floatText(p.x, 2.6, p.z, 'Habilidades desativadas na zona segura', 'info'); return false; }
   const sk = R.SKILLS[id];
@@ -427,7 +428,7 @@ export function castSkill(id, tx, tz) {
   p.rot += dr * 0.6;
   p.castFace = p.rotTarget;
   p.castMove = HEAVY[sk.kind] ? 0 : CONFIG.player.castMove;
-  if (HEAVY[sk.kind]) p.path = null;
+  if (HEAVY[sk.kind] && !(opts && opts.auto)) p.path = null;
   const ctx = { p, sk, id, tx, tz, dx, dz, d, mult: sk.mult, col: CLASS_COLOR[ch.cls], cost };
   const fx = EFFECTS[sk.kind];
   if (!fx || fx(ctx) === false) { G.mp += cost.mp; G.ag += cost.ag; G.cds[id] = 0; p.lockUntil = G.time; return false; }

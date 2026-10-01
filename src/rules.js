@@ -643,6 +643,7 @@
   // ---------------------------------------------------------------------------
   const EDEN = {
     cooldownMs: 3 * 60 * 60 * 1000,
+    levelCutPct: 15,                         // os monstros partem de 15% abaixo do nível do personagem
     hpMult: 1.25, dmgMult: 1.1,            // monstros um pouco mais duros que os de masmorra do mesmo nível
     // nível dos monstros = nível de entrada + bônus por trecho (início dos caminhos → Coração do Éden)
     lvl: { path: 0, pathEnd: 3, heart: 5, mini: 6, boss: 8 },
@@ -657,6 +658,10 @@
     const last = ch && Number.isFinite(ch.edenLast) ? ch.edenLast : 0;
     if (!last) return 0;
     return clamp(last + EDEN.cooldownMs - now, 0, EDEN.cooldownMs);
+  }
+  /** Nível de entrada do Éden: nível do personagem menos 15% (ex.: 360 → 306). */
+  function edenEntryLevel(level) {
+    return Math.max(1, Math.floor(Math.max(1, Math.floor(level || 1)) * (100 - EDEN.levelCutPct) / 100));
   }
   /** Nível dos monstros num trecho do Éden. part: path|heart|mini|boss; t: 0..1 ao longo do caminho. */
   function edenLevel(entry, part, t) {
@@ -773,6 +778,7 @@
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
       unlockedFloors: {}, towerBest: 1, edenLast: 0,
+      autoSkills: [], autoLoot: false, autoPetSell: false,
     };
   }
   function className(ch) {
@@ -962,7 +968,7 @@
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
-    EDEN, edenRemaining, edenLevel, rollEdenDrop,
+    EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,

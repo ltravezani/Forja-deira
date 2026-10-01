@@ -148,12 +148,12 @@ export function enterTower(floor) {
 }
 /**
  * O Éden: mapa aberto com três caminhos até o Coração do Éden. Uma entrada a cada
- * 3 horas (marcada no save ao entrar). Os monstros acompanham o nível de entrada.
+ * 3 horas (marcada no save ao entrar). Os monstros partem de 15% abaixo do nível de entrada.
  */
 export function enterEden() {
   const ch = G.ch;
   clearWorld();
-  const entry = Math.max(1, ch.level);
+  const entry = R.edenEntryLevel(ch.level);
   G.zone = 'eden'; G.biome = 'eden'; G.floor = 1; G.edenLvl = entry;
   ch.edenLast = Date.now();
   Music.play('eden');

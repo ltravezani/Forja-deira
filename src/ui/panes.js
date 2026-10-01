@@ -1,10 +1,12 @@
 // ---------- painéis Personagem, Habilidades, Drops e Opções ----------
 import { gltfEnabled, gltfStats } from '../art/gltfModels.js';
 import { Cloud } from '../core/cloud.js';
+import { CONFIG } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
 import { esc, fmt, R } from '../core/util.js';
 import { MUSIC_LEVELS, musicLevel } from '../engine/music.js';
 import { bloomOn } from '../engine/renderer.js';
+import { autoSkillAllowed, autoSkillOn } from '../game/automation.js';
 import { skillUnlocked } from '../game/skills.js';
 import { skillIconURI } from './icons.js';
 
@@ -43,7 +45,8 @@ export function paneChar() {
 export function paneSkills() {
   const ch = G.ch, st = G.st;
   const pts = R.treePoints(ch) - R.treeSpent(ch);
-  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.</p>';
+  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.</p>' +
+    '<p class="note"><b>Auto</b>: a habilidade sai sozinha quando houver um monstro ao alcance (o herói não anda sozinho; Teleporte e investidas ficam de fora).</p>';
   R.skillsFor(ch.cls).forEach((id) => {
     const sk = R.SKILLS[id];
     const ok = skillUnlocked(id);
@@ -51,6 +54,7 @@ export function paneSkills() {
     const c = R.skillCost(st, sk);
     h += '<div class="skill' + (ok ? '' : ' locked') + '"><img class="skic" src="' + skillIconURI(id) + '" alt=""><div><span class="t">' + esc(sk.name) + '</span> <span class="c">· MP ' + c.mp + ' · AG ' + c.ag + ' · recarga ' + sk.cd + 's' + (sk.mult ? ' · ×' + sk.mult : '') + (st.boosts[id] ? ' · +' + st.boosts[id] + '%' : '') + '</span><div class="c">' + esc(sk.desc) + '</div>' +
       (ok ? '' : '<div class="c" style="color:var(--danger)">Requer nível ' + sk.lvl + (sk.tier ? ' e ' + R.CLASSES[ch.cls].tiers[sk.tier] : '') + '</div>') + '</div><div>' +
+      (ok && autoSkillAllowed(id) ? '<button class="btn sm' + (autoSkillOn(id) ? ' gold' : '') + '" data-act="autoskill" data-id="' + id + '" aria-pressed="' + autoSkillOn(id) + '" title="Lançar sozinha perto de monstros">Auto: ' + (autoSkillOn(id) ? 'sim' : 'não') + '</button> ' : '') +
       (ok ? (inBar >= 0 ? '<button class="btn sm" data-act="unbar" data-id="' + id + '">Slot ' + (inBar + 1) + ' ✕</button>' : '<button class="btn sm" data-act="bar" data-id="' + id + '"' + (ch.skillBar.length >= 6 ? ' disabled' : '') + '>Pôr na barra</button>') : '') + '</div></div>';
   });
   h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 10 níveis, +10 por reset, +5 por evolução. Até 5 ranks por nó.</p><div class="tree">';
@@ -71,7 +75,13 @@ export function paneSkills() {
 
 // ---------- tabela de drops ----------
 export function paneLoot() {
+  const ch = G.ch;
   let h = '<h3>Drops</h3>';
+  const yesNo = (act, on) => '<span class="row" role="group"><button class="btn sm' + (on ? ' gold' : '') + '" data-act="' + act + '" data-v="1" aria-pressed="' + on + '">Sim</button><button class="btn sm' + (on ? '' : ' gold') + '" data-act="' + act + '" data-v="0" aria-pressed="' + !on + '">Não</button></span>';
+  h += '<h4>Automação</h4>' +
+    '<div class="autorow"><span>Pegar drops do chão automaticamente</span>' + yesNo('autoLoot', !!ch.autoLoot) + '</div>' +
+    '<div class="autorow"><span>Enviar pet para vender automaticamente</span>' + yesNo('autoPetSell', !!ch.autoPetSell) + '</div>' +
+    '<p class="note">Coleta: tudo que cair a até ' + CONFIG.loot.autoLootRadius + ' m do herói, itens também (com a mochila cheia, os itens ficam no chão). Venda: o pet parte sozinho com ' + CONFIG.loot.autoPetSellMin + '+ itens vendáveis ou com a mochila quase cheia; leva o mesmo que na venda manual, menos Lendários, itens trancados e melhorias para você.</p>';
   {
     const st = G.st;
     const rows = ['comum', 'magico', 'excelente', 'ancestral', 'lendario'];

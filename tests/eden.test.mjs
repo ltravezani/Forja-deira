@@ -57,6 +57,13 @@ test('Éden: dificuldade acompanha o nível de entrada', () => {
   assert.ok(R.edenLevel(200, 'boss') > 200);
 });
 
+test('Éden: monstros partem de 15% abaixo do nível do personagem', () => {
+  assert.equal(R.edenEntryLevel(360), 306);
+  assert.equal(R.edenEntryLevel(100), 85);
+  assert.equal(R.edenEntryLevel(1), 1);
+  assert.equal(R.edenEntryLevel(0), 1);
+});
+
 test('rollEdenDrop: Guardião sempre dá Talismã; Lendário só em mini chefe e chefe', () => {
   let legNormal = 0, talNormal = 0, buff = 0, rare = 0;
   const N = 4000;

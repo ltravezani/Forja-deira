@@ -62,3 +62,18 @@ test('personagens das classes novas sobrevivem ao save (sanitize e ida e volta e
     assert.ok(Number.isFinite(R.deriveStats(back, []).maxDmg));
   }
 });
+
+test('automação: saves antigos começam desligados e opções inválidas são limpas', async () => {
+  const { sanitizeCharacter } = await load('core/state.js');
+  const old = sanitizeCharacter({ name: 'Velho', cls: 'dw', level: 360 });
+  assert.deepEqual(old.autoSkills, []);
+  assert.equal(old.autoLoot, false);
+  assert.equal(old.autoPetSell, false);
+  const ch = sanitizeCharacter({ name: 'Y', cls: 'dw', autoSkills: ['ball', 'twist', 'ball', 'nada'], autoLoot: true, autoPetSell: 'sim' });
+  assert.deepEqual(ch.autoSkills, ['ball']);
+  assert.equal(ch.autoLoot, true);
+  assert.equal(ch.autoPetSell, false);
+  const back = sanitizeCharacter(JSON.parse(JSON.stringify(ch)));
+  assert.deepEqual(back.autoSkills, ['ball']);
+  assert.equal(back.autoLoot, true);
+});

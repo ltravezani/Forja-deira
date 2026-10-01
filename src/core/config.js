@@ -69,6 +69,12 @@ export const CONFIG = {
     spaceSeekRadius: 16,    // m: se nada estiver perto, anda até o mais próximo
     spaceRepeat: 0.25,      // s: repetição ao segurar Espaço
     pickupReach: 1.5,       // m: ao clicar num item
+    autoLootRadius: 6,      // m: com "Pegar drops automaticamente" ligado (inclui itens)
+    autoPetSellMin: 5,      // itens vendáveis na mochila para o pet partir sozinho (ou mochila quase cheia)
+  },
+  auto: {
+    skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
+    healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
   },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
