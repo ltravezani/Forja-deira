@@ -20,12 +20,14 @@ import { gy, walkable } from '../world/grid.js';
 import { kit, kitMat } from '../world/kit.js';
 import { buildLevel } from '../world/level.js';
 import { genDungeon, genTower, genTown } from '../world/levelgen.js';
+import { genEden } from '../world/edengen.js';
+import { clearEden, spawnEden } from './eden.js';
 
 /** A cidade é a única zona segura. */
 export function inSafe() { return G.zone === 'town'; }
 export function hasTownServices() { return G.zone === 'town'; }
 /** Nível base dos monstros da zona atual (masmorra ou torre). */
-export function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : floorLevel(G.biome, G.floor); }
+export function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : G.zone === 'eden' ? G.edenLvl || 1 : floorLevel(G.biome, G.floor); }
 
 /** Descarta tudo que pertence à zona atual (o pet e o jogador continuam). */
 export function clearWorld() {
@@ -41,6 +43,7 @@ export function clearWorld() {
   clearEffects();
   clearFx();
   clearCombatFx();
+  clearEden();
   resetFloatText();
 }
 function placePlayer(L) {
@@ -141,6 +144,28 @@ export function enterTower(floor) {
   setZoneText('Torre Infinita · Andar ' + floor, B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
   log('Torre Infinita, andar ' + floor + ' (' + B.name + '). Derrote o chefe no salão central para subir.', 'sys');
   toast('Torre Infinita', 'Andar ' + floor + ' · ' + B.name);
+  persist();
+}
+/**
+ * O Éden: mapa aberto com três caminhos até o Coração do Éden. Uma entrada a cada
+ * 3 horas (marcada no save ao entrar). Os monstros acompanham o nível de entrada.
+ */
+export function enterEden() {
+  const ch = G.ch;
+  clearWorld();
+  const entry = Math.max(1, ch.level);
+  G.zone = 'eden'; G.biome = 'eden'; G.floor = 1; G.edenLvl = entry;
+  ch.edenLast = Date.now();
+  Music.play('eden');
+  const seed = R.hash32('eden', ch.name, Date.now());
+  G.L = genEden(seed);
+  buildLevel(G.L);
+  resize();
+  placePlayer(G.L);
+  spawnEden(G.L, entry);
+  setZoneText(BIOMES.eden.name, 'Monstros nv ' + entry + '+ · Guardião do Éden nv ' + R.edenLevel(entry, 'boss'));
+  log('Você entrou no Éden (seed ' + R.hex(seed) + '). Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
+  toast('O Éden', 'Escolha um caminho: Floresta, Raízes ou Rio');
   persist();
 }
 function spawnBreakable(x, z, biome) {

@@ -7,10 +7,12 @@ export const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
   hp: 1, mp: 1, ag: 1, buffs: [], player: null, pet: null,
   monsters: [], projectiles: [], delayed: [], loot: [], allies: [], breakables: [], npcs: [],
-  exitPortal: null, townPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
+  exitPortal: null, townPortal: null, edenPortal: null, hubPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
   explored: null, boss: null, selectedSlot: 0, dropLog: [], nextMonId: 1, showAllLabels: false,
   cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0,
 };
+/** Portais ativos (descida/subida, masmorras, Éden e o de volta para a cidade). */
+export function allPortals() { return [G.exitPortal, G.townPortal, G.edenPortal, G.hubPortal].filter(Boolean); }
 /** Save global (mutado no lugar para que os módulos compartilhem a mesma referência). */
 export const S = defaultSave();
 export const SAVE_KEY = 'forjadeira.save.v1';
@@ -62,7 +64,7 @@ export function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null };
+export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -88,5 +90,9 @@ export function sanitizeCharacter(ch) {
   if (!ch.tree || typeof ch.tree !== 'object') ch.tree = {};
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
+  ch.edenLast = Math.max(0, num(ch.edenLast, 0));
+  ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
+  // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
+  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
   return ch;
 }

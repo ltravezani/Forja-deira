@@ -34,6 +34,12 @@ export function biomeTex(id) {
       b: texGround('ash_abyss3', { a: 0x3a302c, b: 0x4a3a34, c: 0x7a6a60 }),
       wall: texRock('wall_abyss3', { a: 0x2a1614, b: 0x46241e, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x3a2420, wallGlow: 0xff6a18,
     };
+    // ---------- O Éden: grama viva e alta, chão de musgo, penhascos cobertos de musgo ----------
+    case 'eden': return {
+      a: texGround('grass_eden', { a: 0x36682a, b: 0x46782e, c: 0x7a7a5a, blades: true, bladeCol: 0x8ac84a }),
+      b: texGround('moss_eden', { a: 0x34562a, b: 0x5a4e30, c: 0x7a7a5e, blades: true, bladeCol: 0x6aa040 }),
+      wall: texRock('cliff_eden', { a: 0x5a5448, b: 0x5e6a4a, n: 18 }), wallCol: 0xffffff, capCol: 0x3a6a24,
+    };
     // ---------- Torre Infinita ----------
     case 'tw_granite': return {
       a: texStones('flag_twgranite', { stone: 0x7e828e, stone2: 0x6a6e7a, mortar: 0x262a34, slabs: true, rows: 3 }),

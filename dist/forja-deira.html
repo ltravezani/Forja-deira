@@ -150,6 +150,8 @@ input, select { font-family: inherit; }
 .menu button:hover::after, .menu button:focus-visible::after { opacity: 1; }
 .buffs { display: flex; gap: 4px; }
 .buff { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(40,30,60,.85); border: 1px solid #5c4a7a; }
+.buff.pot { background: rgba(20,52,30,.88); border-color: #6ac87a; color: #d8ffd0; }
+.buffs { flex-wrap: wrap; max-width: 520px; }
 
 .bossbar { position: absolute; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 420px)); min-width: 220px; text-align: center; }
 .bossbar h3 { margin: 0 0 4px; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: #ffb27a; text-shadow: 0 2px 3px #000; }
@@ -5735,6 +5737,18 @@ if (document.currentScript) document.currentScript.remove();
     mp: { name: 'Poção de Mana', pct: 0.3, flat: 40, price: 50 },
     // Não é bebida: consumida na tela de queda para renascer no mesmo lugar com HP/MP cheios.
     rez: { name: 'Poção da Ressurreição', pct: 1, flat: 0, price: 50000, revive: true },
+    // Poções de reforço (só caem no Éden): bebidas no inventário, duram 10 minutos.
+    spd: { name: 'Poção de Velocidade', price: 20000, buff: { atkRatePct: 10 }, dur: 600, color: '#ffd84a', desc: 'Velocidade de ataque +10% por 10 minutos.' },
+    cdr: { name: 'Poção de Recarga', price: 20000, buff: { cdPct: -10 }, dur: 600, color: '#5ae8ff', desc: 'Tempo de recarga das habilidades -10% por 10 minutos.' },
+    str: { name: 'Poção de Força', price: 20000, buff: { str: 50 }, dur: 600, color: '#ff6a3a', desc: 'Força +50 por 10 minutos.' },
+    agi: { name: 'Poção de Agilidade', price: 20000, buff: { agi: 50 }, dur: 600, color: '#7aff5a', desc: 'Agilidade +50 por 10 minutos.' },
+    vit: { name: 'Poção de Vitalidade', price: 20000, buff: { vit: 50 }, dur: 600, color: '#ff5aa8', desc: 'Vitalidade +50 por 10 minutos.' },
+    ene: { name: 'Poção de Energia', price: 20000, buff: { ene: 50 }, dur: 600, color: '#a87aff', desc: 'Energia +50 por 10 minutos.' },
+  };
+  const BUFF_POTIONS = ['spd', 'cdr', 'str', 'agi', 'vit', 'ene'];
+  /** Talismãs: consumidos no Ferreiro. */
+  const TALISMANS = {
+    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
 
   function plusBonus(p) {
@@ -5743,6 +5757,7 @@ if (document.currentScript) document.currentScript.remove();
   function itemName(it) {
     if (it.kind === 'jewel') return JEWELS[it.id].name;
     if (it.kind === 'potion') return POTIONS[it.id].name;
+    if (it.kind === 'talisman') return TALISMANS[it.id].name;
     let base;
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
@@ -5806,6 +5821,7 @@ if (document.currentScript) document.currentScript.remove();
   function itemValue(it) {
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
+    if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3));
   }
@@ -5981,6 +5997,67 @@ if (document.currentScript) document.currentScript.remove();
   }
 
   // ---------------------------------------------------------------------------
+  // O Éden: mapa aberto com três caminhos e o Guardião do Éden. Uma entrada a
+  // cada 3 horas; a dificuldade acompanha o nível do personagem na entrada.
+  // ---------------------------------------------------------------------------
+  const EDEN = {
+    cooldownMs: 3 * 60 * 60 * 1000,
+    hpMult: 1.25, dmgMult: 1.1,            // monstros um pouco mais duros que os de masmorra do mesmo nível
+    // nível dos monstros = nível de entrada + bônus por trecho (início dos caminhos → Coração do Éden)
+    lvl: { path: 0, pathEnd: 3, heart: 5, mini: 6, boss: 8 },
+    rare: { normal: 0.1, elite: 0.15, mini: 0.4, boss: 0.75, chest: 0.3, secret: 0.6 }, // joia ou item Ancestral
+    bossRareRolls: 2,
+    legend: { mini: 0.05, boss: 0.05 },     // item Lendário (só mini chefes e chefe final)
+    talisman: 0.07,                          // Talismã da Sorte (sempre no chefe final)
+    buffPotion: { normal: 0.15, elite: 0.15, mini: 0.15, boss: 0.15, chest: 0.4, secret: 0.6 },
+  };
+  /** Milissegundos que faltam para poder entrar de novo (0 = liberado). */
+  function edenRemaining(ch, now) {
+    const last = ch && Number.isFinite(ch.edenLast) ? ch.edenLast : 0;
+    if (!last) return 0;
+    return clamp(last + EDEN.cooldownMs - now, 0, EDEN.cooldownMs);
+  }
+  /** Nível dos monstros num trecho do Éden. part: path|heart|mini|boss; t: 0..1 ao longo do caminho. */
+  function edenLevel(entry, part, t) {
+    const L = EDEN.lvl, e = Math.max(1, Math.floor(entry || 1));
+    if (part === 'path') return e + Math.round(L.path + (L.pathEnd - L.path) * clamp(t || 0, 0, 1));
+    return e + (L[part] || 0);
+  }
+  /**
+   * Drop do Éden (determinístico pela seed). src: normal|elite|mini|boss|chest|secret.
+   * Joia ou item Ancestral (10%, mais em mini chefes e no chefe), Lendário só em mini
+   * chefes e no chefe (5%), Talismã da Sorte (7%, sempre no chefe), poções de reforço (15%),
+   * além de Gold e poções de vida/mana como numa masmorra.
+   */
+  function rollEdenDrop(opts) {
+    const { seed, mLevel, src, mf, favorCls } = opts;
+    const rnd = mulberry32(seed);
+    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, log: [] };
+    const boss = src === 'boss', mini = src === 'mini', chest = src === 'chest' || src === 'secret';
+    const equipSrc = boss ? 'boss' : mini || chest ? 'elite' : src;
+    if (rnd() < DROP_CHANCE.gold || boss || mini || chest) {
+      const g = goldAmount(mLevel, boss || mini ? 'boss' : src === 'elite' || chest ? 'elite' : 'normal', rnd());
+      out.gold = mini ? Math.floor(g / 2) : src === 'secret' ? g * 2 : g;
+    }
+    const rolls = boss ? EDEN.bossRareRolls : 1;
+    for (let i = 0; i < rolls; i++) {
+      const r = rnd(), p = EDEN.rare[src] || EDEN.rare.normal;
+      out.log.push({ what: 'raro', roll: r, threshold: p });
+      if (r >= p) continue;
+      if (rnd() < 0.5) out.jewels.push(JEWEL_IDS[Math.floor(rnd() * JEWEL_IDS.length)]);
+      else out.items.push(makeEquip(hash32(seed, 'anc', i), mLevel, 'ancestral', favorCls, mf, equipSrc));
+    }
+    const pl = EDEN.legend[src] || 0;
+    if (pl) { const r = rnd(); out.log.push({ what: 'lendario', roll: r, threshold: pl }); if (r < pl) out.items.push(makeEquip(hash32(seed, 'leg'), mLevel, 'lendario', favorCls, mf, equipSrc)); }
+    const rt = rnd();
+    if (boss || rt < EDEN.talisman) out.talismans = 1;
+    const rb = rnd();
+    if (rb < (EDEN.buffPotion[src] || 0)) out.potions.push(BUFF_POTIONS[Math.floor(rnd() * BUFF_POTIONS.length)]);
+    if (!boss && rnd() < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
   // Aprimoramento (+nível)
   // ---------------------------------------------------------------------------
   function upgradeChance(it, jewel) {
@@ -5991,14 +6068,23 @@ if (document.currentScript) document.currentScript.remove();
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
-  function applyUpgrade(it, jewel, roll) {
+  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos). */
+  const talismanUseful = (jewel) => jewel === 'chaos';
+  /**
+   * Aplica uma Jewel. opts.talisman: Talismã da Sorte em uso — se a fusão Chaos
+   * falhar, o item mantém o +nível (protected: true) em vez de voltar a +0.
+   */
+  function applyUpgrade(it, jewel, roll, opts) {
     const ch = upgradeChance(it, jewel);
     if (ch <= 0) return { ok: false, invalid: true, chance: 0 };
     const ok = roll < ch;
     if (jewel === 'life') { if (ok) it.addOpt += 4; return { ok, chance: ch }; }
     if (ok) it.plus += 1;
     else if (jewel === 'soul') it.plus = Math.max(6, it.plus - 1);
-    else if (jewel === 'chaos') it.plus = 0;
+    else if (jewel === 'chaos') {
+      if (opts && opts.talisman) return { ok, chance: ch, protected: true };
+      it.plus = 0;
+    }
     return { ok, chance: ch };
   }
 
@@ -6025,7 +6111,7 @@ if (document.currentScript) document.currentScript.remove();
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
-      unlockedFloors: {}, towerBest: 1,
+      unlockedFloors: {}, towerBest: 1, edenLast: 0,
     };
   }
   function className(ch) {
@@ -6104,7 +6190,7 @@ if (document.currentScript) document.currentScript.remove();
     }
     out.minDmg += out.dmgLvl; out.maxDmg += out.dmgLvl;
     if (out.maxDmg < out.minDmg) out.maxDmg = out.minDmg;
-    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60), 0.2, 1.2);
+    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60) / (1 + (b.atkRatePct || 0) / 100), 0.18, 1.2);
     out.mfTable = rarityTable(out.mf, 'normal');
     return out;
   }
@@ -6211,11 +6297,12 @@ if (document.currentScript) document.currentScript.remove();
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
-    upgradeChance, applyUpgrade, monsterStats,
+    EDEN, edenRemaining, edenLevel, rollEdenDrop,
+    upgradeChance, applyUpgrade, talismanUseful, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
@@ -7505,7 +7592,7 @@ return { decideSync, hasChars, saveSummary, stableJson };
 })();
 
 // ---- core/state.js ----
-const { G, S, SAVE_KEY, SaveHooks, UI, loadSave, persist, sanitizeCharacter } = (() => {
+const { G, S, SAVE_KEY, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter } = (() => {
 // ---------- estado do jogo e do save ----------
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
@@ -7515,10 +7602,12 @@ const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
   hp: 1, mp: 1, ag: 1, buffs: [], player: null, pet: null,
   monsters: [], projectiles: [], delayed: [], loot: [], allies: [], breakables: [], npcs: [],
-  exitPortal: null, townPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
+  exitPortal: null, townPortal: null, edenPortal: null, hubPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
   explored: null, boss: null, selectedSlot: 0, dropLog: [], nextMonId: 1, showAllLabels: false,
   cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0,
 };
+/** Portais ativos (descida/subida, masmorras, Éden e o de volta para a cidade). */
+function allPortals() { return [G.exitPortal, G.townPortal, G.edenPortal, G.hubPortal].filter(Boolean); }
 /** Save global (mutado no lugar para que os módulos compartilhem a mesma referência). */
 const S = defaultSave();
 const SAVE_KEY = 'forjadeira.save.v1';
@@ -7570,7 +7659,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -7596,9 +7685,13 @@ function sanitizeCharacter(ch) {
   if (!ch.tree || typeof ch.tree !== 'object') ch.tree = {};
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
+  ch.edenLast = Math.max(0, num(ch.edenLast, 0));
+  ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
+  // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
+  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
   return ch;
 }
-return { G, S, SAVE_KEY, SaveHooks, UI, loadSave, persist, sanitizeCharacter };
+return { G, S, SAVE_KEY, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter };
 })();
 
 // ---- core/cloud.js ----
@@ -9729,6 +9822,14 @@ function buildItemModel(kind, o) {
     part(GEO.cyl, glass, 0.12, 0.14, 0.12, 0, 0.42, 0, h, false);
     part(GEO.cyl, toon(0x8a6a42, 0, 0, { rough: 0.95 }), 0.13, 0.08, 0.13, 0, 0.52, 0, h, false); // rolha
     part(GEO.sphS, toon(0xffffff, 0xffffff, 0.8), 0.06, 0.1, 0.03, -0.1, 0.28, 0.13, h, false); // brilho do vidro
+  } else if (kind === 'talisman') {
+    // medalhão dourado em pé, com um trevo de quatro folhas que brilha
+    h.position.y = 0.32;
+    part(GEO.cyl, gold, 0.5, 0.07, 0.5, 0, 0, 0, h).rotation.x = Math.PI / 2;
+    part(GEO.cyl, toon(0x0e3a1a, 0, 0, { rough: 0.6 }), 0.4, 0.075, 0.4, 0, 0, 0.004, h).rotation.x = Math.PI / 2;
+    for (const [x, y] of [[0, 0.09], [0, -0.09], [0.09, 0], [-0.09, 0]]) part(GEO.sphS, gem, 0.12, 0.12, 0.05, x, y, 0.045, h, false);
+    part(GEO.torusF, gold, 0.16, 0.16, 0.3, 0, 0.29, 0, h).rotation.y = Math.PI / 2;
+    part(GEO.sphS, halo, 0.75, 0.75, 0.4, 0, 0, 0, h, false);
   } else if (kind === 'gold') {
     const coin = toon(0xffd24a, 0xaa7a00, 0.35, { metal: 0.9, rough: 0.3, env: 1.2 });
     const n = Math.min(7, 2 + (o.amount || 1));
@@ -10342,6 +10443,15 @@ const MUSIC_THEMES = {
     wind: { vol: 0.02, cutoff: 700 },
     echo: { time: 0.55, fb: 0.35, mix: 0.35 },
   },
+  // O Éden: lídio luminoso, sinos e harpa suaves sobre o vento da mata
+  eden: {
+    bpm: 70, root: 53, scale: [0, 2, 4, 6, 7, 9, 11], chords: [0, 4, 5, 3], barsPerChord: 2,
+    pad: { type: 'sine', vol: 0.06, cutoff: 1500 },
+    bass: { type: 'sine', vol: 0.07 },
+    lead: { type: 'triangle', vol: 0.045, oct: 2, density: 0.3, dur: 1.4, bell: true },
+    wind: { vol: 0.018, cutoff: 900 },
+    echo: { time: 0.5, fb: 0.4, mix: 0.4 },
+  },
   caves: {
     bpm: 60, root: 45, scale: [0, 2, 3, 7, 8], chords: [0, 4, 2, 3], barsPerChord: 2,
     pad: { type: 'sine', vol: 0.05, cutoff: 900 },
@@ -10548,7 +10658,7 @@ return { MUSIC_LEVELS, MUSIC_THEMES, Music, musicLevel, scaleNote };
 })();
 
 // ---- game/data.js ----
-const { AFFIX, MON, NPCS } = (() => {
+const { AFFIX, EDEN_MINI, EDEN_MON, MON, NPCS } = (() => {
 // ---------- dados de conteúdo: monstros, afixos de elite e NPCs da cidade ----------
 
 const MON = {
@@ -10573,7 +10683,31 @@ const MON = {
   skeking: { name: 'Rei Esqueleto Aldric', model: 'humanoid', o: { gltf: 'skeleton', tintK: 0.6, skin: 0xf0e6c8, cloth: 0x3a2a6a, armor: 0x4a3a7a, trim: 0xffd24a, head: 'skull', eye: 0x9a6aff, crown: true, weapon: 'sword', weaponGlow: 0x9a6aff, scale: 2.1 }, boss: true, speed: 4.2, range: 3.4, atkT: 1.3, mod: { hp: 16, dmg: 1.9, def: 1.5 } },
   lord: { name: 'Lorde Carmesim', model: 'humanoid', o: { gltf: 'knight', tintK: 0.75, skinK: 0.6, skin: 0x2a2a30, cloth: 0xa01a2a, armor: 0x302a34, trim: 0xff3a3a, trimGlow: true, head: 'helm', eye: 0xff2a2a, horns: true, weapon: 'sword', weaponGlow: 0xff2a2a, bulky: true, scale: 2.1 }, boss: true, speed: 4.4, range: 3.6, atkT: 1.2, mod: { hp: 18, dmg: 2, def: 1.6 } },
   tyrant: { name: 'Tirano do Abismo', model: 'golem', o: { stone: 0x2a1010, core: 0xff3a0a, scale: 2.2 }, boss: true, speed: 3.6, range: 4, atkT: 1.4, mod: { hp: 22, dmg: 2.2, def: 1.7 } },
+  // ---------- O Éden: criaturas de cada caminho, mini chefes e o Guardião ----------
+  e_wolf: { name: 'Lobo Corrompido', model: 'beast', o: { fur: 0x3e5a2a, dark: 0x1a2a12, eye: 0xd04aff }, speed: 6.2, range: 1.8, atkT: 0.9, mod: { hp: 0.9, dmg: 1 } },
+  e_treant: { name: 'Ent Corrompido', model: 'golem', o: { stone: 0x5e4a30, core: 0xc05aff, scale: 0.95 }, speed: 3, range: 2.2, atkT: 1.5, mod: { hp: 1.8, dmg: 1.25, def: 1.4 } },
+  e_sprite: { name: 'Fada Sombria', model: 'floater', o: { body: 0x8aff6a, eye: 0xff5aff }, ranged: { speed: 11, color: 0xb0ff6a }, speed: 4.4, range: 10, atkT: 1.7, mod: { hp: 0.8, dmg: 1.2 } },
+  e_rootspider: { name: 'Aranha das Raízes', model: 'spider', o: { body: 0x4a3a22, belly: 0x5a7a34, eye: 0x6affd0 }, speed: 5.4, range: 1.6, atkT: 0.9, mod: { hp: 0.7, dmg: 0.9 } },
+  e_rootbat: { name: 'Morcego das Profundezas', model: 'bat', o: { body: 0x3a5a4a, wing: 0x1a2a22, eye: 0x6affd0, glow: 0x2a6a4a }, speed: 6.6, range: 1.6, atkT: 0.8, mod: { hp: 0.6, dmg: 0.85 } },
+  e_burrower: { name: 'Golem de Raízes', model: 'golem', o: { stone: 0x4e3e2a, core: 0x6affd0, scale: 0.85 }, speed: 3.2, range: 2.2, atkT: 1.5, mod: { hp: 1.7, dmg: 1.25, def: 1.5 } },
+  e_naiad: { name: 'Náiade Corrompida', model: 'floater', o: { body: 0x4ad0ff, eye: 0xffffff, ghost: true }, ranged: { speed: 12, color: 0x6ae0ff }, speed: 4.6, range: 10, atkT: 1.6, mod: { hp: 0.85, dmg: 1.2 } },
+  e_croc: { name: 'Crocodilo do Rio', model: 'beast', o: { fur: 0x2e5a48, dark: 0x16302a, eye: 0xffe04a, scale: 1.1 }, speed: 5.4, range: 1.9, atkT: 1, mod: { hp: 1.2, dmg: 1.1, def: 1.2 } },
+  e_frog: { name: 'Homem-Sapo', model: 'humanoid', o: { gltf: 'barbarian', skinK: 0.75, tintK: 0.5, skin: 0x4a9a6a, cloth: 0x2a5a6a, armor: 0x3a6a5a, head: 'goblin', weapon: 'club', scale: 0.85 }, speed: 4.6, range: 1.8, atkT: 1.1, mod: { hp: 0.95, dmg: 1 } },
+  // mini chefes (fim de cada caminho): selo no chão e barra com nome, sem trocar a barra do chefe
+  e_alpha: { name: 'Alfa da Floresta Corrompida', model: 'beast', o: { fur: 0x2a4a1a, dark: 0x10200a, eye: 0xd04aff, scale: 2 }, mini: true, speed: 5.6, range: 2.8, atkT: 1, mod: { hp: 8, dmg: 1.6, def: 1.3 } },
+  e_rootcolossus: { name: 'Colosso das Raízes', model: 'golem', o: { stone: 0x4a3a28, core: 0x6affd0, scale: 1.6 }, mini: true, speed: 3.2, range: 3.2, atkT: 1.5, mod: { hp: 9, dmg: 1.7, def: 1.5 } },
+  e_matriarch: { name: 'Matriarca das Águas', model: 'floater', o: { body: 0x3ab8ff, eye: 0xffffff, scale: 2 }, ranged: { speed: 12, color: 0x6ae0ff }, mini: true, speed: 4, range: 11, atkT: 1.4, mod: { hp: 7, dmg: 1.7, def: 1.2 } },
+  e_guardian: { name: 'Guardião do Éden', model: 'humanoid', o: { gltf: 'knight', tintK: 0.7, skinK: 0.5, skin: 0x6a8a4a, cloth: 0x2a5a1a, armor: 0x4a6a3a, trim: 0xd8ff6a, trimGlow: true, head: 'helm', horns: true, eye: 0x9aff4a, crown: true, weapon: 'sword', weaponGlow: 0x9aff4a, bulky: true, scale: 2.3 }, boss: true, speed: 4.2, range: 3.6, atkT: 1.2, mod: { hp: 26, dmg: 2.2, def: 1.7 } },
 };
+/** Criaturas do Éden por região (1 clareira, 2 floresta, 3 raízes, 4 rio, 5 Coração) e mini chefe de cada caminho. */
+const EDEN_MON = {
+  1: ['e_wolf', 'e_rootspider', 'e_frog'],
+  2: ['e_wolf', 'e_treant', 'e_sprite'],
+  3: ['e_rootspider', 'e_rootbat', 'e_burrower'],
+  4: ['e_naiad', 'e_croc', 'e_frog'],
+  5: ['e_treant', 'e_burrower', 'e_naiad', 'e_wolf', 'e_sprite', 'e_croc'],
+};
+const EDEN_MINI = { 2: 'e_alpha', 3: 'e_rootcolossus', 4: 'e_matriarch' };
 const AFFIX = {
   veloz: { name: 'Veloz', speed: 1.5 },
   colosso: { name: 'Colosso', hp: 2, scale: 1.3 },
@@ -10581,14 +10715,16 @@ const AFFIX = {
   explosivo: { name: 'Explosivo', explode: true },
 };
 const NPCS = {
-  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0.' },
+  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
   merchant: { name: 'Lira', role: 'Mercadora · poções e compra de itens', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas! E se o seu pet estiver ocupado, eu compro o que você carrega.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
   tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { gltf: 'knight', skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra ouro e Jewels. Derrote o guardião de cada andar e suba o quanto aguentar.' },
+  // não é um NPC na praça: cabeçalho da janela do portal (entre Kora e Varek)
+  eden: { name: 'Portal do Éden', role: 'Uma entrada a cada 3 horas', look: {}, say: 'Além deste portal há uma terra que nunca conheceu o inverno. Três caminhos levam ao Coração do Éden, onde o Guardião vela a Árvore-Mãe. O portal adormece por três horas depois que alguém o atravessa.' },
   duel: { name: 'Kora', role: 'Arena de Duelo · em construção', look: { gltf: 'knight', skin: 0xe0a880, cloth: 0x3a3a3a, armor: 0x8a2a2a, head: 'helm', weapon: 'sword', shield: true }, say: 'A arena ainda está sendo erguida. Em breve, desafios contra os campeões de Aldrena. Até lá, afie a lâmina nas masmorras.' },
 };
-return { AFFIX, MON, NPCS };
+return { AFFIX, EDEN_MINI, EDEN_MON, MON, NPCS };
 })();
 
 // ---- game/projectiles.js ----
@@ -11595,10 +11731,12 @@ const ICON_SHAPE = {
   pendant: '<path d="M14 6 Q32 34 50 6" stroke="#c9b28a" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path class="m" d="M32 26 L45 40 L32 59 L19 40 Z"/><path d="M32 26 L32 59 M19 40 L45 40" stroke="#fff7" stroke-width="1"/><circle class="g" cx="32" cy="24" r="3"/>',
   wings: '<path class="m" d="M31 32 Q15 4 3 12 Q10 19 7 27 Q14 29 11 37 Q19 37 19 46 Q27 40 31 38Z"/><path class="m" d="M33 32 Q49 4 61 12 Q54 19 57 27 Q50 29 53 37 Q45 37 45 46 Q37 40 33 38Z"/><path d="M29 30 Q18 16 8 14 M29 34 Q18 28 11 29 M29 37 Q22 36 15 38 M35 30 Q46 16 56 14 M35 34 Q46 28 53 29 M35 37 Q42 36 49 38" stroke="#0005" stroke-width="1.2" fill="none"/><circle class="g" cx="32" cy="35" r="3"/>',
   jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+  // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
+  talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
   potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
 };
 /** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', jewel: '#20183a', potion: '#2a1a1a' };
+const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', jewel: '#20183a', potion: '#2a1a1a' };
 const _iconCache = {};
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -11608,6 +11746,7 @@ function shade(hex, f) {
 function iconKind(it) {
   if (it.kind === 'jewel') return 'jewel';
   if (it.kind === 'potion') return 'potion';
+  if (it.kind === 'talisman') return 'talisman';
   if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
   return it.slot;
 }
@@ -11624,8 +11763,10 @@ function iconURI(kind, col) {
 }
 function glyph(it) {
   const kind = iconKind(it);
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'potion' ? (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8') : R.RARITY[it.rarity].color;
-  return { kind, c, bg: it.kind === 'potion' ? (it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind], src: iconURI(kind, c) };
+  const P = it.kind === 'potion' && R.POTIONS[it.id];
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
+  const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
+  return { kind, c, bg, src: iconURI(kind, c) };
 }
 function iconHtml(g) {
   return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
@@ -11687,6 +11828,8 @@ function setVar(id, name, v) { const k = id + '--' + name; if (last.get(k) !== v
 /** Força a próxima atualização a reescrever tudo (troca de personagem). */
 function resetHudCache() { last.clear(); }
 
+/** Tempo de buff: "42s" ou "9:58" (poções de reforço duram 10 minutos). */
+const buffLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : Math.ceil(s) + 's');
 function hudTick() {
   const ch = G.ch, st = G.st;
   if (!ch || !st) return;
@@ -11705,7 +11848,7 @@ function hudTick() {
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();
-  setHtml('buffs', G.buffs.map((x) => '<span class="buff">' + esc(x.name) + ' ' + Math.ceil(x.until - G.time) + 's</span>').join('') +
+  setHtml('buffs', G.buffs.map((x) => '<span class="buff' + (x.potion ? ' pot' : '') + '">' + esc(x.name) + ' ' + buffLeft(x.until - G.time) + '</span>').join('') +
     (G.pet && G.pet.away > G.time ? '<span class="buff">Pet vendendo ' + Math.ceil(G.pet.away - G.time) + 's</span>' : ''));
   updateLowHp(hpFrac, G.player.alive);
 }
@@ -11754,6 +11897,8 @@ const BIOMES = {
   tw_arcane: { name: 'Biblioteca Arcana', tower: true, fog: [0x140c22, 24, 64], hemi: [0xa08ad0, 0x1a1028, 1.7], sun: [0xd8c0ff, 1.3], light: 0xd0a8ff, exposure: 1.1, shadow: [0x5a38c0, 0.55], grade: [0xe4d4ff, 1.03], look: { contrast: 1.06, lift: 0x2a1450, gamma: [1, 0.98, 1.04] }, hfog: [0x54486a, 0.9, 0.12], monsters: ['warlock', 'specter', 'bat'], boss: 'colossus', decor: 'tower', ambient: 0xc89aff },
   tw_storm: { name: 'Terraço da Tempestade', tower: true, fog: [0x0a161a, 26, 66], hemi: [0x7ab0b8, 0x10201e, 1.7], sun: [0xbff4ff, 1.6], light: 0xa8f0ff, exposure: 1.08, shadow: [0x2a6a9a, 0.45], grade: [0xd0f4ff, 1.02], look: { contrast: 1.06, lift: 0x0a2a3a, gamma: [0.98, 1.02, 1.04] }, hfog: [0x6a8488, 1.1, 0.14], monsters: ['gargoyle', 'archer', 'wolf'], boss: 'lord', decor: 'tower', ambient: 0x8af0ff },
   tw_void: { name: 'Coroa do Vazio', tower: true, fog: [0x12060e, 24, 62], hemi: [0x9a6a9a, 0x1a0814, 1.5], sun: [0xff9ad8, 1.3], light: 0xff9ae0, exposure: 1.1, shadow: [0x7a2080, 0.55], grade: [0xffd0ec, 1.0], look: { contrast: 1.06, lift: 0x300a30, gamma: [1.02, 0.97, 1.02] }, hfog: [0x4a3048, 1.0, 0.14], monsters: ['herald', 'hound', 'lavademon'], boss: 'tyrant', decor: 'tower', ambient: 0xff6ad0 },
+  // ---------- O Éden: dia claro, verde e vivo (as Raízes escurecem por conta própria, ver game/eden.js) ----------
+  eden: { name: 'O Éden', fog: [0x3e6a58, 34, 92], hemi: [0xcfe8d8, 0x2e4a24, 1.9], sun: [0xffe8c0, 2.3], light: 0xfff0c0, exposure: 0.98, shadow: [0x1e4a5a, 0.42], grade: [0xe8f8e0, 1.0], look: { contrast: 1.1, lift: 0x0e2414, gamma: [1.02, 1, 1.03], gain: 0xfff4e0 }, hfog: [0x8ac8a8, 1.2, 0.1], monsters: ['e_wolf', 'e_naiad', 'e_rootspider'], boss: 'e_guardian', decor: 'eden', ambient: 0xd8ff8a },
 };
 const DUNGEON_ORDER = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
 const floorLevel = (biome, floor) => BIOMES[biome].base + (floor - 1) * 8;
@@ -11774,7 +11919,7 @@ const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.
 /** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
 const sellListed = (it) => !it.slot;
 /** Joias pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel';
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman';
 function sellSection(ch) {
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
   const cnt = { all: 0, jewel: 0, potion: 0 };
@@ -11789,7 +11934,7 @@ function sellSection(ch) {
   h += '<div class="list selllist">';
   idx.forEach((i) => {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = it.kind === 'jewel' ? 'Joia · você tem ' + q : 'Poção · você tem ' + q;
+    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : 'Poção') + ' · você tem ' + q;
     let a;
     if (cf && cf.it === it) {
       a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
@@ -11816,6 +11961,14 @@ function sellFromBag(ch, i, n, confirmed) {
   log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' Gold.', 'loot');
   Sfx.coin();
 }
+function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
+/** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
+function takeTalisman() {
+  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'talisman' && b.id === 'luck');
+  if (!t) return false;
+  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
+  return true;
+}
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 function openNpc(id) {
   if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
@@ -11841,6 +11994,13 @@ function openNpc(id) {
     h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
     h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
       '<p class="note">Drops: só Gold (igual a um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Jewel aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Gold e Jewels.</p>';
+  } else if (id === 'eden') {
+    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = Math.max(1, ch.level);
+    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível agora) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
+      (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
+    h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
+      '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
+      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
   } else if (id === 'smith') {
     const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
     const sel = items.find((x) => x === UI.smithSel) || items[0];
@@ -11848,11 +12008,20 @@ function openNpc(id) {
     const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
     h += '<div class="row">' + items.slice(0, 24).map((x, i) => '<button class="btn sm' + (x === sel ? ' gold' : '') + '" data-npc="smithsel" data-i="' + i + '" style="color:' + R.RARITY[x.rarity].color + '">' + esc(R.itemName(x)) + '</button>').join('') + '</div>';
     if (sel) {
-      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4><div class="list">';
+      const tal = talismanCount();
+      if (!tal) UI.smithTalisman = false;
+      const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
+      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4>';
+      h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
+      // Talismã da Sorte: liga/desliga; protege a fusão Chaos (a única que volta o item a +0)
+      const tg = { kind: 'talisman', id: 'luck' };
+      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
+      h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
         const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '';
-        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + esc(R.JEWELS[j].desc) + '</span></div>';
+        const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
+        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
       });
       h += '</div>';
     } else h += '<p class="note">Você não tem equipamentos.</p>';
@@ -11884,6 +12053,7 @@ function npcAction(e) {
   switch (a) {
     case 'close': closeModal(); return;
     case 'go': closeModal(); enterDungeon(b.dataset.b, +b.dataset.f); return;
+    case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot)); UI.smithSel = items[+b.dataset.i]; break; }
     case 'up': {
@@ -11892,12 +12062,16 @@ function npcAction(e) {
       if (!it || !stack) break;
       if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
       stack.qty--; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
-      const r = R.applyUpgrade(it, j, Math.random());
-      if (r.ok) { log('Sucesso! ' + R.itemName(it), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
+      // Talismã da Sorte: gasto na tentativa de fusão Chaos com ele ligado
+      const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
+      const r = R.applyUpgrade(it, j, Math.random(), { talisman });
+      if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
+      else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
       else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
       recalc(); buildPlayerModel();
       break;
     }
+    case 'taltoggle': UI.smithTalisman = !UI.smithTalisman && talismanCount() > 0; break;
     case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break; ch.gold -= D.price * n; Sfx.coin(); break; }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
     case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
@@ -12068,6 +12242,7 @@ function fluffNormals(g, c, k) {
 const WIND = {
   tuft: [0.02, 0.5, 0.07], grassEdge: [0.02, 0.7, 0.09], fern: [0.02, 0.3, 0.06], flowers: [0.05, 0.35, 0.05],
   bush: [0.25, 1.2, 0.07], pine: [1.3, 5.6, 0.2], oak: [2.2, 5.6, 0.22],
+  gtree: [7, 14, 0.28], gtreeDeep: [7, 14, 0.28], motherTree: [7, 14, 0.18], hedge: [0.3, 1.4, 0.08], reeds: [0.1, 1.5, 0.12], magicFlower: [0.05, 0.5, 0.05],
 };
 function windAttr(geo, w) {
   const pos = geo.attributes.position, a = new Float32Array(pos.count);
@@ -12731,7 +12906,146 @@ function kit(name) {
       }
       for (let i = 0; i < 6; i++) { const a = i * 1.1 + 0.3; P.push(KP(GEO.sphLow, 0xd83a2a, Math.cos(a) * 1.6, 3.2 + (i % 2) * 0.6, Math.sin(a) * 1.6, 0.2)); } // maçãs
       break;
+    // ---------- O Éden ----------
+    case 'gtree': case 'gtreeDeep': case 'motherTree': { // árvore gigante: raízes-contraforte, tronco largo, copa enorme em camadas, cipós
+      const mother = name === 'motherTree', BARK = mother ? 0x7a5a3a : 0x5e4228, BARK2 = mother ? 0x5a4028 : 0x4a3220;
+      const LEAF = mother ? [0x5ab83a, 0x7ad04a, 0x9ae05a] : name === 'gtreeDeep' ? [0x2e6a2a, 0x387a30, 0x448a36] : [0x347a2e, 0x408a34, 0x52a03c];
+      const H0 = 8.5;
+      P.push(KP(GEO.taper, BARK, 0, H0 / 2, 0, 2.6, H0, 2.6, Math.PI, 0, 0));
+      P.push(KP(GEO.taper, BARK2, 0.2, H0 + 1.2, 0, 1.5, 2.6, 1.5, Math.PI, 0, -0.12));
+      for (let i = 0; i < 6; i++) { // contrafortes
+        const a = i * 1.05 + 0.3;
+        P.push(KP(GEO.cone4, i % 2 ? BARK : BARK2, Math.cos(a) * 1.25, 0.9, Math.sin(a) * 1.25, 0.9, 2.6, 0.5, Math.sin(a) * 0.75, -a, -Math.cos(a) * 0.75));
+        P.push(KP(GEO.cone, BARK2, Math.cos(a) * 2.1, 0.2, Math.sin(a) * 2.1, 0.5, 1.6, 0.5, Math.sin(a) * 1.4, 0, -Math.cos(a) * 1.4));
+      }
+      for (let i = 0; i < 4; i++) { const a = i * 1.6 + 0.7; P.push(KP(GEO.cone, BARK2, Math.cos(a) * 1.4, H0 - 0.6, Math.sin(a) * 1.4, 0.55, 3.4, 0.55, Math.sin(a) * 0.95, 0, -Math.cos(a) * 0.95)); } // galhos
+      P.push(KP(GEO.sphS, 0x2a1a10, 0.1, 2.0, 1.25, 0.7, 1.1, 0.2)); // oco
+      for (let i = 0; i < 12; i++) { // copa em três camadas
+        const a = i * 0.9 + (i > 5 ? 0.4 : 0), r = i === 0 ? 0 : i < 7 ? 3.2 : 1.8, y = H0 + 1.4 + (i < 7 ? (i % 2) * 0.6 : 2.0) + (i === 0 ? 2.8 : 0);
+        const sz = i === 0 ? 5 : i < 7 ? 4.4 - (i % 2) * 0.6 : 3.6;
+        P.push(fluff(KP(GEO.sph, LEAF[i % 3], Math.cos(a) * r, y, Math.sin(a) * r, sz, sz * 0.72, sz), [0, H0 + 2.2, 0], 0.8));
+      }
+      for (let i = 0; i < 8; i++) { // cipós pendurados
+        const a = i * 0.8 + 0.2, r = 3.6 + (i % 2) * 0.6, len = 2.4 + (i % 3) * 1.1;
+        P.push(KP(GEO.box, i % 2 ? 0x3e7a2e : 0x4e8a34, Math.cos(a) * r, H0 + 0.6 - len / 2, Math.sin(a) * r, 0.1, len, 0.1));
+        P.push(KP(GEO.ico0, 0x5aa040, Math.cos(a) * r, H0 + 0.6 - len, Math.sin(a) * r, 0.3, 0.22, 0.3));
+      }
+      if (mother) for (let i = 0; i < 16; i++) { const a = i * 2.4, r = 2.4 + (i % 4) * 0.8, y = H0 + 1 + (i % 5) * 0.8; Gl.push(KP(GEO.sphLow, i % 2 ? 0xfff0a0 : 0xb0ff8a, Math.cos(a) * r, y, Math.sin(a) * r, 0.35)); }
+      else for (let i = 0; i < 6; i++) { const a = i * 2.2, r = 3 + (i % 2); Gl.push(KP(GEO.sphLow, 0xe0ff9a, Math.cos(a) * r, H0 + 0.5 + (i % 3) * 0.7, Math.sin(a) * r, 0.18)); } // frutos/esporos que brilham
+      break;
+    }
+    case 'chest': // corpo do baú (a tampa é 'chestLid', articulada atrás)
+      P.push(KP(GEO.box, WOOD, 0, 0.32, 0, 1.1, 0.62, 0.72));
+      for (const x of [-0.5, 0, 0.5]) P.push(KP(GEO.box, IRON, x, 0.32, 0, 0.08, 0.66, 0.76));
+      P.push(KP(GEO.box, 0xc9a24a, 0, 0.5, 0.37, 0.18, 0.2, 0.06));
+      P.push(KP(GEO.box, DWOOD, 0, 0.03, 0, 1.16, 0.06, 0.78));
+      Gl.push(KP(GEO.box, 0xffe08a, 0, 0.63, 0, 0.98, 0.02, 0.6)); // tesouro aparece quando a tampa abre
+      break;
+    case 'chestLid':
+      P.push(KP(GEO.cyl, WOOD, 0, 0.02, 0.36, 0.72, 1.1, 0.72, 0, 0, Math.PI / 2));
+      P.push(KP(GEO.box, WOOD, 0, -0.06, 0.36, 1.1, 0.14, 0.72));
+      for (const x of [-0.5, 0, 0.5]) P.push(KP(GEO.torusF, IRON, x, -0.02, 0.36, 0.76, 0.76, 0.4, 0, Math.PI / 2, 0));
+      break;
+    case 'shrine': { // santuário: degraus de pedra com musgo, pilar entalhado com folhas, cristais; o orbe é desenhado à parte
+      P.push(KP(GEO.cyl, DSTONE, 0, 0.12, 0, 2.0, 0.24, 2.0));
+      P.push(KP(GEO.cyl, STONE, 0, 0.34, 0, 1.5, 0.22, 1.5));
+      P.push(KP(GEO.sphH, 0x4e8a34, 0.3, 0.42, 0.2, 1.0, 0.16, 0.6));
+      P.push(KP(GEO.taper, STONE, 0, 1.0, 0, 0.8, 1.2, 0.8, Math.PI, 0, 0));
+      P.push(KP(GEO.cyl, DSTONE, 0, 1.62, 0, 1.0, 0.14, 1.0));
+      for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; P.push(KP(GEO.cone4, 0x5aa040, Math.cos(a) * 0.42, 1.0, Math.sin(a) * 0.42, 0.3, 0.7, 0.08, 0, -a, 0)); }
+      for (let i = 0; i < 3; i++) { const a = i * 2.1; Gl.push(KP(GEO.oct, 0x9affc0, Math.cos(a) * 0.36, 1.85, Math.sin(a) * 0.36, 0.14, 0.4, 0.14, 0, 0, (i - 1) * 0.3)); }
+      Gl.push(KP(GEO.torusF, 0xb0ffd0, 0, 0.36, 0, 1.4, 1.4, 0.4, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'standing': // pedra em pé com musgo e runa verde
+      P.push(KP(GEO.box, 0x7a8072, 0, 1.2, 0, 0.9, 2.4, 0.55, 0.04, 0, 0.05));
+      P.push(KP(GEO.dod, DSTONE, 0, 2.45, 0, 0.8, 0.5, 0.55));
+      P.push(KP(GEO.sphH, 0x4e8a34, 0.05, 2.55, 0, 0.8, 0.22, 0.55));
+      P.push(KP(GEO.dod, DSTONE, 0.3, 0.12, 0.3, 0.5, 0.3, 0.45));
+      Gl.push(KP(GEO.box, 0x8affb0, 0, 1.4, 0.285, 0.12, 0.9, 0.02));
+      Gl.push(KP(GEO.box, 0x8affb0, 0, 1.6, 0.285, 0.42, 0.1, 0.02));
+      break;
+    case 'edenSign': // placa dos três caminhos: Floresta (verde), Raízes (marrom), Rio (azul)
+      P.push(KP(GEO.cyl6, DWOOD, 0, 1.3, 0, 0.18, 2.6, 0.18));
+      for (const [y, ry, c] of [[2.2, -0.9, 0x4a8a34], [1.75, 0.3, 0x7a5a34], [1.3, 1.4, 0x3a7ab8]]) {
+        P.push(KP(GEO.box, c, Math.sin(ry) * 0.55, y, Math.cos(ry) * 0.55, 0.1, 0.32, 1.1, 0, ry, 0));
+        P.push(KP(GEO.cone4, c, Math.sin(ry) * 1.15, y, Math.cos(ry) * 1.15, 0.36, 0.32, 0.1, Math.PI / 2, ry, 0));
+      }
+      P.push(KP(GEO.sphH, 0x4e8a34, 0, 2.62, 0, 0.5, 0.25, 0.5));
+      Gl.push(KP(GEO.sphLow, 0xd8ff8a, 0, 2.85, 0, 0.18));
+      break;
+    case 'edenArch': // moldura viva do Portal do Éden: dois troncos que se curvam e se encontram, com folhas, flores e runas
+      for (const sx of [-1, 1]) {
+        const pts = [[2.45, 0], [2.3, 1.2], [2.2, 2.4], [2.15, 3.4], [1.9, 4.4], [1.3, 5.1], [0.55, 5.5], [0, 5.6]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], len = Math.hypot(x1 - x0, y1 - y0), th = 0.62 - i * 0.05;
+          P.push(KP(GEO.taper, i % 2 ? 0x6a4a2c : 0x5a3e24, sx * (x0 + x1) / 2, (y0 + y1) / 2, 0, th, len + 0.2, th, 0, 0, -Math.atan2(sx * (x1 - x0), y1 - y0)));
+        }
+        P.push(KP(GEO.cone, 0x5a3e24, sx * 2.6, 0.3, 0.2, 0.7, 1.4, 0.7, 0.4, 0, -sx * 0.6));
+        P.push(KP(GEO.cone, 0x5a3e24, sx * 2.1, 0.3, -0.3, 0.6, 1.2, 0.6, -0.4, 0, sx * 0.5));
+        for (let k = 0; k < 4; k++) Gl.push(KP(GEO.box, 0x8affb0, sx * (2.25 - k * 0.1), 1.1 + k * 0.85, 0.36, 0.22, 0.1, 0.02));
+      }
+      for (let i = 0; i < 9; i++) { const a = (i / 8) * Math.PI, r = 2.6; P.push(fluff(KP(GEO.sph, [0x3a7a30, 0x4a9a38, 0x5aae40][i % 3], Math.cos(a) * r * 0.9, 4.2 + Math.sin(a) * 1.4, (i % 2) * 0.3 - 0.15, 1.5, 1.1, 1.2), [0, 5, 0], 0.6)); }
+      for (let i = 0; i < 10; i++) { const a = (i / 9) * Math.PI, r = 2.8; P.push(KP(GEO.ico0, [0xf05a8a, 0xffe070, 0xffffff][i % 3], Math.cos(a) * r * 0.9, 4.3 + Math.sin(a) * 1.5, 0.55, 0.22, 0.16, 0.1)); }
+      Gl.push(KP(GEO.oct, 0xd8ffb0, 0, 5.9, 0.2, 0.5, 0.7, 0.3));
+      break;
+    case 'bridge': { // ponte de troncos e tábuas sobre o rio (ao longo de z)
+      const L = 7.2;
+      for (let i = 0; i < 12; i++) { const z = -L / 2 + (i + 0.5) * (L / 12); P.push(KP(GEO.box, i % 2 ? WOOD : 0x7a4e2c, 0, 0.32 + Math.sin((z / L + 0.5) * Math.PI) * 0.25, z, 2.3, 0.12, L / 12 - 0.04, 0, 0, (i % 3 - 1) * 0.03)); }
+      for (const x of [-1.15, 1.15]) {
+        P.push(KP(GEO.cyl, DWOOD, x, 0.2, 0, 0.32, L + 0.6, 0.32, Math.PI / 2, 0, 0));
+        for (const z of [-L / 2, 0, L / 2]) P.push(KP(GEO.cyl6, DWOOD, x, 0.75, z, 0.14, 1.1 + (z ? 0 : 0.25), 0.14));
+        P.push(KP(GEO.box, 0xb89a6a, x, 1.15, 0, 0.05, 0.05, L));
+      }
+      P.push(KP(GEO.sphH, 0x4e8a34, 1.15, 0.36, 2.2, 0.6, 0.18, 0.9));
+      break;
+    }
+    case 'lily': // vitórias-régias com flor
+      for (let i = 0; i < 4; i++) { const a = i * 1.7, r = i ? 0.55 : 0; P.push(KP(GEO.cyl, i % 2 ? 0x3e8a34 : 0x52a040, Math.cos(a) * r, 0, Math.sin(a) * r, 0.7 - (i % 2) * 0.2, 0.03, 0.7 - (i % 2) * 0.2)); }
+      P.push(KP(GEO.cone, 0xf8a0c0, 0.1, 0.12, 0.05, 0.28, 0.22, 0.28));
+      P.push(KP(GEO.sphLow, 0xffe070, 0.1, 0.2, 0.05, 0.1));
+      break;
+    case 'reeds': // juncos na beira da água
+      for (let i = 0; i < 9; i++) { const t = (i - 4) * 0.2, h = 0.9 + ((i * 7) % 4) * 0.25; P.push(KP(GEO.blade3, i % 2 ? 0x5a8a3a : 0x7aa848, t, h / 2, ((i * 3) % 3) * 0.12 - 0.12, 0.08, h, 0.04, 0.1 * (i % 3 - 1), i, 0.1 * (i % 2 ? 1 : -1))); if (i % 3 === 0) P.push(KP(GEO.cyl6, 0x6a4a2a, t, h + 0.1, ((i * 3) % 3) * 0.12 - 0.12, 0.08, 0.3, 0.08)); }
+      break;
+    case 'magicFlower': // flores que brilham (elementos mágicos do Éden)
+      for (let i = 0; i < 3; i++) { const a = i * 2.1, r = i ? 0.25 : 0, x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.35 + (i % 2) * 0.15;
+        P.push(KP(GEO.blade3, 0x4a8a34, x, h / 2, z, 0.03, h, 0.03));
+        Gl.push(KP(GEO.oct, [0x9affe0, 0xe0a0ff, 0xfff08a][i], x, h + 0.06, z, 0.16, 0.12, 0.16)); }
+      break;
+    case 'hedge': // folhagem densa no alto da mata
+      for (let i = 0; i < 6; i++) { const a = i * 1.1, r = i ? 0.7 : 0; P.push(fluff(KP(GEO.sph, [0x2e6a2a, 0x3a7e30, 0x4a9038][i % 3], Math.cos(a) * r, 0.5 + (i ? 0 : 0.35), Math.sin(a) * r, 1.6 - (i % 2) * 0.3, 1.2, 1.6 - (i % 2) * 0.3), [0, 0.4, 0])); }
+      for (let i = 0; i < 4; i++) { const a = i * 1.7 + 0.5; P.push(KP(GEO.sphLow, [0xf8e070, 0xf05a8a][i % 2], Math.cos(a) * 0.95, 0.75 + (i % 2) * 0.3, Math.sin(a) * 0.95, 0.14)); }
+      break;
+    case 'rootVines': // raízes grossas descendo pela parede (Caminho das Raízes), com esporos
+      for (let i = 0; i < 4; i++) {
+        const x = -0.6 + i * 0.4, top = 3.6, len = 2.4 + ((i * 5) % 3) * 0.5;
+        P.push(KP(GEO.taper, i % 2 ? 0x5a4028 : 0x4a3420, x, top - len / 2, 0.15, 0.22, len, 0.22, 0, 0, (i % 3 - 1) * 0.12));
+        P.push(KP(GEO.cone, 0x4a3420, x + (i % 2 ? 0.2 : -0.2), 0.25, 0.35, 0.3, 0.7, 0.3, 0.9, 0, (i % 2 ? -0.5 : 0.5)));
+      }
+      Gl.push(KP(GEO.sphLow, 0x6affd0, -0.2, 1.4, 0.32, 0.12)); Gl.push(KP(GEO.sphLow, 0x6affd0, 0.35, 2.1, 0.3, 0.1)); Gl.push(KP(GEO.sphLow, 0x9affe0, 0.1, 0.9, 0.34, 0.08));
+      break;
+    case 'fallRock': // borda de pedra com musgo no alto da cachoeira (ao longo de x, face em +z)
+      for (let i = 0; i < 5; i++) { const x = (i - 2) * 0.95; P.push(KP(GEO.dod, i % 2 ? STONE : DSTONE, x, 0, 0.1 + (i % 2) * 0.15, 1.2, 0.7, 1.0, i, i * 2, 0)); }
+      P.push(KP(GEO.sphH, 0x4e8a34, 0, 0.3, 0, 4.4, 0.4, 1.2));
+      break;
     default:
+      if (name.startsWith('rootArch')) { // arco de raiz sobre a trilha: vão de n tiles (ao longo de x), com musgo, cipós e esporos
+        const n = +name.slice(8) || 6, A = (n * 2) / 2, Hh = 4.6;
+        for (const [off, th, c] of [[0, 1, 0x5a4028], [0.45, 0.55, 0x4a3420]]) {
+          const seg = 10;
+          for (let i = 0; i < seg; i++) {
+            const a0 = Math.PI - (i / seg) * Math.PI, a1 = Math.PI - ((i + 1) / seg) * Math.PI;
+            const x0 = Math.cos(a0) * A, y0 = Math.sin(a0) * Hh + (off ? 0.3 : 0), x1 = Math.cos(a1) * A, y1 = Math.sin(a1) * Hh + (off ? 0.3 : 0);
+            const len = Math.hypot(x1 - x0, y1 - y0), t = Math.abs(i + 0.5 - seg / 2) / (seg / 2);
+            P.push(KP(GEO.cyl6, c, (x0 + x1) / 2, (y0 + y1) / 2, off * Math.sin(i), (0.45 + t * 0.4) * th, len + 0.2, (0.45 + t * 0.4) * th, 0, 0, -Math.atan2(x1 - x0, y1 - y0)));
+          }
+        }
+        for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) P.push(KP(GEO.cone, 0x4a3420, sx * (A + 0.3 + k * 0.3), 0.3, (k - 1) * 0.5, 0.45, 1.4, 0.45, (k - 1) * 0.4, 0, -sx * (0.7 + k * 0.2)));
+        for (let i = 0; i < 5; i++) { const x = (i - 2) / 2.5 * A * 0.7, y = Math.sqrt(Math.max(0, 1 - (x / A) ** 2)) * Hh; P.push(KP(GEO.sphH, 0x4e8a34, x, y + 0.35, 0, 0.9, 0.3, 0.7)); P.push(KP(GEO.box, 0x3e7a2e, x + 0.2, y - 0.7, 0.1, 0.07, 1.4 - (i % 2) * 0.5, 0.07)); }
+        for (let i = 0; i < 6; i++) { const x = (i - 2.5) / 3 * A * 0.8, y = Math.sqrt(Math.max(0, 1 - (x / A) ** 2)) * Hh; Gl.push(KP(GEO.sphLow, i % 2 ? 0x6affd0 : 0xb0ffe0, x, y - 0.5, 0.3, 0.14)); }
+        break;
+      }
       if (name.startsWith('bunting')) { // bandeirolas pendentes de comprimento L (ao longo de x), catenária rasa
         const L = +name.slice(7) || 10, n = Math.round(L / 0.7), sag = L * 0.08;
         const yAt = (t) => -sag * (1 - (2 * t - 1) ** 2);
@@ -12877,7 +13191,7 @@ return { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, set
 })();
 
 // ---- game/npcs.js ----
-const { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals } = (() => {
+const { clearNpcs, fmtWait, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals } = (() => {
 // ---------- NPCs e cidade ----------
 
 function spawnNpcs(L) {
@@ -12902,6 +13216,32 @@ function spawnNpcs(L) {
   // portal da cidade
   const pp = L.portal;
   if (pp) G.townPortal = makePortal(pp.x * TILE, pp.z * TILE, 0x9a7aff, 'Portal das Masmorras', () => openNpc('portal'));
+  if (L.eden) G.edenPortal = makeEdenPortal(L.eden.x * TILE, L.eden.z * TILE);
+}
+/** Tempo restante no formato "2h 05min" (ou "12min", "40s"). */
+function fmtWait(ms) {
+  const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? h + 'h ' + String(m).padStart(2, '0') + 'min' : m ? m + 'min' : s + 's';
+}
+/**
+ * Portal do Éden na cidade: verde e cheio de vida quando liberado; adormecido
+ * (apagado, com o tempo restante no rótulo) nas 3 horas seguintes a uma entrada.
+ */
+function makeEdenPortal(x, z) {
+  const pt = makePortal(x, z, 0x7aff9a, 'Portal do Éden', () => openNpc('eden'));
+  pt.wait = -1; pt.labelT = 0;
+  pt.update = (dt) => {
+    pt.labelT -= dt;
+    if (pt.labelT > 0) return;
+    pt.labelT = 1;
+    const left = G.ch ? R.edenRemaining(G.ch, Date.now()) : 0;
+    const asleep = left > 0;
+    pt.label.textContent = asleep ? 'Portal do Éden · ' + fmtWait(left) : 'Portal do Éden';
+    pt.color = asleep ? 0x4a6a58 : 0x7aff9a;
+    pt.ring.material.color.setHex(asleep ? 0x2a4a38 : 0x7aff9a).multiplyScalar(asleep ? 1 : CONFIG.style.glowCore);
+    pt.disc.material.color.setHex(asleep ? 0x1a2a20 : 0x7aff9a);
+  };
+  return pt;
 }
 // geometrias do portal: criadas uma vez e compartilhadas por todos os portais
 let portalGeo = null;
@@ -13028,8 +13368,8 @@ function updateNpcs(dt) {
 }
 function updatePortals(dt) {
   if (G.townTower) updateTownTower(G.townTower, dt);
-  for (const pt of [G.exitPortal, G.townPortal]) {
-    if (!pt) continue;
+  for (const pt of allPortals()) {
+    if (pt.update) pt.update(dt);
     pt.ring.rotation.z += dt * 1.5;
     pt.disc.material.opacity = 0.3 + Math.sin(G.time * 4) * 0.1;
     if (Math.random() < 0.5) emit(pt.x + (rand() - 0.5) * 2, 0.3, pt.z + (rand() - 0.5) * 2, { n: 1, color: pt.color, speed: 0.5, up: 3, life: 1, size: 0.8, grav: 1.5 });
@@ -13039,12 +13379,11 @@ function updatePortals(dt) {
 function clearNpcs() {
   for (const n of G.npcs) { world.remove(n.model.root); if (n.model.mixer) disposeModel(n.model); else disposeObject(n.model.root, true); n.label.remove(); }
   G.npcs.length = 0;
-  removePortal(G.exitPortal);
-  removePortal(G.townPortal);
+  for (const pt of allPortals()) removePortal(pt);
   removeTownTower(G.townTower);
-  G.exitPortal = G.townPortal = G.townTower = null;
+  G.exitPortal = G.townPortal = G.edenPortal = G.hubPortal = G.townTower = null;
 }
-return { clearNpcs, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals };
+return { clearNpcs, fmtWait, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals };
 })();
 
 // ---- game/townlife.js ----
@@ -13298,6 +13637,586 @@ function townLifeCount() { return LIFE ? { folk: LIFE.folk.length, critters: LIF
 return { clearTownLife, spawnTownLife, townLifeCount, updateTownLife };
 })();
 
+// ---- world/edengen.js ----
+const { REGION, REGION_INFO, genEden } = (() => {
+// ---------- O Éden: geração do mapa (dados puros, sem Three.js) ----------
+// Região aberta e orgânica: uma clareira de entrada na frente (perto da câmera),
+// três caminhos que seguem separados quase até o fim (Floresta à esquerda da tela,
+// Raízes no meio, Rio à direita) e o Coração do Éden no fundo, onde os três se
+// encontram em volta do Guardião. A câmera olha do sudeste: +x/+z = frente.
+
+/** Regiões gravadas por tile em L.region (0 = mata fechada / rocha). */
+const REGION = { hub: 1, forest: 2, roots: 3, river: 4, heart: 5 };
+const REGION_INFO = {
+  1: { key: 'hub', name: 'Clareira dos Três Caminhos', sub: 'Escolha um caminho: Floresta, Raízes ou Rio' },
+  2: { key: 'forest', name: 'Caminho da Floresta', sub: 'Árvores gigantes, clareiras e criaturas corrompidas' },
+  3: { key: 'roots', name: 'Caminho das Raízes', sub: 'Túneis de raízes, cavernas e cristais' },
+  4: { key: 'river', name: 'Caminho do Rio', sub: 'Cachoeiras, lagos e ruínas submersas' },
+  5: { key: 'heart', name: 'Coração do Éden', sub: 'Onde os três caminhos se encontram' },
+};
+
+const W = 108, H = 108;
+const HUB = { x: 84, z: 84, r: 8 };
+const HEART = { x: 26, z: 26, r: 13.5 };
+/**
+ * Caminhos: pontos de passagem, largura base/variação e salas especiais
+ * (índice do ponto → raio; 'mini' marca a sala do mini chefe no fim do caminho).
+ */
+const PATH_DEFS = {
+  forest: { reg: REGION.forest, pts: [[84, 84], [70, 91], [52, 93], [36, 88], [24, 79], [16, 64], [16, 48], [22, 37], [27, 31]], r: 2.8, amp: 0.9, rooms: { 2: 5, 4: 6.5, 6: 6.5 }, mini: 6, shrine: 3, ambush: 4 },
+  roots: { reg: REGION.roots, pts: [[84, 84], [74, 74], [64, 72], [62, 60], [50, 62], [47, 50], [55, 44], [44, 40], [35, 35]], r: 1.9, amp: 0.5, rooms: { 3: 4, 5: 4.2, 7: 5 }, mini: 7, shrine: 2, ambush: 5 },
+  river: { reg: REGION.river, pts: [[84, 84], [91, 70], [93, 52], [88, 36], [79, 24], [64, 16], [48, 16], [37, 22], [31, 27]], r: 4.6, amp: 0.8, rooms: { 2: 7.5, 4: 7.5, 6: 6.5 }, mini: 6, shrine: 3, ambush: 5, lakes: [2, 4] },
+};
+
+/** Suaviza a linha (Chaikin) e devolve pontos a cada ~0,5 tile com a distância acumulada. */
+function sampleLine(pts) {
+  let p = pts.map(([x, z]) => ({ x, z }));
+  for (let it = 0; it < 2; it++) {
+    const q = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1];
+      q.push({ x: a.x * 0.75 + b.x * 0.25, z: a.z * 0.75 + b.z * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, z: a.z * 0.25 + b.z * 0.75 });
+    }
+    q.push(p[p.length - 1]);
+    p = q;
+  }
+  const out = [];
+  let s = 0;
+  for (let i = 0; i < p.length - 1; i++) {
+    const a = p[i], b = p[i + 1], d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(d / 0.5));
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, s: s + d * t, dx: (b.x - a.x) / (d || 1), dz: (b.z - a.z) / (d || 1) });
+    }
+    s += d;
+  }
+  const l = p[p.length - 1], pl = out[out.length - 1];
+  out.push({ x: l.x, z: l.z, s, dx: pl.dx, dz: pl.dz });
+  return out;
+}
+/** Ponto da linha amostrada mais próximo de (x, z). */
+function nearestOnLine(line, x, z) {
+  let best = line[0], bd = 1e9;
+  for (const p of line) { const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+
+function genEden(seed) {
+  const rnd = R.mulberry32(seed);
+  const N = W * H;
+  const grid = new Uint8Array(N);   // 0 mata/rocha, 1 chão, 2 chão bloqueado (água, adereço)
+  const region = new Uint8Array(N);
+  const water = new Uint8Array(N);  // 1 = água (desenhada por cima do chão)
+  const idx = (x, z) => z * W + x;
+  const inb = (x, z) => x > 1 && z > 1 && x < W - 2 && z < H - 2;
+  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[idx(x, z)]);
+  const disc = (cx, cz, r, fn) => {
+    for (let z = Math.floor(cz - r - 1); z <= Math.ceil(cz + r + 1); z++) for (let x = Math.floor(cx - r - 1); x <= Math.ceil(cx + r + 1); x++) {
+      if (inb(x, z) && Math.hypot(x - cx, z - cz) <= r) fn(x, z, idx(x, z));
+    }
+  };
+  const carve = (cx, cz, r, reg, force) => disc(cx, cz, r, (x, z, i) => { if (!grid[i] || force) { grid[i] = 1; region[i] = reg; } else if (!region[i]) region[i] = reg; });
+
+  // ---------- caminhos (com leve sorteio nos pontos internos) ----------
+  const lines = {};
+  const PATHS = {};
+  for (const k of Object.keys(PATH_DEFS)) {
+    const P = PATHS[k] = Object.assign({}, PATH_DEFS[k]);
+    const pts = P.pts.map(([x, z], i) => (i === 0 || i === P.pts.length - 1 ? [x, z] : [x + (rnd() - 0.5) * 3, z + (rnd() - 0.5) * 3]));
+    P.cur = pts;
+    const line = sampleLine(pts);
+    lines[k] = line;
+    const ph1 = rnd() * 9, ph2 = rnd() * 9;
+    for (const p of line) {
+      const r = P.r + P.amp * (0.6 * Math.sin(p.s * 0.21 + ph1) + 0.4 * Math.sin(p.s * 0.53 + ph2));
+      carve(p.x, p.z, Math.max(1.3, r), P.reg);
+    }
+    for (const i in P.rooms) carve(pts[i][0], pts[i][1], P.rooms[i], P.reg);
+  }
+  // clareira de entrada e Coração do Éden (bordas irregulares)
+  const blob = (c, r, reg, wob) => {
+    const ph = rnd() * 6;
+    for (let z = Math.floor(c.z - r - 3); z <= Math.ceil(c.z + r + 3); z++) for (let x = Math.floor(c.x - r - 3); x <= Math.ceil(c.x + r + 3); x++) {
+      if (!inb(x, z)) continue;
+      const a = Math.atan2(z - c.z, x - c.x), rr = r + wob * (Math.sin(a * 3 + ph) * 0.6 + Math.sin(a * 7 + ph * 2) * 0.4);
+      if (Math.hypot(x - c.x, z - c.z) <= rr) { grid[idx(x, z)] = 1; region[idx(x, z)] = reg; }
+    }
+  };
+  blob(HUB, HUB.r, REGION.hub, 1.2);
+  blob(HEART, HEART.r, REGION.heart, 1.6);
+
+  // ---------- áreas secretas: bolsões fora do caminho, ligados por uma trilha estreita e sinuosa ----------
+  const secrets = [];
+  const freeAround = (cx, cz, r) => { for (let z = Math.floor(cz - r); z <= Math.ceil(cz + r); z++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) if (!inb(x, z) || grid[idx(x, z)]) return false; return true; };
+  for (const k of Object.keys(PATHS)) {
+    const P = PATHS[k], line = lines[k];
+    let made = 0;
+    for (let tries = 0; tries < 40 && made < 2; tries++) {
+      const p = line[Math.floor(line.length * (0.18 + rnd() * 0.6))];
+      const side = rnd() < 0.5 ? 1 : -1, nx = -p.dz * side, nz = p.dx * side;
+      const dist = P.r + 7 + rnd() * 3, sx = p.x + nx * dist, sz = p.z + nz * dist;
+      if (!freeAround(sx, sz, 5.2) || secrets.some((s) => Math.hypot(s.x - sx, s.z - sz) < 14)) continue;
+      // trilha: sai da borda do caminho e serpenteia até o bolsão
+      const n = Math.ceil(dist * 2), wob = rnd() * 6;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, w = Math.sin(t * Math.PI) * 1.6 * Math.sin(t * 5 + wob);
+        carve(p.x + nx * dist * t - nx * 0 + nz * w * side, p.z + nz * dist * t - nz * 0 - nx * w * side, 0.75, P.reg);
+      }
+      carve(sx, sz, 2.9, P.reg);
+      secrets.push({ x: Math.round(sx), z: Math.round(sz), reg: P.reg });
+      made++;
+    }
+  }
+
+  // ---------- água: rio com margens, lagos, poças do Coração ----------
+  const wet = (x, z, i) => { if (grid[i]) { water[i] = 1; grid[i] = 2; } };
+  const riv = lines.river, RP = PATHS.river, rph = rnd() * 9;
+  const sStart = 13, sEnd = riv[riv.length - 1].s - 9;
+  for (const p of riv) {
+    if (p.s < sStart || p.s > sEnd) continue;
+    disc(p.x, p.z, 1.25 + 0.35 * Math.sin(p.s * 0.4 + rph), wet);
+  }
+  for (const li of RP.lakes) disc(RP.cur[li][0], RP.cur[li][1], 3.6, wet);
+  // poças no Coração (o rio, as raízes e a floresta se misturam)
+  const pools = [];
+  for (const [a, d, r] of [[-1.0, 9, 2.9], [2.6, 9, 2.6], [0.8, 10.5, 2.3]]) {
+    const px = HEART.x + Math.cos(a) * d, pz = HEART.z + Math.sin(a) * d;
+    disc(px, pz, r, wet); pools.push({ x: px, z: pz, r });
+  }
+  // pontes naturais: faixas de chão que cruzam o rio a cada ~14 tiles (nunca nos lagos)
+  const bridges = [];
+  const nearLake = (x, z) => RP.lakes.some((li) => Math.hypot(RP.cur[li][0] - x, RP.cur[li][1] - z) < 6);
+  let nextB = sStart + 8;
+  for (const p of riv) {
+    if (p.s < nextB || p.s > sEnd - 3 || nearLake(p.x, p.z)) continue;
+    nextB = p.s + 13 + rnd() * 4;
+    const nx = -p.dz, nz = p.dx;
+    for (let k = -3; k <= 3; k += 0.5) for (const w of [-0.6, 0, 0.6]) {
+      const x = Math.round(p.x + nx * k + p.dx * w), z = Math.round(p.z + nz * k + p.dz * w), i = idx(x, z);
+      if (water[i]) { water[i] = 0; grid[i] = 1; }
+    }
+    bridges.push({ x: p.x, z: p.z, ry: Math.atan2(nx, nz) });
+  }
+
+  // ---------- cachoeiras: na parede do fundo (norte) de cada lago, com um riacho até a água ----------
+  const falls = [];
+  for (const li of RP.lakes) {
+    const cx = Math.round(RP.cur[li][0]);
+    let z = Math.round(RP.cur[li][1]);
+    while (z > 2 && at(cx, z - 1)) z--;
+    if (z <= 2) continue;
+    for (let zz = z; zz <= z + 3; zz++) for (const dx of [-1, 0, 1]) { const i = idx(cx + dx, zz); if (grid[i]) { water[i] = 1; grid[i] = 2; } }
+    falls.push({ x: cx, z: z - 1, w: 3.6, h: 5.5 });
+  }
+  // uma cachoeira alimenta a poça do fundo do Coração
+  {
+    const p = pools[0];
+    let z = Math.round(p.z);
+    const cx = Math.round(p.x);
+    while (z > 2 && at(cx, z - 1)) { const i = idx(cx, z - 1); z--; if (grid[i]) { water[i] = 1; grid[i] = 2; } }
+    if (z > 2) falls.push({ x: cx, z: z - 1, w: 3, h: 6 });
+  }
+
+  // ---------- Coração: Árvore-Mãe no fundo, Guardião no centro ----------
+  const boss = { x: HEART.x, z: HEART.z };
+  const motherTree = { x: HEART.x - 8, z: HEART.z - 8 };
+  for (let z = motherTree.z - 1; z <= motherTree.z + 1; z++) for (let x = motherTree.x - 1; x <= motherTree.x + 1; x++) if (grid[idx(x, z)]) grid[idx(x, z)] = 2;
+  const start = { x: HUB.x + 3, z: HUB.z + 3 };
+  grid[idx(start.x, start.z)] = 1;
+
+  // ---------- tudo alcançável a partir da entrada (o resto vira mata) ----------
+  const flood = () => {
+    const dist = new Int32Array(N).fill(-1), q = [idx(start.x, start.z)];
+    dist[q[0]] = 0;
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % W, z = (i - x) / W;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const j = (z + dz) * W + x + dx; if (grid[j] === 1 && dist[j] < 0) { dist[j] = dist[i] + 1; q.push(j); } }
+    }
+    return dist;
+  };
+  let dist = flood();
+  for (let i = 0; i < N; i++) if (grid[i] === 1 && dist[i] < 0) { grid[i] = 0; region[i] = 0; }
+
+  // ---------- adereços que ocupam o tile (grid 2): santuários e baús ----------
+  const props = [];
+  const nearWallTile = (x, z) => !at(x - 1, z) || !at(x + 1, z) || !at(x, z - 1) || !at(x, z + 1);
+  /** Tile de chão livre perto de (x, z), de preferência encostado na mata (não fecha a passagem). */
+  const edgeSpot = (x0, z0, r, wantWall) => {
+    let best = null, bd = 1e9;
+    for (let z = Math.round(z0 - r); z <= Math.round(z0 + r); z++) for (let x = Math.round(x0 - r); x <= Math.round(x0 + r); x++) {
+      if (at(x, z) !== 1 || (wantWall && !nearWallTile(x, z))) continue;
+      const d = (x - x0) ** 2 + (z - z0) ** 2 + rnd() * 2;
+      if (d < bd) { bd = d; best = { x, z }; }
+    }
+    return best;
+  };
+  const events = [], chests = [];
+  const block = (s) => { grid[idx(s.x, s.z)] = 2; };
+  for (const k of Object.keys(PATHS)) {
+    const P = PATHS[k], pts = P.cur;
+    const sh = edgeSpot(pts[P.shrine][0], pts[P.shrine][1], 5, true);
+    if (sh) { block(sh); events.push({ type: 'shrine', x: sh.x, z: sh.z, reg: P.reg }); }
+    events.push({ type: 'ambush', x: Math.round(pts[P.ambush][0]), z: Math.round(pts[P.ambush][1]), reg: P.reg, r: 5 });
+    for (const i of [2, 5]) {
+      const c = edgeSpot(pts[i][0] + (rnd() - 0.5) * 4, pts[i][1] + (rnd() - 0.5) * 4, 5, true);
+      if (c) { block(c); chests.push({ x: c.x, z: c.z, reg: P.reg, secret: false }); }
+    }
+  }
+  for (const s of secrets) { const c = edgeSpot(s.x, s.z, 2, false); if (c) { block(c); chests.push({ x: c.x, z: c.z, reg: s.reg, secret: true }); } }
+  // bloquear um tile nunca pode isolar chão: confere e devolve o que for preciso
+  dist = flood();
+  for (let i = 0; i < N; i++) if (grid[i] === 1 && dist[i] < 0) {
+    const x = i % W, z = (i - x) / W;
+    for (const c of chests) if (Math.abs(c.x - x) + Math.abs(c.z - z) <= 1) grid[idx(c.x, c.z)] = 1;
+    for (const e of events) if (e.type === 'shrine' && Math.abs(e.x - x) + Math.abs(e.z - z) <= 1) grid[idx(e.x, e.z)] = 1;
+  }
+  dist = flood();
+  for (let i = 0; i < N; i++) if (grid[i] === 1 && dist[i] < 0) { grid[i] = 0; region[i] = 0; }
+
+  // ---------- bandos ao longo de cada caminho, mini chefes e o Coração ----------
+  const spawns = [];
+  const okSpawn = (x, z) => at(x, z) === 1 && Math.hypot(x - start.x, z - start.z) > 13;
+  const snap = (x, z) => edgeSpot(x, z, 3, false);
+  for (const k of Object.keys(PATHS)) {
+    const P = PATHS[k], line = lines[k], total = line[line.length - 1].s;
+    const miniP = P.cur[P.mini];
+    for (let s = 12; s < total - 6; s += 6.5 + rnd() * 3) {
+      const p = line.find((q) => q.s >= s);
+      if (Math.hypot(p.x - miniP[0], p.z - miniP[1]) < 7 || Math.hypot(p.x - HEART.x, p.z - HEART.z) < HEART.r + 2) continue;
+      const q = snap(p.x + (rnd() - 0.5) * 3, p.z + (rnd() - 0.5) * 3);
+      if (!q || !okSpawn(q.x, q.z)) continue;
+      spawns.push({ x: q.x, z: q.z, reg: P.reg, t: s / total, elite: rnd() < 0.15, size: 3 + Math.floor(rnd() * 3) });
+    }
+    const m = snap(miniP[0], miniP[1]);
+    if (m) spawns.push({ x: m.x, z: m.z, reg: P.reg, t: 1, mini: true, size: 2 });
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3, q = snap(HEART.x + Math.cos(a) * 8, HEART.z + Math.sin(a) * 8);
+    if (q) spawns.push({ x: q.x, z: q.z, reg: REGION.heart, t: 1, elite: i % 3 === 0, size: 4 });
+  }
+  spawns.push({ x: boss.x, z: boss.z, reg: REGION.heart, boss: true, size: 1 });
+  for (const s of secrets) { const q = snap(s.x + 1, s.z + 1); if (q) spawns.push({ x: q.x, z: q.z, reg: s.reg, t: 0.6, elite: true, size: 1 }); }
+
+  // ---------- adereços decorativos (não mudam a grade) ----------
+  // árvores gigantes: no fundo das trilhas (mata a norte/oeste do chão) e no meio da mata fechada
+  const distFloor = new Uint8Array(N).fill(9);
+  {
+    const q = [];
+    for (let i = 0; i < N; i++) if (grid[i]) { distFloor[i] = 0; q.push(i); }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % W, z = (i - x) / W;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz;
+        if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue;
+        const j = nz * W + nx;
+        if (distFloor[j] > distFloor[i] + 1) { distFloor[j] = distFloor[i] + 1; q.push(j); }
+      }
+    }
+  }
+  const trees = [];
+  const farFromTrees = (x, z, d) => !trees.some((t) => (t.x - x) ** 2 + (t.z - z) ** 2 < d * d);
+  for (let z = 2; z < H - 2; z++) for (let x = 2; x < W - 2; x++) {
+    const i = idx(x, z);
+    if (grid[i]) continue;
+    const back = (at(x + 1, z) || at(x + 2, z) || at(x, z + 1) || at(x, z + 2)) && !(at(x - 1, z) || at(x, z - 1));
+    // copas no meio da mata só onde não tampam a trilha: a câmera olha do sudeste, então uma árvore alta
+    // cobre o chão que fica a -x/-z dela (acima dela na tela)
+    let front = false;
+    for (let k = 1; k <= 8 && !front; k++) front = at(x - k, z - k) || at(x - k, z) || at(x, z - k) || at(x - k, z - Math.ceil(k / 2)) || at(x - Math.ceil(k / 2), z - k);
+    const deep = distFloor[i] >= 3 && !front;
+    if (back && rnd() < 0.16 && farFromTrees(x, z, 4.5)) trees.push({ x, z, v: rnd(), edge: true });
+    else if (deep && rnd() < 0.06 && farFromTrees(x, z, 5.5)) trees.push({ x, z, v: rnd(), edge: false });
+  }
+  for (const t of trees) props.push({ x: t.x, z: t.z, kind: t.edge ? 'gtree' : 'gtreeDeep', v: t.v });
+  // ruínas antigas: colunas e arcos tombados na floresta, ruínas meio submersas no rio
+  for (const k of ['forest', 'river']) {
+    const P = PATHS[k];
+    for (const i in P.rooms) {
+      const [cx, cz] = P.cur[i];
+      for (let n = 0; n < 4; n++) {
+        const a = rnd() * Math.PI * 2, d = P.rooms[i] * (0.55 + rnd() * 0.4), x = Math.round(cx + Math.cos(a) * d), z = Math.round(cz + Math.sin(a) * d);
+        const wtr = water[idx(x, z)];
+        if (at(x, z) === 1 && nearWallTile(x, z)) { props.push({ x, z, kind: n % 2 ? 'ruinPillar' : 'ruinBroken', v: rnd() }); grid[idx(x, z)] = 2; }
+        else if (wtr) props.push({ x, z, kind: 'ruinSunk', v: rnd() });
+      }
+    }
+  }
+  // arcos de raiz sobre o Caminho das Raízes (perpendiculares à trilha)
+  {
+    const line = lines.roots;
+    for (let s = 8; s < line[line.length - 1].s - 6; s += 7 + rnd() * 3) {
+      const p = line.find((q) => q.s >= s);
+      // largura livre de cada lado da trilha
+      const span = (sg) => { let d = 0; while (d < 8 && at(Math.round(p.x - p.dz * sg * (d + 1)), Math.round(p.z + p.dx * sg * (d + 1)))) d++; return d; };
+      const a = span(1), b = span(-1);
+      props.push({ x: p.x + (-p.dz) * (a - b) / 2, z: p.z + p.dx * (a - b) / 2, kind: 'rootArch', ry: Math.atan2(-p.dz, p.dx), span: a + b + 2, v: rnd() });
+    }
+  }
+  // adereços baixos soltos: pelos tiles de chão, por região
+  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
+    const i = idx(x, z);
+    if (grid[i] !== 1 || Math.hypot(x - start.x, z - start.z) < 3 || Math.hypot(x - boss.x, z - boss.z) < 4) continue;
+    const r = rnd(), wall = nearWallTile(x, z);
+    if (wall && r < 0.22) props.push({ x, z, kind: 'low', reg: region[i], v: rnd() });
+    else if (r < 0.04) props.push({ x, z, kind: 'decal', reg: region[i], v: rnd() });
+  }
+  // círculo de pedras na clareira de entrada e a placa dos três caminhos
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2 + 0.2, x = Math.round(HUB.x + Math.cos(a) * 5.2), z = Math.round(HUB.z + Math.sin(a) * 5.2);
+    if (at(x, z) === 1 && Math.hypot(x - start.x, z - start.z) > 2.5) { props.push({ x, z, kind: 'standing', v: rnd(), ry: -a }); grid[idx(x, z)] = 2; }
+  }
+  const sign = { x: HUB.x - 1, z: HUB.z - 1 };
+  if (at(sign.x, sign.z) === 1) { props.push({ x: sign.x, z: sign.z, kind: 'edenSign' }); grid[idx(sign.x, sign.z)] = 2; }
+  // runas no chão: círculo sob o Guardião
+  const runes = [{ x: boss.x, z: boss.z, s: 9 }];
+  dist = flood();
+  for (let i = 0; i < N; i++) if (grid[i] === 1 && dist[i] < 0) grid[i] = 0;
+  const exit = { x: HUB.x + 5, z: HUB.z - 2 };
+  if (at(exit.x, exit.z) !== 1) { const e = edgeSpot(exit.x, exit.z, 3, false); if (e) Object.assign(exit, e); }
+  return {
+    W, H, grid, region, water, biome: 'eden', floor: 1, seed, start, boss, props, spawns, breakables: [], templates: [],
+    eden: true, hub: HUB, heart: HEART, lines, paths: PATHS, secrets, events, chests, bridges, falls, pools, motherTree, runes, exit,
+  };
+}
+return { REGION, REGION_INFO, genEden };
+})();
+
+// ---- game/eden.js ----
+const { clearEden, edenState, onEdenBossKilled, onEdenKill, onMiniKilled, openChest, spawnEden, updateEden } = (() => {
+// ---------- O Éden: povoamento, baús, santuários, emboscadas, regiões e o Guardião ----------
+
+/** Estado do Éden atual (zerado a cada entrada). */
+const E = { chests: [], shrines: [], ambush: [], region: -1, seen: new Set(), k: 0, base: null, pack: 1000 };
+
+/** Bênçãos dos santuários (uma por caminho), 90 s. */
+const BLESS = {
+  [REGION.forest]: { name: 'Bênção da Floresta', stats: { dmgPct: 15 }, say: '+15% de dano', color: 0x9aff6a },
+  [REGION.roots]: { name: 'Bênção das Raízes', stats: { defPct: 30, dmgRed: 8 }, say: '+30% de defesa e -8% de dano recebido', color: 0x6affd0 },
+  [REGION.river]: { name: 'Bênção do Rio', stats: { cdPct: -10, atkRatePct: 10 }, say: '+10% de velocidade de ataque e -10% de recarga', color: 0x6ad8ff },
+};
+const AMBUSH_SAY = {
+  [REGION.forest]: 'A floresta se fecha à sua volta!',
+  [REGION.roots]: 'Algo se mexe entre as raízes!',
+  [REGION.river]: 'Criaturas emergem da água!',
+};
+
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+/** Ponto andável perto de (x, z) em coordenadas de mundo (ou o próprio ponto). */
+function nearWalkable(x, z, r) {
+  if (walkable(G.L, x, z)) return { x, z };
+  for (let k = 0; k < 16; k++) {
+    const a = rand() * Math.PI * 2, d = rand() * r;
+    if (walkable(G.L, x + Math.cos(a) * d, z + Math.sin(a) * d)) return { x: x + Math.cos(a) * d, z: z + Math.sin(a) * d };
+  }
+  return null;
+}
+
+/** Monstros, mini chefes, Guardião, baús, santuários, emboscadas e o portal de volta. */
+function spawnEden(L, entry) {
+  E.chests = []; E.shrines = []; E.ambush = []; E.region = -1; E.seen = new Set(); E.k = 0; E.pack = 1000;
+  let pack = 1;
+  for (const s of L.spawns) {
+    const wx = s.x * TILE, wz = s.z * TILE;
+    const kinds = EDEN_MON[s.reg] || EDEN_MON[REGION.heart];
+    if (s.boss) {
+      spawnMonster('e_guardian', wx, wz, R.edenLevel(entry, 'boss'), { pack });
+      for (let i = 0; i < 4; i++) { const q = nearWalkable(wx + (rand() - 0.5) * 8, wz + (rand() - 0.5) * 8, 3); if (q) spawnMonster(kinds[i % kinds.length], q.x, q.z, R.edenLevel(entry, 'heart'), { pack }); }
+    } else if (s.mini) {
+      spawnMonster(EDEN_MINI[s.reg], wx, wz, R.edenLevel(entry, 'mini'), { pack });
+      for (let i = 0; i < 3; i++) { const q = nearWalkable(wx + (rand() - 0.5) * 6, wz + (rand() - 0.5) * 6, 3); if (q) spawnMonster(kinds[i % kinds.length], q.x, q.z, R.edenLevel(entry, 'path', 1), { pack }); }
+    } else {
+      const lvl = s.reg === REGION.heart ? R.edenLevel(entry, 'heart') : R.edenLevel(entry, 'path', s.t);
+      const kind = pick(kinds);
+      for (let i = 0; i < s.size; i++) {
+        const q = nearWalkable(wx + (rand() - 0.5) * 4, wz + (rand() - 0.5) * 4, 2) || { x: wx, z: wz };
+        spawnMonster(rand() < 0.7 ? kind : pick(kinds), q.x, q.z, lvl + Math.floor(rand() * 2), { pack, elite: s.elite && i === 0 });
+      }
+    }
+    pack++;
+  }
+  for (const c of L.chests) spawnChest(c.x * TILE, c.z * TILE, c.secret ? 'secret' : 'chest');
+  for (const e of L.events) {
+    if (e.type === 'shrine') spawnShrine(e);
+    else if (e.type === 'ambush') E.ambush.push({ x: e.x * TILE, z: e.z * TILE, r: e.r * TILE, reg: e.reg, state: 0, mons: [] });
+  }
+  G.hubPortal = makePortal(L.exit.x * TILE, L.exit.z * TILE, 0x8affb0, 'Voltar para Aldrena', () => { enterTown(); return true; });
+  E.base = { hemi: hemi.intensity, sun: sun.intensity, fog: scene.fog.color.clone(), hero: heroLight.intensity };
+}
+
+// ---------- baús ----------
+/** Baú de madeira com ferragens; a tampa gira para abrir. src: chest | secret (bolsões escondidos e prêmio de emboscada). */
+function spawnChest(x, z, src) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(kit('chest').geo, kitMat());
+  body.castShadow = true; body.receiveShadow = true;
+  const lid = new THREE.Group();
+  lid.position.set(0, 0.62, -0.36);
+  const lm = new THREE.Mesh(kit('chestLid').geo, kitMat());
+  lm.castShadow = true;
+  lid.add(lm);
+  g.add(body, lid);
+  if (src === 'secret') { // brilho dourado no chão: tesouro escondido
+    const ring = new THREE.Mesh(GEO.ring, glowShared(0xffd86a, 0.45));
+    ring.scale.setScalar(1.2); ring.position.y = 0.05;
+    g.add(ring);
+  }
+  g.position.set(x, gy(x, z), z);
+  g.rotation.y = Math.PI / 4; // frente virada para a câmera
+  world.add(g);
+  const b = { x, z, mesh: g, color: 0x8a5a2a, broken: false, chest: true, src, lid, open: 0 };
+  G.breakables.push(b);
+  E.chests.push(b);
+  return b;
+}
+/** Abre o baú (clique/ataque): a tampa sobe e o tesouro cai em volta. */
+function openChest(b) {
+  if (b.broken) return;
+  b.broken = true; b.opening = true;
+  const lvl = (G.edenLvl || 1) + 3;
+  const drop = R.rollEdenDrop({ seed: R.hash32(G.L.seed, 'bau', Math.round(b.x), Math.round(b.z)), mLevel: lvl, src: b.src, mf: G.st.mf, favorCls: G.ch.cls });
+  const rare = dropEdenRoll(b.x, b.z, drop, b.src);
+  emit(b.x, 0.8, b.z, { n: 40, color: 0xffd86a, speed: 3, up: 4, life: 1, size: 0.9, grav: 3, spread: 0.6 });
+  Sfx.loot(rare ? 4 : 2);
+  log(b.src === 'secret' ? 'Tesouro escondido do Éden!' : 'Baú do Éden aberto.', 'loot');
+  persist();
+}
+
+// ---------- santuários ----------
+function spawnShrine(e) {
+  const x = e.x * TILE, z = e.z * TILE, B = BLESS[e.reg];
+  const g = new THREE.Group();
+  const k = kit('shrine');
+  const m = new THREE.Mesh(k.geo, kitMat());
+  m.castShadow = true; m.receiveShadow = true;
+  g.add(m);
+  const orb = new THREE.Mesh(k.glow, kitGlowMat());
+  orb.renderOrder = 3;
+  g.add(orb);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), glowShared(B.color, 0.5));
+  halo.position.y = 2.1;
+  g.add(halo);
+  g.position.set(x, gy(x, z), z);
+  world.add(g);
+  E.shrines.push({ x, z, reg: e.reg, used: false, g, halo, B });
+}
+function useShrine(s) {
+  s.used = true;
+  const B = s.B;
+  G.buffs = G.buffs.filter((b) => b.id !== 'eden:' + s.reg);
+  G.buffs.push({ id: 'eden:' + s.reg, name: B.name, until: G.time + 90, stats: B.stats });
+  recalc();
+  G.hp = G.st.maxHp; G.mp = G.st.maxMp;
+  const p = G.player;
+  emit(p.x, 0.4, p.z, { n: 70, color: B.color, speed: 3, up: 4, life: 1.2, size: 1, grav: 1.5, spread: 1.2 });
+  spawnRing(s.x, s.z, 0.5, 4, B.color, 0.9);
+  floatText(p.x, 3, p.z, B.name, 'heal');
+  toast(B.name, B.say + ' por 90s · HP e mana cheios');
+  log('Santuário do Éden: ' + B.name + ' (' + B.say + ' por 90s).', 'sys');
+  Sfx.level();
+  s.halo.visible = false;
+}
+
+// ---------- emboscadas ----------
+function triggerAmbush(a) {
+  a.state = 1;
+  const kinds = EDEN_MON[a.reg] || EDEN_MON[REGION.heart];
+  const lvl = R.edenLevel(G.edenLvl || 1, 'path', 0.7), pack = E.pack++;
+  for (let i = 0; i < 7; i++) {
+    const ang = (i / 7) * Math.PI * 2 + rand() * 0.4, d = (4 + rand() * 3) * TILE;
+    const q = nearWalkable(a.x + Math.cos(ang) * d, a.z + Math.sin(ang) * d, 4);
+    if (!q) continue;
+    const m = spawnMonster(pick(kinds), q.x, q.z, lvl + Math.floor(rand() * 2), { pack, elite: i === 0 });
+    m.aggro = true;
+    a.mons.push(m);
+    emit(q.x, 0.5, q.z, { n: 16, color: 0x9aff6a, speed: 3, up: 2, life: 0.6, size: 1 });
+  }
+  toast('Emboscada!', AMBUSH_SAY[a.reg] || 'Você foi cercado!');
+  log('Emboscada no ' + REGION_INFO[a.reg].name + '! Derrote todos para ganhar o tesouro.', 'warn');
+  shake(0.5);
+}
+function finishAmbush(a) {
+  a.state = 2;
+  const q = nearWalkable(a.x, a.z, 4) || { x: a.x, z: a.z };
+  spawnChest(q.x, q.z, 'secret');
+  emit(q.x, 0.5, q.z, { n: 60, color: 0xffd86a, speed: 3, up: 5, life: 1.2, size: 1, grav: 2, spread: 1 });
+  toast('Emboscada vencida', 'Um baú surgiu na clareira');
+  Sfx.level();
+}
+
+// ---------- mortes ----------
+/** Qualquer abate no Éden: confere emboscadas vencidas. */
+function onEdenKill() {
+  for (const a of E.ambush) if (a.state === 1 && a.mons.every((m) => m.dead)) finishAmbush(a);
+}
+function onMiniKilled(m) {
+  shake(0.8); Sfx.boom();
+  toast('Mini chefe derrotado', m.T.name);
+  log(m.T.name + ' foi derrotado. O Coração do Éden está mais perto.', 'sys');
+  persist();
+}
+/** Guardião do Éden: portal de volta para Aldrena no lugar dele. */
+function onEdenBossKilled(m) {
+  const ch = G.ch;
+  ch.edenClears = (ch.edenClears || 0) + 1;
+  toast('Guardião do Éden derrotado', 'O Coração do Éden está em paz');
+  log('Você derrotou o Guardião do Éden! Um portal para Aldrena se abriu.', 'sys');
+  G.exitPortal = makePortal(m.x, m.z, 0x8affb0, 'Voltar para Aldrena', () => { enterTown(); return true; });
+  persist();
+}
+
+// ---------- por quadro ----------
+const ROOTS_FOG = new THREE.Color(0x1c3a32);
+function updateEden(dt) {
+  const p = G.player, L = G.L;
+  if (!p || !L || L.biome !== 'eden') return;
+  // região sob o herói: nome no topo e aviso na primeira visita
+  const tx = Math.round(p.x / TILE), tz = Math.round(p.z / TILE);
+  const reg = tx >= 0 && tz >= 0 && tx < L.W && tz < L.H ? L.region[tz * L.W + tx] : 0;
+  if (reg && reg !== E.region) {
+    E.region = reg;
+    const info = REGION_INFO[reg];
+    setZoneText('O Éden · ' + info.name, info.sub);
+    if (!E.seen.has(reg)) { E.seen.add(reg); if (reg !== REGION.hub) toast(info.name, info.sub); }
+  }
+  // nas Raízes a luz do dia some aos poucos (sob a terra), e volta ao sair
+  if (E.base) {
+    const target = E.region === REGION.roots ? 1 : 0;
+    E.k += (target - E.k) * Math.min(1, dt * 1.2);
+    const k = E.k;
+    hemi.intensity = E.base.hemi * (1 - 0.55 * k);
+    sun.intensity = E.base.sun * (1 - 0.75 * k);
+    heroLight.intensity = E.base.hero * (1 + 0.5 * k);
+    scene.fog.color.copy(E.base.fog).lerp(ROOTS_FOG, k);
+    scene.background.copy(scene.fog.color);
+  }
+  // santuários: o orbe gira; tocar concede a bênção
+  for (const s of E.shrines) {
+    if (s.used) continue;
+    s.halo.position.y = 2.1 + Math.sin(G.time * 2 + s.x) * 0.12;
+    s.halo.scale.setScalar(1 + Math.sin(G.time * 3 + s.z) * 0.08);
+    if (Math.random() < 0.3) emit(s.x + (rand() - 0.5), 2.1, s.z + (rand() - 0.5), { n: 1, color: s.B.color, speed: 0.4, up: 1.5, life: 1.2, size: 0.6, grav: -0.5 });
+    if (p.alive && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < 3.2 * 3.2) useShrine(s);
+  }
+  // emboscadas: disparam quando o herói entra na clareira
+  for (const a of E.ambush) if (a.state === 0 && p.alive && (a.x - p.x) ** 2 + (a.z - p.z) ** 2 < a.r * a.r) triggerAmbush(a);
+  // tampa dos baús abrindo
+  for (const b of E.chests) {
+    if (!b.opening || b.open >= 1) continue;
+    b.open = Math.min(1, b.open + dt * 3);
+    b.lid.rotation.x = -1.9 * (1 - (1 - b.open) ** 3);
+  }
+}
+/** Saída do Éden: as malhas de baús e santuários (os baús também estão em G.breakables). */
+function clearEden() {
+  for (const s of E.shrines) world.remove(s.g);
+  for (const s of E.shrines) s.halo.geometry.dispose();
+  E.shrines = []; E.chests = []; E.ambush = []; E.base = null;
+}
+/** Estado do Éden para testes e depuração. */
+function edenState() { return E; }
+return { clearEden, edenState, onEdenBossKilled, onEdenKill, onMiniKilled, openChest, spawnEden, updateEden };
+})();
+
 // ---- ui/minimap.js ----
 const { drawMinimap, paintMinimapTile, resetMinimap } = (() => {
 // ---------- minimapa ----------
@@ -13341,9 +14260,9 @@ function drawMinimap() {
   const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc((x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2, r, 0, Math.PI * 2); c.fill(); };
   const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
   G.loot.forEach((l) => { if (l.ord >= 2) dot(l.x, l.z, 4, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
-  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.elite ? '#6aa0ff' : '#e0453a'); });
+  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.mini ? 7 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.mini ? '#8aff6a' : m.elite ? '#6aa0ff' : '#e0453a'); });
   G.npcs.forEach((n) => dot(n.x, n.z, 6, '#f2cf7a'));
-  [G.exitPortal, G.townPortal].forEach((pt) => { if (pt) dot(pt.x, pt.z, 8, '#b9a4ff'); });
+  allPortals().forEach((pt) => dot(pt.x, pt.z, 8, pt === G.edenPortal || pt === G.hubPortal ? '#8affb0' : '#b9a4ff'));
   G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
   if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
   c.restore();
@@ -13392,6 +14311,12 @@ function biomeTex(id) {
       a: texRock('floor_abyss3', { a: 0x2c2428, b: 0x3a3034, n: 12, soft: true }),
       b: texGround('ash_abyss3', { a: 0x3a302c, b: 0x4a3a34, c: 0x7a6a60 }),
       wall: texRock('wall_abyss3', { a: 0x2a1614, b: 0x46241e, glow: true, n: 16 }), wallCol: 0xffffff, capCol: 0x3a2420, wallGlow: 0xff6a18,
+    };
+    // ---------- O Éden: grama viva e alta, chão de musgo, penhascos cobertos de musgo ----------
+    case 'eden': return {
+      a: texGround('grass_eden', { a: 0x36682a, b: 0x46782e, c: 0x7a7a5a, blades: true, bladeCol: 0x8ac84a }),
+      b: texGround('moss_eden', { a: 0x34562a, b: 0x5a4e30, c: 0x7a7a5e, blades: true, bladeCol: 0x6aa040 }),
+      wall: texRock('cliff_eden', { a: 0x5a5448, b: 0x5e6a4a, n: 18 }), wallCol: 0xffffff, capCol: 0x3a6a24,
     };
     // ---------- Torre Infinita ----------
     case 'tw_granite': return {
@@ -13625,6 +14550,154 @@ function updateTownFx(px, pz, t, dt, screenH) {
 return { buildTownFx, clearTownFx, updateTownFx };
 })();
 
+// ---- world/edenfx.js ----
+const { buildEdenFx, clearEdenFx, updateEdenFx } = (() => {
+// =============================================================================
+// Água do Éden: superfície do rio, dos lagos e das poças (correnteza, faixas de
+// cor em degraus como o resto do cenário, espuma nas margens e cintilado do sol)
+// e as cachoeiras (cortinas que escorrem, espuma e névoa ao pé). Pertence ao
+// nível e é liberada com ele.
+// =============================================================================
+
+let FX = null;
+const Y = 0.14; // altura da lâmina d'água
+
+const VS = `attribute float shore; varying vec3 vW; varying vec2 vUv; varying float vShore;
+  #include <fog_pars_vertex>
+  void main() {
+    vUv = uv; vShore = shore;
+    vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz;
+    vec4 mvPosition = viewMatrix * wp;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }`;
+const WATER_FS = `uniform float uTime; uniform vec3 uDeep; uniform vec3 uLight;
+  varying vec3 vW; varying vec2 vUv; varying float vShore;
+  ${CUT_GLSL}
+  #include <fog_pars_fragment>
+  void main() {
+    if (cutHidden(vW)) discard;
+    vec2 p = vW.xz;
+    // correnteza: duas camadas de ondas andando em direções diferentes
+    float n1 = sin(p.x * 1.3 + p.y * 0.4 + uTime * 1.6) * sin(p.y * 1.1 - uTime * 1.2 + sin(p.x * 0.5));
+    float n2 = sin((p.x + p.y) * 2.7 - uTime * 2.4) * sin((p.x - p.y) * 2.1 + uTime * 1.5);
+    float h = 0.5 + n1 * 0.3 + n2 * 0.25;
+    float depth = smoothstep(0.0, 1.0, vShore);
+    vec3 col = mix(uLight, uDeep, depth * 0.85);
+    col = mix(col * 0.8, col * 1.12, floor(clamp(h, 0.0, 1.0) * 3.0 + 0.5) / 3.0);
+    // cintilado do sol nas cristas
+    float sp = smoothstep(0.9, 0.99, n2 * 0.5 + 0.5 + n1 * 0.1);
+    col += vec3(0.9, 0.95, 0.85) * sp * 0.45;
+    // espuma nas margens, pulsando com a correnteza
+    float foam = (1.0 - smoothstep(0.0, 0.3, vShore)) * (0.5 + 0.5 * sin(uTime * 3.0 + p.x * 3.0 + p.y * 2.3));
+    col = mix(col, vec3(0.78, 0.9, 0.86), foam * 0.45);
+    gl_FragColor = vec4(col, 0.86 + foam * 0.1 - (1.0 - depth) * 0.12);
+    #include <fog_fragment>
+  }`;
+const FALL_FS = `uniform float uTime; uniform vec3 uLight;
+  varying vec3 vW; varying vec2 vUv;
+  ${CUT_GLSL}
+  #include <fog_pars_fragment>
+  void main() {
+    if (cutHidden(vW)) discard;
+    float streak = sin(vUv.x * 60.0 + sin(vUv.x * 9.0) * 3.0) * 0.5 + 0.5;
+    float flow = fract(vUv.y * 1.6 + uTime * 1.9 + sin(vUv.x * 31.0) * 0.4);
+    float edge = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x);
+    float a = (0.45 + 0.45 * streak * smoothstep(0.0, 0.6, flow)) * edge;
+    vec3 col = mix(uLight, vec3(0.95, 1.0, 1.0), streak * 0.55 + (1.0 - vUv.y) * 0.3);
+    gl_FragColor = vec4(col, a * 0.85);
+    #include <fog_fragment>
+  }`;
+function mat(fs) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      uTime: { value: 0 }, uDeep: { value: new THREE.Color(0x0a3240) }, uLight: { value: new THREE.Color(0x2a8a86) },
+    }]),
+    vertexShader: VS, fragmentShader: fs, transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,
+  });
+  Object.assign(m.uniforms, CUT);
+  return m;
+}
+
+/** Uma malha para toda a água: um quad por tile, `shore` = quanto do canto está cercado de água. */
+function waterGeo(L) {
+  const { W, H, water } = L, T2 = TILE / 2;
+  const wAt = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : water[z * W + x]);
+  const CELLS = [[-1, -1], [0, -1], [-1, 0], [0, 0]];
+  const shoreAt = (cx, cz) => { let n = 0; for (const [dx, dz] of CELLS) n += wAt(cx + dx, cz + dz); return n === 4 ? 1 : n === 3 ? 0.35 : 0; };
+  // margem arredondada: quinas convexas recuam para a água, côncavas avançam sobre a terra,
+  // e um ruído leve tira a cara de grade das retas
+  const cornerPos = (cx, cz) => {
+    let n = 0, ax = 0, az = 0;
+    for (const [dx, dz] of CELLS) if (wAt(cx + dx, cz + dz)) { n++; ax += dx + 0.5; az += dz + 0.5; }
+    let ox = 0, oz = 0;
+    if (n === 1) { ox = ax * 1.3; oz = az * 1.3; }
+    else if (n === 3) { for (const [dx, dz] of CELLS) if (!wAt(cx + dx, cz + dz)) { ox = (dx + 0.5) * 0.7; oz = (dz + 0.5) * 0.7; } }
+    else if (n === 2) { ox = -ax * 0.25; oz = -az * 0.25; }
+    if (n < 4) { const h = Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453; const r = h - Math.floor(h); ox += (r - 0.5) * 0.35; oz += (((h * 7.13) % 1 + 1) % 1 - 0.5) * 0.35; }
+    return [cx * TILE - T2 + ox * TILE * 0.5, cz * TILE - T2 + oz * TILE * 0.5];
+  };
+  const pos = [], sh = [], uv = [];
+  for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) {
+    if (!wAt(x, z)) continue;
+    const cs = [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]];
+    for (const ci of [0, 3, 2, 0, 2, 1]) {
+      const [cx, cz] = cs[ci], [px, pz] = cornerPos(cx, cz);
+      pos.push(px, Y, pz); sh.push(shoreAt(cx, cz)); uv.push(cx, cz);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('shore', new THREE.BufferAttribute(new Float32Array(sh), 1));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+  g.computeBoundingSphere();
+  return g;
+}
+
+function buildEdenFx(L, add) {
+  clearEdenFx();
+  FX = { mats: [], falls: [], t: 0 };
+  if (L.water && L.water.some((w) => w)) {
+    const m = mat(WATER_FS);
+    const mesh = new THREE.Mesh(waterGeo(L), m);
+    mesh.renderOrder = 2; mesh.receiveShadow = true;
+    add(mesh); FX.mats.push(m);
+  }
+  for (const f of L.falls || []) {
+    const w = f.w * 1.3, top = 4.7, x = f.x * TILE, z = f.z * TILE + TILE / 2 + 0.15;
+    const m = mat(FALL_FS);
+    // cortina levemente curva para a frente no alto (a água sai da borda de pedra)
+    const g = new THREE.PlaneGeometry(w, top, 8, 6);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i) / top + 0.5; p.setZ(i, Math.pow(y, 3) * 0.6 + (1 - y) * 0.35); }
+    g.translate(0, top / 2, 0);
+    const mesh = new THREE.Mesh(g, m);
+    mesh.position.set(x, 0, z);
+    mesh.renderOrder = 3;
+    add(mesh); FX.mats.push(m);
+    FX.falls.push({ x, z: z + 0.6, w, acc: 0 });
+  }
+}
+function clearEdenFx() { FX = null; }
+/** Anima a água e solta espuma e névoa ao pé das cachoeiras próximas. */
+function updateEdenFx(px, pz, t, dt) {
+  if (!FX) return;
+  for (const m of FX.mats) m.uniforms.uTime.value = t;
+  for (const f of FX.falls) {
+    if ((f.x - px) ** 2 + (f.z - pz) ** 2 > 30 * 30) continue;
+    f.acc += dt * 14;
+    while (f.acc >= 1) {
+      f.acc -= 1;
+      const r = Math.random();
+      emit(f.x + (Math.random() - 0.5) * f.w * 0.8, 0.25, f.z + Math.random() * 0.8, r < 0.6
+        ? { n: 1, color: 0xe8fff8, speed: 1.4, up: 2.2, life: 0.6, size: 0.35, grav: 5, spread: 0.6, alpha: 0.8 }
+        : { n: 1, color: 0xc8f0e8, speed: 0.4, up: 0.6, life: 2.2, size: 1.4, grav: -0.05, drag: 1, alpha: 0.35 });
+    }
+  }
+}
+return { buildEdenFx, clearEdenFx, updateEdenFx };
+})();
+
 // ---- world/level.js ----
 const { buildLevel, getLevelMeshes, updateTorchLights } = (() => {
 // ---------- montagem visual do nível: chão, paredes, adereços, decalques, névoa, chamas e tochas ----------
@@ -13685,7 +14758,7 @@ function groundMaterial(A, Bt, tint) {
   return stylize(m, { rim: 0 });
 }
 /** Chão: um quad por tile andável, UV = mundo/4, AO nos cantos junto às paredes. */
-function buildGround(L, T, blendFn) {
+function buildGround(L, T, blendFn, tintFn) {
   const { W, H, grid } = L;
   const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
   let n = 0;
@@ -13710,6 +14783,7 @@ function buildGround(L, T, blendFn) {
       uv[k * 2] = wx / 4; uv[k * 2 + 1] = wz / 4;
       const a = aoAt(cx, cz), nn = 0.86 + vnoise(wx * 0.15, wz * 0.15, 999, 5) * 0.28;
       col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = a * nn;
+      if (tintFn) { const c = tintFn(x, z, wx, wz); col[k * 3] *= c[0]; col[k * 3 + 1] *= c[1]; col[k * 3 + 2] *= c[2]; }
       bl[k] = blendFn(wx, wz);
       k++;
     }
@@ -13921,6 +14995,7 @@ function buildLevel(L) {
   shafts = null;
   cones = [];
   clearTownFx();
+  clearEdenFx();
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
   scene.fog = new THREE.Fog(B.fog[0], B.fog[1], B.fog[2]);
@@ -13938,8 +15013,9 @@ function buildLevel(L) {
   const sd = L.seed % 1000;
   const blendFn = town
     ? (x, z) => { const tx = x / TILE, tz = z / TILE; return L.isPath(Math.round(tx), Math.round(tz)) ? sat((fbm(x / 60, z / 60, 4, 3, 5) - 0.62) * 3) : 1; }
+    : L.biome === 'eden' ? edenBlend(L, sd)
     : (x, z) => sat((fbm(((x / 40) % 1 + 1) % 1, ((z / 40) % 1 + 1) % 1, 3, 4, sd) - 0.52) * 5);
-  buildGround(L, T, blendFn);
+  buildGround(L, T, blendFn, L.biome === 'eden' ? edenTint(L) : null);
   const wopt = {
     town: { h: 2.6, var: 0.4, capCol: 0.7 },
     forest: { h: 3.4, var: 0.9, rough: 0.9, lip: 0.22 },
@@ -13951,6 +15027,7 @@ function buildLevel(L) {
     tw_arcane: { h: 4.2, var: 0.1, lip: 0.2 },
     tw_storm: { h: 3.8, var: 0.35, lip: 0.18 },
     tw_void: { h: 4.0, var: 0.6, rough: 0.6, lip: 0.16 },
+    eden: { h: 4.4, var: 1.0, rough: 0.6, lip: 0.24 },
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
@@ -13959,7 +15036,7 @@ function buildLevel(L) {
   const rnd = R.mulberry32(L.seed * 13 + 1);
   // tochas nas paredes altas voltadas para o jogador (+x / +z)
   const sconces = [];
-  if (!town) walls.forEach((w) => {
+  if (!town && L.biome !== 'eden') walls.forEach((w) => {
     if (w.low || w.decor) return;
     const fx = at(w.x + 1, w.z) === 1, fz = !fx && at(w.x, w.z + 1) === 1;
     if ((fx || fz) && rnd() < (L.biome === 'caves' ? 0.03 : 0.075)) {
@@ -13976,7 +15053,7 @@ function buildLevel(L) {
   buildProps(L, B, rnd);
   scatterClutter(L, walls);
   buildFlames();
-  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
+  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08], eden: [0xc0f0d0, 0.12] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
   buildCones();
@@ -13986,6 +15063,7 @@ function buildLevel(L) {
 const SHAFTS = {
   town: [0x9ab4ff, 4, 0.06], forest: [0xe0f8a8, 10, 0.13], caves: [0x7ab8ff, 6, 0.11],
   ruins: [0xffe2b0, 8, 0.12], castle: [0xff9a8a, 5, 0.09], abyss: [0xff7a3a, 4, 0.07],
+  eden: [0xf0ffc0, 18, 0.15],
   tw_granite: [0xd8e4ff, 7, 0.11], tw_arcane: [0xd0a8ff, 6, 0.12], tw_storm: [0xbff4ff, 9, 0.13], tw_void: [0xff8ad8, 5, 0.09],
 };
 let shafts = null;
@@ -14157,6 +15235,8 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
+    // moldura viva do Portal do Éden, no fundo da rua entre a Kora e o Varek
+    if (L.eden) { placeKit('edenArch', [L.eden], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 })); torches.push({ x: L.eden.x * T, y: 2.4, z: L.eden.z * T, green: true }); }
     // luz fria na porta da Torre Infinita (a porta olha para a praça)
     if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }
     return;
@@ -14168,7 +15248,7 @@ function buildProps(L, B, rnd) {
     if (L.grid[z * L.W + x] !== 1) continue;
     if (!L.grid[z * L.W + x - 1] && !L.grid[(z - 1) * L.W + x] && rnd() < (deco === 'lava' ? 0.05 : 0.3)) webs.push({ x: x * T - 0.9, y: 2.2 + rnd() * 0.8, z: z * T - 0.9, ry: -Math.PI / 4, s: 0.8 + rnd() * 0.5 });
   }
-  if (deco !== 'lava') placeDecals(webs, 'web', 2.2, { vertical: true });
+  if (deco !== 'lava' && deco !== 'eden') placeDecals(webs, 'web', 2.2, { vertical: true });
   // manchas no chão
   const splat = decal.concat(low.filter((p) => p.v < 0.2)).map((p) => ({ ...pos(p, 1.2), r: p.v * 17, s: 0.7 + p.v * 0.8 }));
   const half = Math.floor(splat.length / 2);
@@ -14178,6 +15258,7 @@ function buildProps(L, B, rnd) {
   else if (deco === 'castle') { placeDecals(splat.slice(0, half), 'blood', 1.8); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'lava') { placeDecals(splat.slice(0, half), 'ash', 2.8); placeDecals(splat.slice(half), 'blood', 1.8); }
   else if (deco === 'tower') { placeDecals(splat, L.biome === 'tw_void' ? 'ash' : 'crack', 2.4); }
+  else if (deco === 'eden') { placeDecals(splat.filter((p, i) => i % 4), 'moss', 2.8); placeDecals(splat.filter((p, i) => !(i % 4)), 'crack', 2.2); }
   if (L.runes) {
     placeDecals(L.runes.map((r) => ({ x: r.x * T, z: r.z * T, r: r.s, s: r.s })), 'rune', 1, { glow: TOWER_RUNE[L.biome] });
     for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
@@ -14218,6 +15299,8 @@ function buildProps(L, B, rnd) {
     placeKit(castle ? 'skulls' : 'bones', by(low, (p) => p.v >= 0.8).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
   } else if (deco === 'tower') {
     buildTowerProps(L, tall, low, decal, pos, by, addFire);
+  } else if (deco === 'eden') {
+    buildEdenProps(L, low, pos, by, addFire, rnd);
   } else if (deco === 'lava') {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
@@ -14238,7 +15321,7 @@ function buildProps(L, B, rnd) {
 }
 
 /** Cor das runas do chão em cada bioma da torre. */
-const TOWER_RUNE = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
+const TOWER_RUNE = { eden: 0x8affb0, tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
 /**
  * Adereços da Torre Infinita: obeliscos rúnicos e colunas em todos os andares;
  * cada bioma troca o resto (estátuas e armaduras no granito, estantes e cristais
@@ -14294,6 +15377,7 @@ const CLUTTER = {
   tw_arcane: { floor: [['shard', 0.05], ['pebbles', 0.05]], edge: [['baseRocks', 0.2]] },
   tw_storm: { floor: [['tuft', 0.12], ['pebbles', 0.1]], edge: [['baseRocks', 0.3], ['grassEdge', 0.2]] },
   tw_void: { floor: [['ember', 0.06], ['shard', 0.04], ['pebbles', 0.06]], edge: [['baseRocks', 0.35]] },
+  eden: { floor: [['tuft', 0.7, 'dry'], ['fern', 0.2, 'dry'], ['flowers', 0.12, 'dry'], ['pebbles', 0.03, 'dry']], edge: [['grassEdge', 0.7], ['fern', 0.25], ['baseRocks', 0.12]] },
 };
 function scatterClutter(L, walls) {
   const C = CLUTTER[L.biome];
@@ -14305,6 +15389,7 @@ function scatterClutter(L, walls) {
   const T2 = TILE * 0.42;
   for (let z = 0; z < L.H; z++) for (let x = 0; x < L.W; x++) {
     if (!at(x, z)) continue;
+    if (L.water && L.water[z * L.W + x]) continue; // nada de grama dentro do rio
     const path = L.isPath ? L.isPath(x, z) : false;
     for (const [k, p, where] of C.floor) {
       if (where === 'grass' && path) continue;
@@ -14335,6 +15420,7 @@ const MAZE_DECOR = {
   ruins: { wall: [['shieldWall', 0.05], ['weaponRack', 0.04], ['vines', 0.06], ['chains', 0.03]], paint: ['crack', 'moss', 'moss'], floor: 0.065, pilaster: true },
   castle: { wall: [['shieldWall', 0.07], ['weaponRack', 0.05], ['chains', 0.05], ['skullNiche', 0.03]], paint: ['crack', 'blood', 'crack'], floor: 0.075, pilaster: true },
   abyss: { wall: [['chains', 0.08], ['skullNiche', 0.06], ['shieldWall', 0.02]], paint: ['blood', 'ash', 'crack'], floor: 0.06, pilaster: false },
+  eden: { wall: [['vines', 0.3], ['rootVines', 0.08], ['wallCrystals', 0.03]], paint: ['moss', 'moss', 'moss'], floor: 0, pilaster: false },
 };
 function decorateMaze(L, walls, rnd) {
   const D = MAZE_DECOR[L.biome] || MAZE_DECOR.ruins;
@@ -14370,7 +15456,7 @@ function decorateMaze(L, walls, rnd) {
   for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
     if (at(x, z) !== 1 || near(x, z, L.start, 2) || near(x, z, L.boss, 2)) continue;
     const byWall = wallAt(x - 1, z) || wallAt(x + 1, z) || wallAt(x, z - 1) || wallAt(x, z + 1);
-    if (rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
+    if (!D.floor || rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
     const o = { x: x * T + (rnd() - 0.5) * 1.1, z: z * T + (rnd() - 0.5) * 1.1, ry: rnd() * 6.28, s: 0.9 + rnd() * 0.3 };
     add(rnd() < 0.6 ? 'swordStuck' : 'swordPile', o);
   }
@@ -14388,6 +15474,7 @@ function updateTorchLights(px, pz, t) {
   setKitGlowTime(t);
   setCutaway(px, 0, pz, camera);
   updateTownFx(px, pz, t, dt, renderer.domElement.height);
+  updateEdenFx(px, pz, t, dt);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;
@@ -14406,11 +15493,106 @@ function updateTorchLights(px, pz, t) {
     if (!n || n.d > 1100) { l.intensity = 0; return; }
     const tc = n.tc;
     l.position.set(tc.x, tc.y + 0.3, tc.z);
-    l.color.setHex(tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
+    l.color.setHex(tc.green ? 0x8affb0 : tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
     l.distance = tc.lamp ? 16 : tc.lava ? 10 : 13;
     const flick = tc.cold ? 1 : 0.84 + Math.sin(t * 9 + i * 2) * 0.09 + Math.sin(t * 23 + i) * 0.06;
     l.intensity = (tc.water ? 7 : tc.cold ? 16 : tc.lava ? 24 : tc.lamp ? 30 : 34) * flick;
   });
+}
+
+// =============================================================================
+// O Éden: chão tingido por região, adereços (árvores gigantes, ruínas, arcos de
+// raiz, pontes, santuários de pedra) e a água (ver world/edenfx.js).
+// =============================================================================
+/** Tom do chão por região: clareira clara, floresta verde, raízes terrosas, rio musgoso, Coração dourado. */
+const EDEN_TINT = { 1: [1.0, 1.02, 0.92], 2: [0.9, 0.98, 0.86], 3: [0.78, 0.72, 0.66], 4: [0.84, 0.96, 0.94], 5: [1.04, 1.0, 0.8] };
+function edenTint(L) {
+  return (x, z) => {
+    const i = z * L.W + x;
+    if (L.water[i]) return [0.42, 0.5, 0.46]; // leito do rio: escuro sob a água
+    let wet = 0; // margem molhada (barro escuro) junto da água
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (L.water[i + dz * L.W + dx]) wet++;
+    const c = EDEN_TINT[L.region[i]] || EDEN_TINT[2];
+    return wet ? [c[0] * 0.8, c[1] * 0.82, c[2] * 0.78] : c;
+  };
+}
+/** Mistura grama/musgo: as Raízes são quase só musgo e terra; a Floresta e a clareira, grama com manchas. */
+function edenBlend(L, sd) {
+  return (x, z) => {
+    const tx = Math.min(L.W - 1, Math.max(0, Math.round(x / TILE))), tz = Math.min(L.H - 1, Math.max(0, Math.round(z / TILE)));
+    const reg = L.region[tz * L.W + tx], n = fbm(((x / 40) % 1 + 1) % 1, ((z / 40) % 1 + 1) % 1, 3, 4, sd);
+    if (reg === 3) return sat(0.55 + (n - 0.5) * 2);
+    if (reg === 4) return sat((n - 0.45) * 4);
+    return sat((n - 0.6) * 5);
+  };
+}
+function buildEdenProps(L, low, pos, by, addFire, rnd) {
+  const T = TILE, P = (k) => L.props.filter((p) => p.kind === k);
+  // árvores gigantes nos paredões (as da borda inclinam um pouco para a trilha)
+  placeKit('gtree', P('gtree'), (p) => ({ x: p.x * T, y: -0.4, z: p.z * T, ry: p.v * 9, s: 0.72 + p.v * 0.25 }));
+  placeKit('gtreeDeep', P('gtreeDeep'), (p) => ({ x: p.x * T, y: 0.6, z: p.z * T, ry: p.v * 9, s: 0.8 + p.v * 0.3 }));
+  // Árvore-Mãe no fundo do Coração, com luz dourada
+  const mt = L.motherTree;
+  if (mt) {
+    placeKit('motherTree', [mt], () => ({ x: mt.x * T, z: mt.z * T, ry: 0.6, s: 1.45 }));
+    torches.push({ x: mt.x * T + 3, y: 3, z: mt.z * T + 3, green: true });
+  }
+  // ruínas antigas
+  placeKit('pillar', by(P('ruinPillar'), (p) => p.v < 0.5), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+  placeKit('pillarBroken', by(P('ruinPillar'), (p) => p.v >= 0.5).concat(P('ruinBroken')), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+  placeKit('pillarBroken', P('ruinSunk'), (p) => ({ x: p.x * T, y: -0.9, z: p.z * T, ry: p.v * 9, rx: (p.v - 0.5) * 0.5, s: 1.1 }));
+  placeKit('rubble', P('ruinSunk'), (p) => ({ x: p.x * T + 0.5, y: -0.15, z: p.z * T - 0.4, ry: p.v * 7 }), { noShadow: true });
+  // arcos de raiz por cima do Caminho das Raízes (um kit por vão, arredondado)
+  const arches = {};
+  for (const a of P('rootArch')) { const n = Math.max(4, Math.min(12, Math.round(a.span))); (arches[n] || (arches[n] = [])).push(a); }
+  for (const n in arches) placeKit('rootArch' + n, arches[n], (a) => ({ x: a.x * T, z: a.z * T, ry: a.ry + Math.PI / 2 }));
+  // pontes sobre o rio
+  placeKit('bridge', L.bridges, (b) => ({ x: b.x * T, y: 0.05, z: b.z * T, ry: b.ry }));
+  // clareira de entrada: pedras em pé e a placa dos três caminhos
+  placeKit('standing', P('standing'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.ry || 0, s: 0.9 + p.v * 0.3 }));
+  P('standing').forEach((p, i) => { if (i % 2 === 0) torches.push({ x: p.x * T, y: 1.6, z: p.z * T, green: true }); });
+  placeKit('edenSign', P('edenSign'), (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.PI / 4 }));
+  // miudezas por região
+  const lowR = (r) => by(low, (p) => p.reg === r);
+  const forestish = low.filter((p) => p.reg === 1 || p.reg === 2 || p.reg === 5);
+  placeKit('hedge', by(forestish, (p) => p.v < 0.35), (p) => ({ ...pos(p, 0.6), ry: p.v * 9, s: 0.8 + p.v }));
+  placeKit('bush', by(forestish, (p) => p.v >= 0.35 && p.v < 0.5), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }));
+  placeKit('log', by(lowR(2), (p) => p.v >= 0.5 && p.v < 0.6), (p) => ({ ...pos(p, 0.4), ry: p.v * 9 }));
+  placeKit('mushroom', by(forestish, (p) => p.v >= 0.6 && p.v < 0.72), (p) => ({ ...pos(p, 1), ry: p.v * 9, s: 0.7 + p.v * 0.5 }));
+  placeKit('rock', by(forestish, (p) => p.v >= 0.72 && p.v < 0.82), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.5 }));
+  const mf = by(forestish, (p) => p.v >= 0.82);
+  placeKit('magicFlower', mf, (p) => ({ ...pos(p, 1), ry: p.v * 9, s: 1 + p.v * 0.6 }));
+  mf.filter((p, i) => i % 4 === 0).forEach((p) => torches.push({ x: p.x * T, y: 0.8, z: p.z * T, green: true }));
+  // Raízes: cristais, cogumelos que brilham, estalagmites
+  const roots = lowR(3);
+  placeKit('crystal', by(roots, (p) => p.v < 0.25), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }));
+  by(roots, (p) => p.v < 0.25).filter((p, i) => i % 2 === 0).forEach((p) => torches.push({ x: p.x * T, y: 1.2, z: p.z * T, cold: true }));
+  placeKit('glowshroom', by(roots, (p) => p.v >= 0.25 && p.v < 0.55), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v * 0.6 }));
+  by(roots, (p) => p.v >= 0.25 && p.v < 0.55).filter((p, i) => i % 4 === 0).forEach((p) => torches.push({ x: p.x * T, y: 1, z: p.z * T, green: true }));
+  placeKit('stalagmite', by(roots, (p) => p.v >= 0.55 && p.v < 0.75), (p) => ({ ...pos(p, 0.5), ry: p.v * 9, s: 0.7 + p.v * 0.4 }));
+  placeKit('rock', by(roots, (p) => p.v >= 0.75), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.5 }));
+  // Rio: juncos e pedras nas margens, vitórias-régias na água
+  const river = lowR(4);
+  placeKit('reeds', by(river, (p) => p.v < 0.45), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.9 + p.v * 0.5 }), { noShadow: true });
+  placeKit('rock', by(river, (p) => p.v >= 0.45 && p.v < 0.7), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.6 }));
+  placeKit('hedge', by(river, (p) => p.v >= 0.7), (p) => ({ ...pos(p, 0.6), ry: p.v * 9, s: 0.7 + p.v * 0.6 }));
+  const lilies = [];
+  for (let i = 0; i < L.water.length; i++) if (L.water[i] && rnd() < 0.07) lilies.push({ x: (i % L.W) * T + (rnd() - 0.5) * 1.2, y: 0.17, z: Math.floor(i / L.W) * T + (rnd() - 0.5) * 1.2, ry: rnd() * 6, s: 0.8 + rnd() * 0.5 });
+  placeKit('lily', lilies, (o) => o, { noShadow: true });
+  // moitas no alto dos paredões (vistas de cima, deixam a mata densa)
+  const tops = [];
+  const rr = R.mulberry32(L.seed * 23 + 9);
+  for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
+    if (L.grid[z * L.W + x] || rr() > 0.12) continue;
+    let adj = false;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (L.grid[(z + dz) * L.W + x + dx]) adj = true;
+    if (adj) tops.push({ x: x * T + (rr() - 0.5), y: 4.2, z: z * T + (rr() - 0.5), ry: rr() * 6, s: 1 + rr() * 0.7 });
+  }
+  placeKit('hedge', tops, (o) => o, { noShadow: true });
+  // cachoeiras: borda de pedra no alto, água e espuma (edenfx)
+  placeKit('fallRock', L.falls, (f) => ({ x: f.x * T, y: 4.7, z: f.z * T + 0.7, sx: f.w * 1.3 / 4.6 }));
+  for (const f of L.falls) torches.push({ x: f.x * T, y: 1, z: (f.z + 2) * T, water: true });
+  buildEdenFx(L, addLevel);
 }
 return { buildLevel, getLevelMeshes, updateTorchLights };
 })();
@@ -14443,7 +15625,7 @@ function runDelayed(dt) {
   }
 }
 
-const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
+const AMBIENT = { eden: 0xe8ff9a, forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
 /** Partículas de ambiente: vaga-lumes na floresta, brasas no abismo, poeira nas ruínas. */
 function ambient(p) {
   if (G.zone === 'town' || Math.random() >= 0.3) return;
@@ -14479,6 +15661,7 @@ function updateWorld(dt) {
   runDelayed(dt);
   updateNpcs(dt);
   if (G.zone === 'town') updateTownLife(dt);
+  if (G.zone === 'eden') updateEden(dt);
   updateLootVisuals(dt);
   updatePortals(dt);
   const p = G.player;
@@ -14545,6 +15728,8 @@ const { QUERY_PAD, aggroPack, clearMonsters, queryMonsters, rebuildMonsterGrid, 
 /** Maior raio de colisão de monstro (chefe); usado para ampliar consultas na grade espacial. */
 /** Raio de colisão do corpo do chefe (m). */
 const BOSS_RADIUS = 1.6;
+/** Raio do corpo dos mini chefes (Éden). */
+const MINI_RADIUS = 1.2;
 const MAX_MONSTER_RADIUS = BOSS_RADIUS;
 /**
  * Folga das consultas na grade: maior raio de monstro + 1 m, porque a grade é
@@ -14569,6 +15754,7 @@ function spawnMonster(kind, x, z, level, opt) {
   const T = MON[kind];
   const mod = Object.assign({}, T.mod);
   if (G.zone === 'tower') { const tm = R.towerMod(G.floor); mod.hp = (mod.hp || 1) * tm.hp; mod.dmg = (mod.dmg || 1) * tm.dmg; }
+  if (G.zone === 'eden') { mod.hp = (mod.hp || 1) * R.EDEN.hpMult; mod.dmg = (mod.dmg || 1) * R.EDEN.dmgMult; }
   let affix = null;
   if (opt.elite) {
     const ks = Object.keys(AFFIX);
@@ -14585,7 +15771,7 @@ function spawnMonster(kind, x, z, level, opt) {
   if (T.boss) {
     // selo rúnico no chão, do tamanho do corpo do chefe (compensa a escala do modelo)
     attachBossSigil(model, 0xff5a2a, BOSS_RADIUS * 1.45);
-  }
+  } else if (T.mini) attachBossSigil(model, 0x8aff6a, MINI_RADIUS * 1.5); // mini chefe: selo verde, menor
   model.root.position.set(x, gy(x, z), z);
   model.root.rotation.y = rand() * 6.28;
   world.add(model.root);
@@ -14593,10 +15779,10 @@ function spawnMonster(kind, x, z, level, opt) {
     id: G.nextMonId++, kind, T, name: (affix ? affix.name + ' ' : '') + T.name, level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
     x, z, homeX: x, homeZ: z, rot: model.root.rotation.y, model, speed: T.speed * (affix && affix.speed ? affix.speed : 1),
     range: T.range, atkT: T.atkT, atkCd: rand(), atkWind: 0, attackAnim: 0, aggro: false, pack: opt.pack || 0,
-    elite: !!opt.elite, affix, boss: !!T.boss, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0,
-    radius: (T.boss ? BOSS_RADIUS : 0.55) * (affix && affix.scale ? affix.scale : 1),
+    elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0,
+    radius: (T.boss ? BOSS_RADIUS : T.mini ? MINI_RADIUS : 0.55) * (affix && affix.scale ? affix.scale : 1),
     // raio usado contra paredes: o chefe é largo e não pode atravessar blocos
-    moveR: T.boss ? 1.1 : 0.35 * (affix && affix.scale ? affix.scale : 1), losT: 0, los: false, path: null, repath: rand() * 0.6,
+    moveR: T.boss ? 1.1 : T.mini ? 0.8 : 0.35 * (affix && affix.scale ? affix.scale : 1), losT: 0, los: false, path: null, repath: rand() * 0.6,
     wanderT: rand() * 3, special: 5, summoned: false, moving: false, flyer: T.model === 'bat' || T.model === 'floater',
   };
   if (m.boss) G.boss = m;
@@ -14625,7 +15811,7 @@ function updateMonsters(dt) {
     m.losT -= dt;
     if (m.losT <= 0) { m.losT = CONFIG.monsters.losInterval + rand() * 0.1; m.los = d < 18 && lineClear(G.L, m.x, m.z, p.x, p.z, 0); }
     const slow = m.slowUntil > G.time ? 0.5 : 1;
-    const enrage = m.boss && m.hp < m.maxHp * 0.25 ? 1.3 : 1;
+    const enrage = (m.boss || m.mini) && m.hp < m.maxHp * 0.25 ? 1.3 : 1;
     m.moving = false;
     m.atkCd -= dt * enrage;
     if (!p.alive || safe) m.aggro = false;
@@ -14635,7 +15821,7 @@ function updateMonsters(dt) {
       updateIdle(m, d, dt, p, safe);
     } else {
       updateEngaged(m, dx, dz, d, dt, slow, p);
-      if (m.boss) updateBoss(m, d, dt, enrage, p);
+      if (m.boss || m.mini) updateBoss(m, d, dt, enrage, p);
     }
     separate(m);
     updateVisual(m, dt, slow);
@@ -14699,7 +15885,7 @@ function resolveAttack(m, dx, dz, d, p) {
 function updateBoss(m, d, dt, enrage, p) {
   m.special -= dt;
   if (m.special <= 0 && d < 16) {
-    m.special = 6.5 / enrage;
+    m.special = (m.mini ? 8 : 6.5) / enrage;
     const tx = p.x, tz = p.z;
     spawnRing(tx, tz, 3.4, 3.4, 0xff2a1a, 1.1, { hold: true, op: 0.55 });
     spawnRing(tx, tz, 0.2, 3.4, 0xff2a1a, 1.1, { disc: true, op: 0.18 });
@@ -14711,7 +15897,7 @@ function updateBoss(m, d, dt, enrage, p) {
       if ((G.player.x - tx) ** 2 + (G.player.z - tz) ** 2 < 3.4 * 3.4) hurtPlayer(m.dmg * 1.8, m);
     } });
   }
-  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
+  if (m.boss && !m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
     m.summoned = true;
     const B = BIOMES[G.biome];
     for (let k = 0; k < 4; k++) {
@@ -15130,6 +16316,14 @@ function genTown() {
   const tower = { x: cx + 11, z: cz + 11 };
   block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
   for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
+  // Portal do Éden: no fim da rua de baixo, entre a Kora (arena) e o Varek (torre)
+  const eden = { x: cx + 1, z: cz + 14 };
+  for (let i = props.length - 1; i >= 0; i--) {
+    const p = props[i];
+    if (Math.hypot(p.x - eden.x, p.z - eden.z) >= 3) continue;
+    if (grid[Math.round(p.z) * W + Math.round(p.x)] === 2) grid[Math.round(p.z) * W + Math.round(p.x)] = 1;
+    props.splice(i, 1);
+  }
   const npcs = [
     { id: 'tower', x: cx + 8, z: cz + 8 },
     { id: 'smith', x: cx - 7, z: cz - 6 },
@@ -15139,21 +16333,21 @@ function genTown() {
     { id: 'duel', x: cx - 5, z: cz + 9 },
   ];
   // garante que NPCs e portal estejam livres
-  for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath, spots, pen, bunting, town: { cx, cz } };
+  for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }, eden])) grid[n.z * W + n.x] = 1;
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, isPath, spots, pen, bunting, town: { cx, cz } };
 }
 return { genDungeon, genTower, genTown };
 })();
 
 // ---- game/zones.js ----
-const { clearWorld, enterDungeon, enterTower, enterTown, hasTownServices, inSafe, zoneLevel } = (() => {
+const { clearWorld, enterDungeon, enterEden, enterTower, enterTown, hasTownServices, inSafe, zoneLevel } = (() => {
 // ---------- limpeza / carregamento de zonas ----------
 
 /** A cidade é a única zona segura. */
 function inSafe() { return G.zone === 'town'; }
 function hasTownServices() { return G.zone === 'town'; }
 /** Nível base dos monstros da zona atual (masmorra ou torre). */
-function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : floorLevel(G.biome, G.floor); }
+function zoneLevel() { return G.zone === 'tower' ? R.towerLevel(G.floor) : G.zone === 'eden' ? G.edenLvl || 1 : floorLevel(G.biome, G.floor); }
 
 /** Descarta tudo que pertence à zona atual (o pet e o jogador continuam). */
 function clearWorld() {
@@ -15169,6 +16363,7 @@ function clearWorld() {
   clearEffects();
   clearFx();
   clearCombatFx();
+  clearEden();
   resetFloatText();
 }
 function placePlayer(L) {
@@ -15271,6 +16466,28 @@ function enterTower(floor) {
   toast('Torre Infinita', 'Andar ' + floor + ' · ' + B.name);
   persist();
 }
+/**
+ * O Éden: mapa aberto com três caminhos até o Coração do Éden. Uma entrada a cada
+ * 3 horas (marcada no save ao entrar). Os monstros acompanham o nível de entrada.
+ */
+function enterEden() {
+  const ch = G.ch;
+  clearWorld();
+  const entry = Math.max(1, ch.level);
+  G.zone = 'eden'; G.biome = 'eden'; G.floor = 1; G.edenLvl = entry;
+  ch.edenLast = Date.now();
+  Music.play('eden');
+  const seed = R.hash32('eden', ch.name, Date.now());
+  G.L = genEden(seed);
+  buildLevel(G.L);
+  resize();
+  placePlayer(G.L);
+  spawnEden(G.L, entry);
+  setZoneText(BIOMES.eden.name, 'Monstros nv ' + entry + '+ · Guardião do Éden nv ' + R.edenLevel(entry, 'boss'));
+  log('Você entrou no Éden (seed ' + R.hex(seed) + '). Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
+  toast('O Éden', 'Escolha um caminho: Floresta, Raízes ou Rio');
+  persist();
+}
 function spawnBreakable(x, z, biome) {
   const c = { forest: 0x8a5a2a, caves: 0x6a5a4a, ruins: 0x9a7a5a, castle: 0x7a3a2a, abyss: 0x4a2a2a, tw_granite: 0x7a7068, tw_arcane: 0x6a4a7a, tw_storm: 0x5a6a6a, tw_void: 0x4a2a4a }[biome];
   const g = new THREE.Group();
@@ -15283,7 +16500,7 @@ function spawnBreakable(x, z, biome) {
   world.add(g);
   G.breakables.push({ x, z, mesh: g, color: c, broken: false });
 }
-return { clearWorld, enterDungeon, enterTower, enterTown, hasTownServices, inSafe, zoneLevel };
+return { clearWorld, enterDungeon, enterEden, enterTower, enterTown, hasTownServices, inSafe, zoneLevel };
 })();
 
 // ---- ui/panes.js ----
@@ -15421,10 +16638,12 @@ function cellHtml(it, attrs, sel, ctx) {
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
-  const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : '#fff';
+  const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : glyph(it).c;
   let h = '<div class="detail"><div class="nm" style="color:' + col + '">' + esc(R.itemName(it)) + (it.qty > 1 ? ' ×' + it.qty : '') + '</div>';
   if (it.kind === 'jewel') h += '<div class="ln">' + esc(R.JEWELS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
   else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
+  else if (it.kind === 'potion' && R.POTIONS[it.id].buff) h += '<div class="ln">' + esc(R.POTIONS[it.id].desc) + '</div><div class="ln note">Clique em Usar (ou clique duplo / botão direito no ícone). Beber de novo renova o tempo.</div>';
+  else if (it.kind === 'talisman') h += '<div class="ln">' + esc(R.TALISMANS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
     h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.itemUsers(it).join(', ') : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
@@ -15551,13 +16770,14 @@ return { closeDrawer, initDrawer, openTab, refreshPaneSoon, renderPane };
 })();
 
 // ---- game/loot.js ----
-const { autoPickup, clearLoot, dropLoot, pickup, spacePickup, updateLootVisuals } = (() => {
+const { autoPickup, clearLoot, dropEdenRoll, dropLoot, pickup, spacePickup, updateLootVisuals } = (() => {
 // ---------- loot no chão ----------
 
 function lootLabel(l) {
   if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
-  if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: l.id === 'hp' ? '#ff8a7a' : '#8ab8ff' };
+  if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: R.POTIONS[l.id].color || (l.id === 'hp' ? '#ff8a7a' : '#8ab8ff') };
+  if (l.type === 'talisman') return { text: R.TALISMANS[l.id].name, color: R.TALISMANS[l.id].color };
   return { text: R.itemName(l.item), color: R.RARITY[l.item.rarity].color };
 }
 function dropLoot(x, z, l) {
@@ -15574,9 +16794,9 @@ function dropLoot(x, z, l) {
   mesh.position.y = 0.12;
   mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
-  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' ? 3 : 0;
+  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' ? 3 : 0;
   // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
-  if (ord >= 1 || l.type === 'jewel') {
+  if (ord >= 1 || l.type === 'jewel' || l.type === 'talisman') {
     const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
     pool.position.y = 0.05; pool.scale.setScalar(0.45 + ord * 0.05); pool.renderOrder = 1;
     g.add(pool);
@@ -15601,6 +16821,25 @@ function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+}
+/**
+ * Espalha no chão um drop do Éden (R.rollEdenDrop): Gold, itens Ancestrais e
+ * Lendários, Jewels, Talismã da Sorte e poções. Devolve quantos itens raros caíram.
+ */
+function dropEdenRoll(x, z, drop, src) {
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(x, z, { type: 'gold', amount: gold });
+  for (const it of drop.items) {
+    dropLoot(x, z, { type: 'item', item: it });
+    G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: null, table: null, src, mf: G.st.mf, at: Date.now() });
+    log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot');
+    Sfx.loot(R.RARITY[it.rarity].order);
+  }
+  if (G.dropLog.length > 40) G.dropLog.length = 40;
+  for (const j of drop.jewels) dropLoot(x, z, { type: 'jewel', id: j });
+  for (let i = 0; i < drop.talismans; i++) dropLoot(x, z, { type: 'talisman', id: 'luck' });
+  for (const p of drop.potions) dropLoot(x, z, { type: 'potion', id: p });
+  return drop.items.length + drop.jewels.length + drop.talismans;
 }
 /** Espaço: coleta tudo que está perto (mais raros primeiro); se nada estiver ao alcance, anda até o item mais próximo. */
 function spacePickup() {
@@ -15633,7 +16872,8 @@ function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
-  else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; }
+  else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
+  else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else {
     if (!addToBag(l.item)) return false;
     Sfx.loot(R.RARITY[l.item.rarity].order);
@@ -15661,7 +16901,7 @@ function clearLoot() {
   for (const l of G.loot) removeLootVisual(l);
   G.loot.length = 0;
 }
-return { autoPickup, clearLoot, dropLoot, pickup, spacePickup, updateLootVisuals };
+return { autoPickup, clearLoot, dropEdenRoll, dropLoot, pickup, spacePickup, updateLootVisuals };
 })();
 
 // ---- input/inputState.js ----
@@ -15765,8 +17005,7 @@ function clickWorld(sx, sy, fromHold) {
   if (m) { p.target = { type: 'mon', m }; p.path = null; return; }
   if (fromHold && p.target && p.target.type === 'mon') return;
   if (!fromHold) {
-    for (const pt of [G.exitPortal, G.townPortal]) {
-      if (!pt) continue;
+    for (const pt of allPortals()) {
       const s = toScreen(pt.x, 1.8, pt.z);
       if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 60 * 60) { p.target = { type: 'portal', p: pt }; pathTo(pt.x, pt.z); return; }
     }
@@ -16235,6 +17474,20 @@ function addToBag(it) {
   bag.push(it);
   return true;
 }
+/**
+ * Poção de reforço (Éden): 10 minutos de efeito. Beber de novo a mesma poção
+ * renova o tempo (não acumula); poções diferentes valem juntas.
+ */
+function drinkBuff(id, D) {
+  const bid = 'pot:' + id;
+  G.buffs = G.buffs.filter((b) => b.id !== bid);
+  G.buffs.push({ id: bid, name: D.name.replace('Poção de ', ''), until: G.time + D.dur, stats: D.buff, potion: true });
+  recalc();
+  const col = parseInt(D.color.slice(1), 16);
+  emit(G.player.x, 1, G.player.z, { n: 30, color: col, speed: 2.5, up: 3, life: 0.9, size: 0.9, grav: 1, spread: 0.8 });
+  floatText(G.player.x, 2.8, G.player.z, D.name.replace('Poção de ', '') + '!', 'heal');
+  log(D.name + ': ' + D.desc, 'sys');
+}
 function potionCount(id) { const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id); return p ? p.qty : 0; }
 /** Bebe uma poção (Q/E); pequena recarga para não gastar várias num clique duplo. */
 function usePotion(id) {
@@ -16244,6 +17497,7 @@ function usePotion(id) {
   G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
   if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
+  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });
@@ -16380,24 +17634,26 @@ function respawn() {
   p.model.root.position.y = 0;
   p.model.dead = false;
   if (p.model.blob) p.model.blob.visible = true;
-  G.buffs = []; recalc();
+  G.buffs = G.buffs.filter((b) => b.potion); recalc(); // poções de reforço continuam valendo depois da queda
   enterTown();
 }
 
 function killMonster(m) {
   if (m.dead) return;
   m.dead = true; m.deadT = 0; m.hp = 0;
-  const src = m.boss ? 'boss' : m.elite ? 'elite' : 'normal';
+  const src = m.boss ? 'boss' : m.mini ? 'mini' : m.elite ? 'elite' : 'normal';
   grantKillRewards(m);
   if (m.elite || m.boss) hitStop(CONFIG.feel.hitStop);
   emit(m.x, 1, m.z, { n: m.boss ? 80 : 18, color: m.boss ? 0xffa040 : 0xc8b8ff, speed: m.boss ? 9 : 5, life: 0.7, size: 1, grav: -4 });
   if (m.affix && m.affix.explode) scheduleExplosion(m);
   dropMonsterLoot(m, src);
   if (m.boss) onBossKilled(m);
+  else if (m.mini) onMiniKilled(m);
+  if (G.zone === 'eden') onEdenKill(m);
 }
 function grantKillRewards(m) {
   const ch = G.ch;
-  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.elite ? 2.5 : 1);
+  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
   const before = ch.level;
   if (R.gainExp(ch, Math.floor(exp))) onLevelUp(before);
   if (G.st.lifeKill) G.hp = Math.min(G.st.maxHp, G.hp + G.st.maxHp / 8);
@@ -16418,6 +17674,7 @@ function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
   if (G.zone === 'tower') { dropTowerLoot(m, src, seed); return; }
+  if (G.zone === 'eden') { dropEdenRoll(m.x, m.z, R.rollEdenDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls }), src); return; }
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
@@ -16449,6 +17706,7 @@ function onBossKilled(m) {
   shake(1.2);
   Sfx.boom();
   if (G.zone === 'tower') { onTowerBossKilled(m); return; }
+  if (G.zone === 'eden') { onEdenBossKilled(m); return; }
   if (G.zone !== 'dungeon') { toast('Chefe derrotado', m.name); persist(); return; }
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
@@ -16559,6 +17817,7 @@ function basicAttack(m) {
 }
 function breakBarrel(b) {
   if (b.broken) return;
+  if (b.chest) { openChest(b); return; } // baús do Éden abrem em vez de quebrar
   b.broken = true;
   world.remove(b.mesh);
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });
@@ -16583,6 +17842,7 @@ function installDebugHook(loopStats) {
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
+    enterEden, edenState,
   };
 }
 return { installDebugHook };
@@ -16753,7 +18013,7 @@ function buildTitleBackdrop() {
   spawnNpcs(G.L);
   G.explored = new Uint8Array(G.L.W * G.L.H);
   for (const n of G.npcs) n.label.style.display = 'none';
-  if (G.townPortal) G.townPortal.label.style.display = 'none';
+  for (const pt of [G.townPortal, G.edenPortal]) if (pt) pt.label.style.display = 'none';
 }
 
 /** Entra no jogo com o personagem `i` do save. */
@@ -17036,8 +18296,7 @@ function updateNpcLabels() {
     const s = toScreen(n.x, (n.model.height || 2.2) + 0.5, n.z);
     place(n.label, n, s.x, s.y, s.vis);
   }
-  for (const pt of [G.exitPortal, G.townPortal]) {
-    if (!pt) continue;
+  for (const pt of allPortals()) {
     const s = toScreen(pt.x, 4, pt.z);
     place(pt.label, pt, s.x, s.y, s.vis);
   }
@@ -17065,12 +18324,12 @@ function barFor(m, named) {
 function updateMonsterBars() {
   for (const m of G.monsters) {
     const hover = mouse.hover === m;
-    const show = !m.dead && !m.boss && (m.elite || G.time - m.lastHit < 5 || hover);
+    const show = !m.dead && !m.boss && (m.elite || m.mini || G.time - m.lastHit < 5 || hover);
     if (!show) {
       if (m.bar) { m.bar.remove(); m.bar = m.barFill = m.barName = null; }
       continue;
     }
-    const bar = barFor(m, m.elite || hover);
+    const bar = barFor(m, m.elite || m.mini || hover);
     const s = toScreen(m.x, m.model.height + 0.5, m.z);
     place(bar, m, s.x, s.y, s.vis);
     const pct = Math.max(0, Math.round((m.hp / m.maxHp) * 100));
@@ -17328,6 +18587,8 @@ return { initAccount, openAccount, refreshAccountUi, showConflictDialog };
 const { initPaneActions } = (() => {
 // ---------- ações dos painéis (cliques delegados por data-act) ----------
 
+/** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
+const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !R.POTIONS[it.id].revive);
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
   const b = e.target.closest('[data-act]');
@@ -17347,6 +18608,8 @@ function paneAction(e) {
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
       if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
+      // clique duplo numa poção: bebe direto do inventário
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
       break;
@@ -17356,7 +18619,7 @@ function paneAction(e) {
     case 'aeqnow': autoEquip(true); break;
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
-    case 'usepot': usePotion(it.id); break;
+    case 'usepot': if (it) usePotion(it.id); if (!selectedItem()) UI.sel = null; break;
     case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
@@ -17391,7 +18654,11 @@ function initPaneActions() {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
     e.preventDefault();
-    if (c.dataset.act === 'selbag') { const i = +c.dataset.i; if (G.ch.bag[i] && G.ch.bag[i].slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); } }
+    if (c.dataset.act === 'selbag') {
+      const i = +c.dataset.i, it = G.ch.bag[i];
+      if (it && it.slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); }
+      else if (drinkable(it)) { usePotion(it.id); persist(); hudTick(); }
+    }
     else if (unequipSlot(c.dataset.slot)) UI.sel = null;
     renderPane();
   });

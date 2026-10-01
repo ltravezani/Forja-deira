@@ -18,7 +18,8 @@ import { gy, walkable } from '../world/grid.js';
 function lootLabel(l) {
   if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
-  if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: l.id === 'hp' ? '#ff8a7a' : '#8ab8ff' };
+  if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: R.POTIONS[l.id].color || (l.id === 'hp' ? '#ff8a7a' : '#8ab8ff') };
+  if (l.type === 'talisman') return { text: R.TALISMANS[l.id].name, color: R.TALISMANS[l.id].color };
   return { text: R.itemName(l.item), color: R.RARITY[l.item.rarity].color };
 }
 export function dropLoot(x, z, l) {
@@ -35,9 +36,9 @@ export function dropLoot(x, z, l) {
   mesh.position.y = 0.12;
   mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
-  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' ? 3 : 0;
+  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' ? 3 : 0;
   // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
-  if (ord >= 1 || l.type === 'jewel') {
+  if (ord >= 1 || l.type === 'jewel' || l.type === 'talisman') {
     const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
     pool.position.y = 0.05; pool.scale.setScalar(0.45 + ord * 0.05); pool.renderOrder = 1;
     g.add(pool);
@@ -62,6 +63,25 @@ export function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+}
+/**
+ * Espalha no chão um drop do Éden (R.rollEdenDrop): Gold, itens Ancestrais e
+ * Lendários, Jewels, Talismã da Sorte e poções. Devolve quantos itens raros caíram.
+ */
+export function dropEdenRoll(x, z, drop, src) {
+  const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
+  if (gold) dropLoot(x, z, { type: 'gold', amount: gold });
+  for (const it of drop.items) {
+    dropLoot(x, z, { type: 'item', item: it });
+    G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: null, table: null, src, mf: G.st.mf, at: Date.now() });
+    log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot');
+    Sfx.loot(R.RARITY[it.rarity].order);
+  }
+  if (G.dropLog.length > 40) G.dropLog.length = 40;
+  for (const j of drop.jewels) dropLoot(x, z, { type: 'jewel', id: j });
+  for (let i = 0; i < drop.talismans; i++) dropLoot(x, z, { type: 'talisman', id: 'luck' });
+  for (const p of drop.potions) dropLoot(x, z, { type: 'potion', id: p });
+  return drop.items.length + drop.jewels.length + drop.talismans;
 }
 /** Espaço: coleta tudo que está perto (mais raros primeiro); se nada estiver ao alcance, anda até o item mais próximo. */
 export function spacePickup() {
@@ -94,7 +114,8 @@ export function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
-  else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; }
+  else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
+  else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else {
     if (!addToBag(l.item)) return false;
     Sfx.loot(R.RARITY[l.item.rarity].order);

@@ -7,7 +7,8 @@ import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
 import { addToBag, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
-import { enterDungeon, enterTower } from '../game/zones.js';
+import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
+import { fmtWait } from '../game/npcs.js';
 import { buildSlots, hudTick } from './hud.js';
 import { glyph, iconHtml } from './icons.js';
 import { log, toast } from './log.js';
@@ -20,7 +21,7 @@ const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.
 /** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
 const sellListed = (it) => !it.slot;
 /** Joias pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel';
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman';
 function sellSection(ch) {
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
   const cnt = { all: 0, jewel: 0, potion: 0 };
@@ -35,7 +36,7 @@ function sellSection(ch) {
   h += '<div class="list selllist">';
   idx.forEach((i) => {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = it.kind === 'jewel' ? 'Joia · você tem ' + q : 'Poção · você tem ' + q;
+    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : 'Poção') + ' · você tem ' + q;
     let a;
     if (cf && cf.it === it) {
       a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
@@ -62,6 +63,14 @@ function sellFromBag(ch, i, n, confirmed) {
   log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' Gold.', 'loot');
   Sfx.coin();
 }
+function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
+/** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
+function takeTalisman() {
+  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'talisman' && b.id === 'luck');
+  if (!t) return false;
+  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
+  return true;
+}
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 export function openNpc(id) {
   if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
@@ -87,6 +96,13 @@ export function openNpc(id) {
     h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
     h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
       '<p class="note">Drops: só Gold (igual a um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Jewel aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Gold e Jewels.</p>';
+  } else if (id === 'eden') {
+    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = Math.max(1, ch.level);
+    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível agora) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
+      (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
+    h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
+      '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
+      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
   } else if (id === 'smith') {
     const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
     const sel = items.find((x) => x === UI.smithSel) || items[0];
@@ -94,11 +110,20 @@ export function openNpc(id) {
     const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
     h += '<div class="row">' + items.slice(0, 24).map((x, i) => '<button class="btn sm' + (x === sel ? ' gold' : '') + '" data-npc="smithsel" data-i="' + i + '" style="color:' + R.RARITY[x.rarity].color + '">' + esc(R.itemName(x)) + '</button>').join('') + '</div>';
     if (sel) {
-      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4><div class="list">';
+      const tal = talismanCount();
+      if (!tal) UI.smithTalisman = false;
+      const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
+      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4>';
+      h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
+      // Talismã da Sorte: liga/desliga; protege a fusão Chaos (a única que volta o item a +0)
+      const tg = { kind: 'talisman', id: 'luck' };
+      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
+      h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
         const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '';
-        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + esc(R.JEWELS[j].desc) + '</span></div>';
+        const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
+        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
       });
       h += '</div>';
     } else h += '<p class="note">Você não tem equipamentos.</p>';
@@ -130,6 +155,7 @@ function npcAction(e) {
   switch (a) {
     case 'close': closeModal(); return;
     case 'go': closeModal(); enterDungeon(b.dataset.b, +b.dataset.f); return;
+    case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot)); UI.smithSel = items[+b.dataset.i]; break; }
     case 'up': {
@@ -138,12 +164,16 @@ function npcAction(e) {
       if (!it || !stack) break;
       if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
       stack.qty--; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
-      const r = R.applyUpgrade(it, j, Math.random());
-      if (r.ok) { log('Sucesso! ' + R.itemName(it), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
+      // Talismã da Sorte: gasto na tentativa de fusão Chaos com ele ligado
+      const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
+      const r = R.applyUpgrade(it, j, Math.random(), { talisman });
+      if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
+      else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
       else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
       recalc(); buildPlayerModel();
       break;
     }
+    case 'taltoggle': UI.smithTalisman = !UI.smithTalisman && talismanCount() > 0; break;
     case 'buy': { const D = R.POTIONS[b.dataset.p], n = +b.dataset.n; if (ch.gold < D.price * n) { log('Gold insuficiente.', 'warn'); break; } if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break; ch.gold -= D.price * n; Sfx.coin(); break; }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
     case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;

@@ -1,5 +1,5 @@
 // ---------- seleção no mundo: tela → chão, monstro, NPC, portal, barril ----------
-import { G } from '../core/state.js';
+import { allPortals, G } from '../core/state.js';
 import { V3 } from '../core/util.js';
 import { spawnRing } from '../engine/effects.js';
 import { toScreen } from '../engine/overlay.js';
@@ -63,8 +63,7 @@ export function clickWorld(sx, sy, fromHold) {
   if (m) { p.target = { type: 'mon', m }; p.path = null; return; }
   if (fromHold && p.target && p.target.type === 'mon') return;
   if (!fromHold) {
-    for (const pt of [G.exitPortal, G.townPortal]) {
-      if (!pt) continue;
+    for (const pt of allPortals()) {
       const s = toScreen(pt.x, 1.8, pt.z);
       if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 60 * 60) { p.target = { type: 'portal', p: pt }; pathTo(pt.x, pt.z); return; }
     }

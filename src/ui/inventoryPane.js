@@ -32,10 +32,12 @@ function cellHtml(it, attrs, sel, ctx) {
 }
 function itemDetail(it, where) {
   if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
-  const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : '#fff';
+  const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : glyph(it).c;
   let h = '<div class="detail"><div class="nm" style="color:' + col + '">' + esc(R.itemName(it)) + (it.qty > 1 ? ' ×' + it.qty : '') + '</div>';
   if (it.kind === 'jewel') h += '<div class="ln">' + esc(R.JEWELS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
   else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
+  else if (it.kind === 'potion' && R.POTIONS[it.id].buff) h += '<div class="ln">' + esc(R.POTIONS[it.id].desc) + '</div><div class="ln note">Clique em Usar (ou clique duplo / botão direito no ícone). Beber de novo renova o tempo.</div>';
+  else if (it.kind === 'talisman') h += '<div class="ln">' + esc(R.TALISMANS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
   else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
   else {
     h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.itemUsers(it).join(', ') : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';

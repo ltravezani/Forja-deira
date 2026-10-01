@@ -21,6 +21,8 @@ import { SpatialHash } from '../world/spatial.js';
 /** Maior raio de colisão de monstro (chefe); usado para ampliar consultas na grade espacial. */
 /** Raio de colisão do corpo do chefe (m). */
 const BOSS_RADIUS = 1.6;
+/** Raio do corpo dos mini chefes (Éden). */
+const MINI_RADIUS = 1.2;
 const MAX_MONSTER_RADIUS = BOSS_RADIUS;
 /**
  * Folga das consultas na grade: maior raio de monstro + 1 m, porque a grade é
@@ -45,6 +47,7 @@ export function spawnMonster(kind, x, z, level, opt) {
   const T = MON[kind];
   const mod = Object.assign({}, T.mod);
   if (G.zone === 'tower') { const tm = R.towerMod(G.floor); mod.hp = (mod.hp || 1) * tm.hp; mod.dmg = (mod.dmg || 1) * tm.dmg; }
+  if (G.zone === 'eden') { mod.hp = (mod.hp || 1) * R.EDEN.hpMult; mod.dmg = (mod.dmg || 1) * R.EDEN.dmgMult; }
   let affix = null;
   if (opt.elite) {
     const ks = Object.keys(AFFIX);
@@ -61,7 +64,7 @@ export function spawnMonster(kind, x, z, level, opt) {
   if (T.boss) {
     // selo rúnico no chão, do tamanho do corpo do chefe (compensa a escala do modelo)
     attachBossSigil(model, 0xff5a2a, BOSS_RADIUS * 1.45);
-  }
+  } else if (T.mini) attachBossSigil(model, 0x8aff6a, MINI_RADIUS * 1.5); // mini chefe: selo verde, menor
   model.root.position.set(x, gy(x, z), z);
   model.root.rotation.y = rand() * 6.28;
   world.add(model.root);
@@ -69,10 +72,10 @@ export function spawnMonster(kind, x, z, level, opt) {
     id: G.nextMonId++, kind, T, name: (affix ? affix.name + ' ' : '') + T.name, level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
     x, z, homeX: x, homeZ: z, rot: model.root.rotation.y, model, speed: T.speed * (affix && affix.speed ? affix.speed : 1),
     range: T.range, atkT: T.atkT, atkCd: rand(), atkWind: 0, attackAnim: 0, aggro: false, pack: opt.pack || 0,
-    elite: !!opt.elite, affix, boss: !!T.boss, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0,
-    radius: (T.boss ? BOSS_RADIUS : 0.55) * (affix && affix.scale ? affix.scale : 1),
+    elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0,
+    radius: (T.boss ? BOSS_RADIUS : T.mini ? MINI_RADIUS : 0.55) * (affix && affix.scale ? affix.scale : 1),
     // raio usado contra paredes: o chefe é largo e não pode atravessar blocos
-    moveR: T.boss ? 1.1 : 0.35 * (affix && affix.scale ? affix.scale : 1), losT: 0, los: false, path: null, repath: rand() * 0.6,
+    moveR: T.boss ? 1.1 : T.mini ? 0.8 : 0.35 * (affix && affix.scale ? affix.scale : 1), losT: 0, los: false, path: null, repath: rand() * 0.6,
     wanderT: rand() * 3, special: 5, summoned: false, moving: false, flyer: T.model === 'bat' || T.model === 'floater',
   };
   if (m.boss) G.boss = m;
@@ -101,7 +104,7 @@ export function updateMonsters(dt) {
     m.losT -= dt;
     if (m.losT <= 0) { m.losT = CONFIG.monsters.losInterval + rand() * 0.1; m.los = d < 18 && lineClear(G.L, m.x, m.z, p.x, p.z, 0); }
     const slow = m.slowUntil > G.time ? 0.5 : 1;
-    const enrage = m.boss && m.hp < m.maxHp * 0.25 ? 1.3 : 1;
+    const enrage = (m.boss || m.mini) && m.hp < m.maxHp * 0.25 ? 1.3 : 1;
     m.moving = false;
     m.atkCd -= dt * enrage;
     if (!p.alive || safe) m.aggro = false;
@@ -111,7 +114,7 @@ export function updateMonsters(dt) {
       updateIdle(m, d, dt, p, safe);
     } else {
       updateEngaged(m, dx, dz, d, dt, slow, p);
-      if (m.boss) updateBoss(m, d, dt, enrage, p);
+      if (m.boss || m.mini) updateBoss(m, d, dt, enrage, p);
     }
     separate(m);
     updateVisual(m, dt, slow);
@@ -175,7 +178,7 @@ function resolveAttack(m, dx, dz, d, p) {
 function updateBoss(m, d, dt, enrage, p) {
   m.special -= dt;
   if (m.special <= 0 && d < 16) {
-    m.special = 6.5 / enrage;
+    m.special = (m.mini ? 8 : 6.5) / enrage;
     const tx = p.x, tz = p.z;
     spawnRing(tx, tz, 3.4, 3.4, 0xff2a1a, 1.1, { hold: true, op: 0.55 });
     spawnRing(tx, tz, 0.2, 3.4, 0xff2a1a, 1.1, { disc: true, op: 0.18 });
@@ -187,7 +190,7 @@ function updateBoss(m, d, dt, enrage, p) {
       if ((G.player.x - tx) ** 2 + (G.player.z - tz) ** 2 < 3.4 * 3.4) hurtPlayer(m.dmg * 1.8, m);
     } });
   }
-  if (!m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
+  if (m.boss && !m.summoned && m.hp < m.maxHp * 0.5 && G.zone !== 'town') {
     m.summoned = true;
     const B = BIOMES[G.biome];
     for (let k = 0; k < 4; k++) {

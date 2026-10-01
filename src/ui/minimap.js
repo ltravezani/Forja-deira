@@ -1,5 +1,5 @@
 // ---------- minimapa ----------
-import { G } from '../core/state.js';
+import { allPortals, G } from '../core/state.js';
 import { $, R, TILE } from '../core/util.js';
 
 const MM = 10;
@@ -41,9 +41,9 @@ export function drawMinimap() {
   const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc((x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2, r, 0, Math.PI * 2); c.fill(); };
   const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
   G.loot.forEach((l) => { if (l.ord >= 2) dot(l.x, l.z, 4, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
-  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.elite ? '#6aa0ff' : '#e0453a'); });
+  G.monsters.forEach((m) => { if (!m.dead && seen(m.x, m.z)) dot(m.x, m.z, m.boss ? 9 : m.mini ? 7 : m.elite ? 6 : 4, m.boss ? '#ff8a3a' : m.mini ? '#8aff6a' : m.elite ? '#6aa0ff' : '#e0453a'); });
   G.npcs.forEach((n) => dot(n.x, n.z, 6, '#f2cf7a'));
-  [G.exitPortal, G.townPortal].forEach((pt) => { if (pt) dot(pt.x, pt.z, 8, '#b9a4ff'); });
+  allPortals().forEach((pt) => dot(pt.x, pt.z, 8, pt === G.edenPortal || pt === G.hubPortal ? '#8affb0' : '#b9a4ff'));
   G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
   if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
   c.restore();

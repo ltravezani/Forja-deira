@@ -12,6 +12,7 @@ import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
 import { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
 import { buildTownFx, clearTownFx, updateTownFx } from './townfx.js';
+import { buildEdenFx, clearEdenFx, updateEdenFx } from './edenfx.js';
 
 const LAVA_DISC = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
 LAVA_DISC.userData.shared = true;
@@ -69,7 +70,7 @@ function groundMaterial(A, Bt, tint) {
   return stylize(m, { rim: 0 });
 }
 /** Chão: um quad por tile andável, UV = mundo/4, AO nos cantos junto às paredes. */
-function buildGround(L, T, blendFn) {
+function buildGround(L, T, blendFn, tintFn) {
   const { W, H, grid } = L;
   const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
   let n = 0;
@@ -94,6 +95,7 @@ function buildGround(L, T, blendFn) {
       uv[k * 2] = wx / 4; uv[k * 2 + 1] = wz / 4;
       const a = aoAt(cx, cz), nn = 0.86 + vnoise(wx * 0.15, wz * 0.15, 999, 5) * 0.28;
       col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = a * nn;
+      if (tintFn) { const c = tintFn(x, z, wx, wz); col[k * 3] *= c[0]; col[k * 3 + 1] *= c[1]; col[k * 3 + 2] *= c[2]; }
       bl[k] = blendFn(wx, wz);
       k++;
     }
@@ -305,6 +307,7 @@ export function buildLevel(L) {
   shafts = null;
   cones = [];
   clearTownFx();
+  clearEdenFx();
   const B = BIOMES[L.biome];
   scene.background = new THREE.Color(B.fog[0]);
   scene.fog = new THREE.Fog(B.fog[0], B.fog[1], B.fog[2]);
@@ -322,8 +325,9 @@ export function buildLevel(L) {
   const sd = L.seed % 1000;
   const blendFn = town
     ? (x, z) => { const tx = x / TILE, tz = z / TILE; return L.isPath(Math.round(tx), Math.round(tz)) ? sat((fbm(x / 60, z / 60, 4, 3, 5) - 0.62) * 3) : 1; }
+    : L.biome === 'eden' ? edenBlend(L, sd)
     : (x, z) => sat((fbm(((x / 40) % 1 + 1) % 1, ((z / 40) % 1 + 1) % 1, 3, 4, sd) - 0.52) * 5);
-  buildGround(L, T, blendFn);
+  buildGround(L, T, blendFn, L.biome === 'eden' ? edenTint(L) : null);
   const wopt = {
     town: { h: 2.6, var: 0.4, capCol: 0.7 },
     forest: { h: 3.4, var: 0.9, rough: 0.9, lip: 0.22 },
@@ -335,6 +339,7 @@ export function buildLevel(L) {
     tw_arcane: { h: 4.2, var: 0.1, lip: 0.2 },
     tw_storm: { h: 3.8, var: 0.35, lip: 0.18 },
     tw_void: { h: 4.0, var: 0.6, rough: 0.6, lip: 0.16 },
+    eden: { h: 4.4, var: 1.0, rough: 0.6, lip: 0.24 },
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
   const walls = buildWalls(L, T, wopt);
@@ -343,7 +348,7 @@ export function buildLevel(L) {
   const rnd = R.mulberry32(L.seed * 13 + 1);
   // tochas nas paredes altas voltadas para o jogador (+x / +z)
   const sconces = [];
-  if (!town) walls.forEach((w) => {
+  if (!town && L.biome !== 'eden') walls.forEach((w) => {
     if (w.low || w.decor) return;
     const fx = at(w.x + 1, w.z) === 1, fz = !fx && at(w.x, w.z + 1) === 1;
     if ((fx || fz) && rnd() < (L.biome === 'caves' ? 0.03 : 0.075)) {
@@ -360,7 +365,7 @@ export function buildLevel(L) {
   buildProps(L, B, rnd);
   scatterClutter(L, walls);
   buildFlames();
-  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08] }[L.biome];
+  const mc = { town: [0x8090b0, 0.08], forest: [0x9ab08a, 0.1], caves: [0x6a7aaa, 0.08], ruins: [0xa098b0, 0.08], castle: [0x806068, 0.07], abyss: [0x8a4a30, 0.08], tw_granite: [0x8090b0, 0.07], tw_arcane: [0x8a6ab0, 0.09], tw_storm: [0x6aa0b0, 0.1], tw_void: [0x8a3a7a, 0.08], eden: [0xc0f0d0, 0.12] }[L.biome];
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
   buildCones();
@@ -370,6 +375,7 @@ export function buildLevel(L) {
 const SHAFTS = {
   town: [0x9ab4ff, 4, 0.06], forest: [0xe0f8a8, 10, 0.13], caves: [0x7ab8ff, 6, 0.11],
   ruins: [0xffe2b0, 8, 0.12], castle: [0xff9a8a, 5, 0.09], abyss: [0xff7a3a, 4, 0.07],
+  eden: [0xf0ffc0, 18, 0.15],
   tw_granite: [0xd8e4ff, 7, 0.11], tw_arcane: [0xd0a8ff, 6, 0.12], tw_storm: [0xbff4ff, 9, 0.13], tw_void: [0xff8ad8, 5, 0.09],
 };
 let shafts = null;
@@ -541,6 +547,8 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
+    // moldura viva do Portal do Éden, no fundo da rua entre a Kora e o Varek
+    if (L.eden) { placeKit('edenArch', [L.eden], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 })); torches.push({ x: L.eden.x * T, y: 2.4, z: L.eden.z * T, green: true }); }
     // luz fria na porta da Torre Infinita (a porta olha para a praça)
     if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }
     return;
@@ -552,7 +560,7 @@ function buildProps(L, B, rnd) {
     if (L.grid[z * L.W + x] !== 1) continue;
     if (!L.grid[z * L.W + x - 1] && !L.grid[(z - 1) * L.W + x] && rnd() < (deco === 'lava' ? 0.05 : 0.3)) webs.push({ x: x * T - 0.9, y: 2.2 + rnd() * 0.8, z: z * T - 0.9, ry: -Math.PI / 4, s: 0.8 + rnd() * 0.5 });
   }
-  if (deco !== 'lava') placeDecals(webs, 'web', 2.2, { vertical: true });
+  if (deco !== 'lava' && deco !== 'eden') placeDecals(webs, 'web', 2.2, { vertical: true });
   // manchas no chão
   const splat = decal.concat(low.filter((p) => p.v < 0.2)).map((p) => ({ ...pos(p, 1.2), r: p.v * 17, s: 0.7 + p.v * 0.8 }));
   const half = Math.floor(splat.length / 2);
@@ -562,6 +570,7 @@ function buildProps(L, B, rnd) {
   else if (deco === 'castle') { placeDecals(splat.slice(0, half), 'blood', 1.8); placeDecals(splat.slice(half), 'crack', 2.6); }
   else if (deco === 'lava') { placeDecals(splat.slice(0, half), 'ash', 2.8); placeDecals(splat.slice(half), 'blood', 1.8); }
   else if (deco === 'tower') { placeDecals(splat, L.biome === 'tw_void' ? 'ash' : 'crack', 2.4); }
+  else if (deco === 'eden') { placeDecals(splat.filter((p, i) => i % 4), 'moss', 2.8); placeDecals(splat.filter((p, i) => !(i % 4)), 'crack', 2.2); }
   if (L.runes) {
     placeDecals(L.runes.map((r) => ({ x: r.x * T, z: r.z * T, r: r.s, s: r.s })), 'rune', 1, { glow: TOWER_RUNE[L.biome] });
     for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
@@ -602,6 +611,8 @@ function buildProps(L, B, rnd) {
     placeKit(castle ? 'skulls' : 'bones', by(low, (p) => p.v >= 0.8).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9 }), { noShadow: true });
   } else if (deco === 'tower') {
     buildTowerProps(L, tall, low, decal, pos, by, addFire);
+  } else if (deco === 'eden') {
+    buildEdenProps(L, low, pos, by, addFire, rnd);
   } else if (deco === 'lava') {
     placeKit('spikes', tall, (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 + p.v * 0.4 }));
     const pools = by(low, (p) => p.v < 0.35).concat(by(decal, (p) => p.v < 0.5));
@@ -622,7 +633,7 @@ function buildProps(L, B, rnd) {
 }
 
 /** Cor das runas do chão em cada bioma da torre. */
-const TOWER_RUNE = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
+const TOWER_RUNE = { eden: 0x8affb0, tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
 /**
  * Adereços da Torre Infinita: obeliscos rúnicos e colunas em todos os andares;
  * cada bioma troca o resto (estátuas e armaduras no granito, estantes e cristais
@@ -678,6 +689,7 @@ const CLUTTER = {
   tw_arcane: { floor: [['shard', 0.05], ['pebbles', 0.05]], edge: [['baseRocks', 0.2]] },
   tw_storm: { floor: [['tuft', 0.12], ['pebbles', 0.1]], edge: [['baseRocks', 0.3], ['grassEdge', 0.2]] },
   tw_void: { floor: [['ember', 0.06], ['shard', 0.04], ['pebbles', 0.06]], edge: [['baseRocks', 0.35]] },
+  eden: { floor: [['tuft', 0.7, 'dry'], ['fern', 0.2, 'dry'], ['flowers', 0.12, 'dry'], ['pebbles', 0.03, 'dry']], edge: [['grassEdge', 0.7], ['fern', 0.25], ['baseRocks', 0.12]] },
 };
 function scatterClutter(L, walls) {
   const C = CLUTTER[L.biome];
@@ -689,6 +701,7 @@ function scatterClutter(L, walls) {
   const T2 = TILE * 0.42;
   for (let z = 0; z < L.H; z++) for (let x = 0; x < L.W; x++) {
     if (!at(x, z)) continue;
+    if (L.water && L.water[z * L.W + x]) continue; // nada de grama dentro do rio
     const path = L.isPath ? L.isPath(x, z) : false;
     for (const [k, p, where] of C.floor) {
       if (where === 'grass' && path) continue;
@@ -719,6 +732,7 @@ const MAZE_DECOR = {
   ruins: { wall: [['shieldWall', 0.05], ['weaponRack', 0.04], ['vines', 0.06], ['chains', 0.03]], paint: ['crack', 'moss', 'moss'], floor: 0.065, pilaster: true },
   castle: { wall: [['shieldWall', 0.07], ['weaponRack', 0.05], ['chains', 0.05], ['skullNiche', 0.03]], paint: ['crack', 'blood', 'crack'], floor: 0.075, pilaster: true },
   abyss: { wall: [['chains', 0.08], ['skullNiche', 0.06], ['shieldWall', 0.02]], paint: ['blood', 'ash', 'crack'], floor: 0.06, pilaster: false },
+  eden: { wall: [['vines', 0.3], ['rootVines', 0.08], ['wallCrystals', 0.03]], paint: ['moss', 'moss', 'moss'], floor: 0, pilaster: false },
 };
 function decorateMaze(L, walls, rnd) {
   const D = MAZE_DECOR[L.biome] || MAZE_DECOR.ruins;
@@ -754,7 +768,7 @@ function decorateMaze(L, walls, rnd) {
   for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
     if (at(x, z) !== 1 || near(x, z, L.start, 2) || near(x, z, L.boss, 2)) continue;
     const byWall = wallAt(x - 1, z) || wallAt(x + 1, z) || wallAt(x, z - 1) || wallAt(x, z + 1);
-    if (rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
+    if (!D.floor || rnd() > (byWall ? D.floor : D.floor * 0.25)) continue;
     const o = { x: x * T + (rnd() - 0.5) * 1.1, z: z * T + (rnd() - 0.5) * 1.1, ry: rnd() * 6.28, s: 0.9 + rnd() * 0.3 };
     add(rnd() < 0.6 ? 'swordStuck' : 'swordPile', o);
   }
@@ -772,6 +786,7 @@ export function updateTorchLights(px, pz, t) {
   setKitGlowTime(t);
   setCutaway(px, 0, pz, camera);
   updateTownFx(px, pz, t, dt, renderer.domElement.height);
+  updateEdenFx(px, pz, t, dt);
   // faíscas das chamas próximas
   for (const f of fires) {
     if (!f.emit) continue;
@@ -790,9 +805,104 @@ export function updateTorchLights(px, pz, t) {
     if (!n || n.d > 1100) { l.intensity = 0; return; }
     const tc = n.tc;
     l.position.set(tc.x, tc.y + 0.3, tc.z);
-    l.color.setHex(tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
+    l.color.setHex(tc.green ? 0x8affb0 : tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
     l.distance = tc.lamp ? 16 : tc.lava ? 10 : 13;
     const flick = tc.cold ? 1 : 0.84 + Math.sin(t * 9 + i * 2) * 0.09 + Math.sin(t * 23 + i) * 0.06;
     l.intensity = (tc.water ? 7 : tc.cold ? 16 : tc.lava ? 24 : tc.lamp ? 30 : 34) * flick;
   });
+}
+
+// =============================================================================
+// O Éden: chão tingido por região, adereços (árvores gigantes, ruínas, arcos de
+// raiz, pontes, santuários de pedra) e a água (ver world/edenfx.js).
+// =============================================================================
+/** Tom do chão por região: clareira clara, floresta verde, raízes terrosas, rio musgoso, Coração dourado. */
+const EDEN_TINT = { 1: [1.0, 1.02, 0.92], 2: [0.9, 0.98, 0.86], 3: [0.78, 0.72, 0.66], 4: [0.84, 0.96, 0.94], 5: [1.04, 1.0, 0.8] };
+function edenTint(L) {
+  return (x, z) => {
+    const i = z * L.W + x;
+    if (L.water[i]) return [0.42, 0.5, 0.46]; // leito do rio: escuro sob a água
+    let wet = 0; // margem molhada (barro escuro) junto da água
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (L.water[i + dz * L.W + dx]) wet++;
+    const c = EDEN_TINT[L.region[i]] || EDEN_TINT[2];
+    return wet ? [c[0] * 0.8, c[1] * 0.82, c[2] * 0.78] : c;
+  };
+}
+/** Mistura grama/musgo: as Raízes são quase só musgo e terra; a Floresta e a clareira, grama com manchas. */
+function edenBlend(L, sd) {
+  return (x, z) => {
+    const tx = Math.min(L.W - 1, Math.max(0, Math.round(x / TILE))), tz = Math.min(L.H - 1, Math.max(0, Math.round(z / TILE)));
+    const reg = L.region[tz * L.W + tx], n = fbm(((x / 40) % 1 + 1) % 1, ((z / 40) % 1 + 1) % 1, 3, 4, sd);
+    if (reg === 3) return sat(0.55 + (n - 0.5) * 2);
+    if (reg === 4) return sat((n - 0.45) * 4);
+    return sat((n - 0.6) * 5);
+  };
+}
+function buildEdenProps(L, low, pos, by, addFire, rnd) {
+  const T = TILE, P = (k) => L.props.filter((p) => p.kind === k);
+  // árvores gigantes nos paredões (as da borda inclinam um pouco para a trilha)
+  placeKit('gtree', P('gtree'), (p) => ({ x: p.x * T, y: -0.4, z: p.z * T, ry: p.v * 9, s: 0.72 + p.v * 0.25 }));
+  placeKit('gtreeDeep', P('gtreeDeep'), (p) => ({ x: p.x * T, y: 0.6, z: p.z * T, ry: p.v * 9, s: 0.8 + p.v * 0.3 }));
+  // Árvore-Mãe no fundo do Coração, com luz dourada
+  const mt = L.motherTree;
+  if (mt) {
+    placeKit('motherTree', [mt], () => ({ x: mt.x * T, z: mt.z * T, ry: 0.6, s: 1.45 }));
+    torches.push({ x: mt.x * T + 3, y: 3, z: mt.z * T + 3, green: true });
+  }
+  // ruínas antigas
+  placeKit('pillar', by(P('ruinPillar'), (p) => p.v < 0.5), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 3 }));
+  placeKit('pillarBroken', by(P('ruinPillar'), (p) => p.v >= 0.5).concat(P('ruinBroken')), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 9 }));
+  placeKit('pillarBroken', P('ruinSunk'), (p) => ({ x: p.x * T, y: -0.9, z: p.z * T, ry: p.v * 9, rx: (p.v - 0.5) * 0.5, s: 1.1 }));
+  placeKit('rubble', P('ruinSunk'), (p) => ({ x: p.x * T + 0.5, y: -0.15, z: p.z * T - 0.4, ry: p.v * 7 }), { noShadow: true });
+  // arcos de raiz por cima do Caminho das Raízes (um kit por vão, arredondado)
+  const arches = {};
+  for (const a of P('rootArch')) { const n = Math.max(4, Math.min(12, Math.round(a.span))); (arches[n] || (arches[n] = [])).push(a); }
+  for (const n in arches) placeKit('rootArch' + n, arches[n], (a) => ({ x: a.x * T, z: a.z * T, ry: a.ry + Math.PI / 2 }));
+  // pontes sobre o rio
+  placeKit('bridge', L.bridges, (b) => ({ x: b.x * T, y: 0.05, z: b.z * T, ry: b.ry }));
+  // clareira de entrada: pedras em pé e a placa dos três caminhos
+  placeKit('standing', P('standing'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.ry || 0, s: 0.9 + p.v * 0.3 }));
+  P('standing').forEach((p, i) => { if (i % 2 === 0) torches.push({ x: p.x * T, y: 1.6, z: p.z * T, green: true }); });
+  placeKit('edenSign', P('edenSign'), (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.PI / 4 }));
+  // miudezas por região
+  const lowR = (r) => by(low, (p) => p.reg === r);
+  const forestish = low.filter((p) => p.reg === 1 || p.reg === 2 || p.reg === 5);
+  placeKit('hedge', by(forestish, (p) => p.v < 0.35), (p) => ({ ...pos(p, 0.6), ry: p.v * 9, s: 0.8 + p.v }));
+  placeKit('bush', by(forestish, (p) => p.v >= 0.35 && p.v < 0.5), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }));
+  placeKit('log', by(lowR(2), (p) => p.v >= 0.5 && p.v < 0.6), (p) => ({ ...pos(p, 0.4), ry: p.v * 9 }));
+  placeKit('mushroom', by(forestish, (p) => p.v >= 0.6 && p.v < 0.72), (p) => ({ ...pos(p, 1), ry: p.v * 9, s: 0.7 + p.v * 0.5 }));
+  placeKit('rock', by(forestish, (p) => p.v >= 0.72 && p.v < 0.82), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.5 }));
+  const mf = by(forestish, (p) => p.v >= 0.82);
+  placeKit('magicFlower', mf, (p) => ({ ...pos(p, 1), ry: p.v * 9, s: 1 + p.v * 0.6 }));
+  mf.filter((p, i) => i % 4 === 0).forEach((p) => torches.push({ x: p.x * T, y: 0.8, z: p.z * T, green: true }));
+  // Raízes: cristais, cogumelos que brilham, estalagmites
+  const roots = lowR(3);
+  placeKit('crystal', by(roots, (p) => p.v < 0.25), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v }));
+  by(roots, (p) => p.v < 0.25).filter((p, i) => i % 2 === 0).forEach((p) => torches.push({ x: p.x * T, y: 1.2, z: p.z * T, cold: true }));
+  placeKit('glowshroom', by(roots, (p) => p.v >= 0.25 && p.v < 0.55), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.8 + p.v * 0.6 }));
+  by(roots, (p) => p.v >= 0.25 && p.v < 0.55).filter((p, i) => i % 4 === 0).forEach((p) => torches.push({ x: p.x * T, y: 1, z: p.z * T, green: true }));
+  placeKit('stalagmite', by(roots, (p) => p.v >= 0.55 && p.v < 0.75), (p) => ({ ...pos(p, 0.5), ry: p.v * 9, s: 0.7 + p.v * 0.4 }));
+  placeKit('rock', by(roots, (p) => p.v >= 0.75), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.5 }));
+  // Rio: juncos e pedras nas margens, vitórias-régias na água
+  const river = lowR(4);
+  placeKit('reeds', by(river, (p) => p.v < 0.45), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.9 + p.v * 0.5 }), { noShadow: true });
+  placeKit('rock', by(river, (p) => p.v >= 0.45 && p.v < 0.7), (p) => ({ ...pos(p, 0.8), ry: p.v * 9, s: 0.6 + p.v * 0.6 }));
+  placeKit('hedge', by(river, (p) => p.v >= 0.7), (p) => ({ ...pos(p, 0.6), ry: p.v * 9, s: 0.7 + p.v * 0.6 }));
+  const lilies = [];
+  for (let i = 0; i < L.water.length; i++) if (L.water[i] && rnd() < 0.07) lilies.push({ x: (i % L.W) * T + (rnd() - 0.5) * 1.2, y: 0.17, z: Math.floor(i / L.W) * T + (rnd() - 0.5) * 1.2, ry: rnd() * 6, s: 0.8 + rnd() * 0.5 });
+  placeKit('lily', lilies, (o) => o, { noShadow: true });
+  // moitas no alto dos paredões (vistas de cima, deixam a mata densa)
+  const tops = [];
+  const rr = R.mulberry32(L.seed * 23 + 9);
+  for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 1; x++) {
+    if (L.grid[z * L.W + x] || rr() > 0.12) continue;
+    let adj = false;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (L.grid[(z + dz) * L.W + x + dx]) adj = true;
+    if (adj) tops.push({ x: x * T + (rr() - 0.5), y: 4.2, z: z * T + (rr() - 0.5), ry: rr() * 6, s: 1 + rr() * 0.7 });
+  }
+  placeKit('hedge', tops, (o) => o, { noShadow: true });
+  // cachoeiras: borda de pedra no alto, água e espuma (edenfx)
+  placeKit('fallRock', L.falls, (f) => ({ x: f.x * T, y: 4.7, z: f.z * T + 0.7, sx: f.w * 1.3 / 4.6 }));
+  for (const f of L.falls) torches.push({ x: f.x * T, y: 1, z: (f.z + 2) * T, water: true });
+  buildEdenFx(L, addLevel);
 }

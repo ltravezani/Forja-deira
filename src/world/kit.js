@@ -38,6 +38,7 @@ function fluffNormals(g, c, k) {
 const WIND = {
   tuft: [0.02, 0.5, 0.07], grassEdge: [0.02, 0.7, 0.09], fern: [0.02, 0.3, 0.06], flowers: [0.05, 0.35, 0.05],
   bush: [0.25, 1.2, 0.07], pine: [1.3, 5.6, 0.2], oak: [2.2, 5.6, 0.22],
+  gtree: [7, 14, 0.28], gtreeDeep: [7, 14, 0.28], motherTree: [7, 14, 0.18], hedge: [0.3, 1.4, 0.08], reeds: [0.1, 1.5, 0.12], magicFlower: [0.05, 0.5, 0.05],
 };
 function windAttr(geo, w) {
   const pos = geo.attributes.position, a = new Float32Array(pos.count);
@@ -701,7 +702,146 @@ export function kit(name) {
       }
       for (let i = 0; i < 6; i++) { const a = i * 1.1 + 0.3; P.push(KP(GEO.sphLow, 0xd83a2a, Math.cos(a) * 1.6, 3.2 + (i % 2) * 0.6, Math.sin(a) * 1.6, 0.2)); } // maçãs
       break;
+    // ---------- O Éden ----------
+    case 'gtree': case 'gtreeDeep': case 'motherTree': { // árvore gigante: raízes-contraforte, tronco largo, copa enorme em camadas, cipós
+      const mother = name === 'motherTree', BARK = mother ? 0x7a5a3a : 0x5e4228, BARK2 = mother ? 0x5a4028 : 0x4a3220;
+      const LEAF = mother ? [0x5ab83a, 0x7ad04a, 0x9ae05a] : name === 'gtreeDeep' ? [0x2e6a2a, 0x387a30, 0x448a36] : [0x347a2e, 0x408a34, 0x52a03c];
+      const H0 = 8.5;
+      P.push(KP(GEO.taper, BARK, 0, H0 / 2, 0, 2.6, H0, 2.6, Math.PI, 0, 0));
+      P.push(KP(GEO.taper, BARK2, 0.2, H0 + 1.2, 0, 1.5, 2.6, 1.5, Math.PI, 0, -0.12));
+      for (let i = 0; i < 6; i++) { // contrafortes
+        const a = i * 1.05 + 0.3;
+        P.push(KP(GEO.cone4, i % 2 ? BARK : BARK2, Math.cos(a) * 1.25, 0.9, Math.sin(a) * 1.25, 0.9, 2.6, 0.5, Math.sin(a) * 0.75, -a, -Math.cos(a) * 0.75));
+        P.push(KP(GEO.cone, BARK2, Math.cos(a) * 2.1, 0.2, Math.sin(a) * 2.1, 0.5, 1.6, 0.5, Math.sin(a) * 1.4, 0, -Math.cos(a) * 1.4));
+      }
+      for (let i = 0; i < 4; i++) { const a = i * 1.6 + 0.7; P.push(KP(GEO.cone, BARK2, Math.cos(a) * 1.4, H0 - 0.6, Math.sin(a) * 1.4, 0.55, 3.4, 0.55, Math.sin(a) * 0.95, 0, -Math.cos(a) * 0.95)); } // galhos
+      P.push(KP(GEO.sphS, 0x2a1a10, 0.1, 2.0, 1.25, 0.7, 1.1, 0.2)); // oco
+      for (let i = 0; i < 12; i++) { // copa em três camadas
+        const a = i * 0.9 + (i > 5 ? 0.4 : 0), r = i === 0 ? 0 : i < 7 ? 3.2 : 1.8, y = H0 + 1.4 + (i < 7 ? (i % 2) * 0.6 : 2.0) + (i === 0 ? 2.8 : 0);
+        const sz = i === 0 ? 5 : i < 7 ? 4.4 - (i % 2) * 0.6 : 3.6;
+        P.push(fluff(KP(GEO.sph, LEAF[i % 3], Math.cos(a) * r, y, Math.sin(a) * r, sz, sz * 0.72, sz), [0, H0 + 2.2, 0], 0.8));
+      }
+      for (let i = 0; i < 8; i++) { // cipós pendurados
+        const a = i * 0.8 + 0.2, r = 3.6 + (i % 2) * 0.6, len = 2.4 + (i % 3) * 1.1;
+        P.push(KP(GEO.box, i % 2 ? 0x3e7a2e : 0x4e8a34, Math.cos(a) * r, H0 + 0.6 - len / 2, Math.sin(a) * r, 0.1, len, 0.1));
+        P.push(KP(GEO.ico0, 0x5aa040, Math.cos(a) * r, H0 + 0.6 - len, Math.sin(a) * r, 0.3, 0.22, 0.3));
+      }
+      if (mother) for (let i = 0; i < 16; i++) { const a = i * 2.4, r = 2.4 + (i % 4) * 0.8, y = H0 + 1 + (i % 5) * 0.8; Gl.push(KP(GEO.sphLow, i % 2 ? 0xfff0a0 : 0xb0ff8a, Math.cos(a) * r, y, Math.sin(a) * r, 0.35)); }
+      else for (let i = 0; i < 6; i++) { const a = i * 2.2, r = 3 + (i % 2); Gl.push(KP(GEO.sphLow, 0xe0ff9a, Math.cos(a) * r, H0 + 0.5 + (i % 3) * 0.7, Math.sin(a) * r, 0.18)); } // frutos/esporos que brilham
+      break;
+    }
+    case 'chest': // corpo do baú (a tampa é 'chestLid', articulada atrás)
+      P.push(KP(GEO.box, WOOD, 0, 0.32, 0, 1.1, 0.62, 0.72));
+      for (const x of [-0.5, 0, 0.5]) P.push(KP(GEO.box, IRON, x, 0.32, 0, 0.08, 0.66, 0.76));
+      P.push(KP(GEO.box, 0xc9a24a, 0, 0.5, 0.37, 0.18, 0.2, 0.06));
+      P.push(KP(GEO.box, DWOOD, 0, 0.03, 0, 1.16, 0.06, 0.78));
+      Gl.push(KP(GEO.box, 0xffe08a, 0, 0.63, 0, 0.98, 0.02, 0.6)); // tesouro aparece quando a tampa abre
+      break;
+    case 'chestLid':
+      P.push(KP(GEO.cyl, WOOD, 0, 0.02, 0.36, 0.72, 1.1, 0.72, 0, 0, Math.PI / 2));
+      P.push(KP(GEO.box, WOOD, 0, -0.06, 0.36, 1.1, 0.14, 0.72));
+      for (const x of [-0.5, 0, 0.5]) P.push(KP(GEO.torusF, IRON, x, -0.02, 0.36, 0.76, 0.76, 0.4, 0, Math.PI / 2, 0));
+      break;
+    case 'shrine': { // santuário: degraus de pedra com musgo, pilar entalhado com folhas, cristais; o orbe é desenhado à parte
+      P.push(KP(GEO.cyl, DSTONE, 0, 0.12, 0, 2.0, 0.24, 2.0));
+      P.push(KP(GEO.cyl, STONE, 0, 0.34, 0, 1.5, 0.22, 1.5));
+      P.push(KP(GEO.sphH, 0x4e8a34, 0.3, 0.42, 0.2, 1.0, 0.16, 0.6));
+      P.push(KP(GEO.taper, STONE, 0, 1.0, 0, 0.8, 1.2, 0.8, Math.PI, 0, 0));
+      P.push(KP(GEO.cyl, DSTONE, 0, 1.62, 0, 1.0, 0.14, 1.0));
+      for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; P.push(KP(GEO.cone4, 0x5aa040, Math.cos(a) * 0.42, 1.0, Math.sin(a) * 0.42, 0.3, 0.7, 0.08, 0, -a, 0)); }
+      for (let i = 0; i < 3; i++) { const a = i * 2.1; Gl.push(KP(GEO.oct, 0x9affc0, Math.cos(a) * 0.36, 1.85, Math.sin(a) * 0.36, 0.14, 0.4, 0.14, 0, 0, (i - 1) * 0.3)); }
+      Gl.push(KP(GEO.torusF, 0xb0ffd0, 0, 0.36, 0, 1.4, 1.4, 0.4, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'standing': // pedra em pé com musgo e runa verde
+      P.push(KP(GEO.box, 0x7a8072, 0, 1.2, 0, 0.9, 2.4, 0.55, 0.04, 0, 0.05));
+      P.push(KP(GEO.dod, DSTONE, 0, 2.45, 0, 0.8, 0.5, 0.55));
+      P.push(KP(GEO.sphH, 0x4e8a34, 0.05, 2.55, 0, 0.8, 0.22, 0.55));
+      P.push(KP(GEO.dod, DSTONE, 0.3, 0.12, 0.3, 0.5, 0.3, 0.45));
+      Gl.push(KP(GEO.box, 0x8affb0, 0, 1.4, 0.285, 0.12, 0.9, 0.02));
+      Gl.push(KP(GEO.box, 0x8affb0, 0, 1.6, 0.285, 0.42, 0.1, 0.02));
+      break;
+    case 'edenSign': // placa dos três caminhos: Floresta (verde), Raízes (marrom), Rio (azul)
+      P.push(KP(GEO.cyl6, DWOOD, 0, 1.3, 0, 0.18, 2.6, 0.18));
+      for (const [y, ry, c] of [[2.2, -0.9, 0x4a8a34], [1.75, 0.3, 0x7a5a34], [1.3, 1.4, 0x3a7ab8]]) {
+        P.push(KP(GEO.box, c, Math.sin(ry) * 0.55, y, Math.cos(ry) * 0.55, 0.1, 0.32, 1.1, 0, ry, 0));
+        P.push(KP(GEO.cone4, c, Math.sin(ry) * 1.15, y, Math.cos(ry) * 1.15, 0.36, 0.32, 0.1, Math.PI / 2, ry, 0));
+      }
+      P.push(KP(GEO.sphH, 0x4e8a34, 0, 2.62, 0, 0.5, 0.25, 0.5));
+      Gl.push(KP(GEO.sphLow, 0xd8ff8a, 0, 2.85, 0, 0.18));
+      break;
+    case 'edenArch': // moldura viva do Portal do Éden: dois troncos que se curvam e se encontram, com folhas, flores e runas
+      for (const sx of [-1, 1]) {
+        const pts = [[2.45, 0], [2.3, 1.2], [2.2, 2.4], [2.15, 3.4], [1.9, 4.4], [1.3, 5.1], [0.55, 5.5], [0, 5.6]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], len = Math.hypot(x1 - x0, y1 - y0), th = 0.62 - i * 0.05;
+          P.push(KP(GEO.taper, i % 2 ? 0x6a4a2c : 0x5a3e24, sx * (x0 + x1) / 2, (y0 + y1) / 2, 0, th, len + 0.2, th, 0, 0, -Math.atan2(sx * (x1 - x0), y1 - y0)));
+        }
+        P.push(KP(GEO.cone, 0x5a3e24, sx * 2.6, 0.3, 0.2, 0.7, 1.4, 0.7, 0.4, 0, -sx * 0.6));
+        P.push(KP(GEO.cone, 0x5a3e24, sx * 2.1, 0.3, -0.3, 0.6, 1.2, 0.6, -0.4, 0, sx * 0.5));
+        for (let k = 0; k < 4; k++) Gl.push(KP(GEO.box, 0x8affb0, sx * (2.25 - k * 0.1), 1.1 + k * 0.85, 0.36, 0.22, 0.1, 0.02));
+      }
+      for (let i = 0; i < 9; i++) { const a = (i / 8) * Math.PI, r = 2.6; P.push(fluff(KP(GEO.sph, [0x3a7a30, 0x4a9a38, 0x5aae40][i % 3], Math.cos(a) * r * 0.9, 4.2 + Math.sin(a) * 1.4, (i % 2) * 0.3 - 0.15, 1.5, 1.1, 1.2), [0, 5, 0], 0.6)); }
+      for (let i = 0; i < 10; i++) { const a = (i / 9) * Math.PI, r = 2.8; P.push(KP(GEO.ico0, [0xf05a8a, 0xffe070, 0xffffff][i % 3], Math.cos(a) * r * 0.9, 4.3 + Math.sin(a) * 1.5, 0.55, 0.22, 0.16, 0.1)); }
+      Gl.push(KP(GEO.oct, 0xd8ffb0, 0, 5.9, 0.2, 0.5, 0.7, 0.3));
+      break;
+    case 'bridge': { // ponte de troncos e tábuas sobre o rio (ao longo de z)
+      const L = 7.2;
+      for (let i = 0; i < 12; i++) { const z = -L / 2 + (i + 0.5) * (L / 12); P.push(KP(GEO.box, i % 2 ? WOOD : 0x7a4e2c, 0, 0.32 + Math.sin((z / L + 0.5) * Math.PI) * 0.25, z, 2.3, 0.12, L / 12 - 0.04, 0, 0, (i % 3 - 1) * 0.03)); }
+      for (const x of [-1.15, 1.15]) {
+        P.push(KP(GEO.cyl, DWOOD, x, 0.2, 0, 0.32, L + 0.6, 0.32, Math.PI / 2, 0, 0));
+        for (const z of [-L / 2, 0, L / 2]) P.push(KP(GEO.cyl6, DWOOD, x, 0.75, z, 0.14, 1.1 + (z ? 0 : 0.25), 0.14));
+        P.push(KP(GEO.box, 0xb89a6a, x, 1.15, 0, 0.05, 0.05, L));
+      }
+      P.push(KP(GEO.sphH, 0x4e8a34, 1.15, 0.36, 2.2, 0.6, 0.18, 0.9));
+      break;
+    }
+    case 'lily': // vitórias-régias com flor
+      for (let i = 0; i < 4; i++) { const a = i * 1.7, r = i ? 0.55 : 0; P.push(KP(GEO.cyl, i % 2 ? 0x3e8a34 : 0x52a040, Math.cos(a) * r, 0, Math.sin(a) * r, 0.7 - (i % 2) * 0.2, 0.03, 0.7 - (i % 2) * 0.2)); }
+      P.push(KP(GEO.cone, 0xf8a0c0, 0.1, 0.12, 0.05, 0.28, 0.22, 0.28));
+      P.push(KP(GEO.sphLow, 0xffe070, 0.1, 0.2, 0.05, 0.1));
+      break;
+    case 'reeds': // juncos na beira da água
+      for (let i = 0; i < 9; i++) { const t = (i - 4) * 0.2, h = 0.9 + ((i * 7) % 4) * 0.25; P.push(KP(GEO.blade3, i % 2 ? 0x5a8a3a : 0x7aa848, t, h / 2, ((i * 3) % 3) * 0.12 - 0.12, 0.08, h, 0.04, 0.1 * (i % 3 - 1), i, 0.1 * (i % 2 ? 1 : -1))); if (i % 3 === 0) P.push(KP(GEO.cyl6, 0x6a4a2a, t, h + 0.1, ((i * 3) % 3) * 0.12 - 0.12, 0.08, 0.3, 0.08)); }
+      break;
+    case 'magicFlower': // flores que brilham (elementos mágicos do Éden)
+      for (let i = 0; i < 3; i++) { const a = i * 2.1, r = i ? 0.25 : 0, x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.35 + (i % 2) * 0.15;
+        P.push(KP(GEO.blade3, 0x4a8a34, x, h / 2, z, 0.03, h, 0.03));
+        Gl.push(KP(GEO.oct, [0x9affe0, 0xe0a0ff, 0xfff08a][i], x, h + 0.06, z, 0.16, 0.12, 0.16)); }
+      break;
+    case 'hedge': // folhagem densa no alto da mata
+      for (let i = 0; i < 6; i++) { const a = i * 1.1, r = i ? 0.7 : 0; P.push(fluff(KP(GEO.sph, [0x2e6a2a, 0x3a7e30, 0x4a9038][i % 3], Math.cos(a) * r, 0.5 + (i ? 0 : 0.35), Math.sin(a) * r, 1.6 - (i % 2) * 0.3, 1.2, 1.6 - (i % 2) * 0.3), [0, 0.4, 0])); }
+      for (let i = 0; i < 4; i++) { const a = i * 1.7 + 0.5; P.push(KP(GEO.sphLow, [0xf8e070, 0xf05a8a][i % 2], Math.cos(a) * 0.95, 0.75 + (i % 2) * 0.3, Math.sin(a) * 0.95, 0.14)); }
+      break;
+    case 'rootVines': // raízes grossas descendo pela parede (Caminho das Raízes), com esporos
+      for (let i = 0; i < 4; i++) {
+        const x = -0.6 + i * 0.4, top = 3.6, len = 2.4 + ((i * 5) % 3) * 0.5;
+        P.push(KP(GEO.taper, i % 2 ? 0x5a4028 : 0x4a3420, x, top - len / 2, 0.15, 0.22, len, 0.22, 0, 0, (i % 3 - 1) * 0.12));
+        P.push(KP(GEO.cone, 0x4a3420, x + (i % 2 ? 0.2 : -0.2), 0.25, 0.35, 0.3, 0.7, 0.3, 0.9, 0, (i % 2 ? -0.5 : 0.5)));
+      }
+      Gl.push(KP(GEO.sphLow, 0x6affd0, -0.2, 1.4, 0.32, 0.12)); Gl.push(KP(GEO.sphLow, 0x6affd0, 0.35, 2.1, 0.3, 0.1)); Gl.push(KP(GEO.sphLow, 0x9affe0, 0.1, 0.9, 0.34, 0.08));
+      break;
+    case 'fallRock': // borda de pedra com musgo no alto da cachoeira (ao longo de x, face em +z)
+      for (let i = 0; i < 5; i++) { const x = (i - 2) * 0.95; P.push(KP(GEO.dod, i % 2 ? STONE : DSTONE, x, 0, 0.1 + (i % 2) * 0.15, 1.2, 0.7, 1.0, i, i * 2, 0)); }
+      P.push(KP(GEO.sphH, 0x4e8a34, 0, 0.3, 0, 4.4, 0.4, 1.2));
+      break;
     default:
+      if (name.startsWith('rootArch')) { // arco de raiz sobre a trilha: vão de n tiles (ao longo de x), com musgo, cipós e esporos
+        const n = +name.slice(8) || 6, A = (n * 2) / 2, Hh = 4.6;
+        for (const [off, th, c] of [[0, 1, 0x5a4028], [0.45, 0.55, 0x4a3420]]) {
+          const seg = 10;
+          for (let i = 0; i < seg; i++) {
+            const a0 = Math.PI - (i / seg) * Math.PI, a1 = Math.PI - ((i + 1) / seg) * Math.PI;
+            const x0 = Math.cos(a0) * A, y0 = Math.sin(a0) * Hh + (off ? 0.3 : 0), x1 = Math.cos(a1) * A, y1 = Math.sin(a1) * Hh + (off ? 0.3 : 0);
+            const len = Math.hypot(x1 - x0, y1 - y0), t = Math.abs(i + 0.5 - seg / 2) / (seg / 2);
+            P.push(KP(GEO.cyl6, c, (x0 + x1) / 2, (y0 + y1) / 2, off * Math.sin(i), (0.45 + t * 0.4) * th, len + 0.2, (0.45 + t * 0.4) * th, 0, 0, -Math.atan2(x1 - x0, y1 - y0)));
+          }
+        }
+        for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) P.push(KP(GEO.cone, 0x4a3420, sx * (A + 0.3 + k * 0.3), 0.3, (k - 1) * 0.5, 0.45, 1.4, 0.45, (k - 1) * 0.4, 0, -sx * (0.7 + k * 0.2)));
+        for (let i = 0; i < 5; i++) { const x = (i - 2) / 2.5 * A * 0.7, y = Math.sqrt(Math.max(0, 1 - (x / A) ** 2)) * Hh; P.push(KP(GEO.sphH, 0x4e8a34, x, y + 0.35, 0, 0.9, 0.3, 0.7)); P.push(KP(GEO.box, 0x3e7a2e, x + 0.2, y - 0.7, 0.1, 0.07, 1.4 - (i % 2) * 0.5, 0.07)); }
+        for (let i = 0; i < 6; i++) { const x = (i - 2.5) / 3 * A * 0.8, y = Math.sqrt(Math.max(0, 1 - (x / A) ** 2)) * Hh; Gl.push(KP(GEO.sphLow, i % 2 ? 0x6affd0 : 0xb0ffe0, x, y - 0.5, 0.3, 0.14)); }
+        break;
+      }
       if (name.startsWith('bunting')) { // bandeirolas pendentes de comprimento L (ao longo de x), catenária rasa
         const L = +name.slice(7) || 10, n = Math.round(L / 0.7), sag = L * 0.08;
         const yAt = (t) => -sag * (1 - (2 * t - 1) ** 2);

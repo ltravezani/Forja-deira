@@ -46,7 +46,7 @@ export function buildTitleBackdrop() {
   spawnNpcs(G.L);
   G.explored = new Uint8Array(G.L.W * G.L.H);
   for (const n of G.npcs) n.label.style.display = 'none';
-  if (G.townPortal) G.townPortal.label.style.display = 'none';
+  for (const pt of [G.townPortal, G.edenPortal]) if (pt) pt.label.style.display = 'none';
 }
 
 /** Entra no jogo com o personagem `i` do save. */

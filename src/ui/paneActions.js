@@ -16,6 +16,8 @@ import { renderPane } from './drawer.js';
 import { buildSlots, hudTick } from './hud.js';
 import { selectedItem } from './inventoryPane.js';
 
+/** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
+const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !R.POTIONS[it.id].revive);
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
   const b = e.target.closest('[data-act]');
@@ -35,6 +37,8 @@ function paneAction(e) {
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
       if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
+      // clique duplo numa poção: bebe direto do inventário
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
       break;
@@ -44,7 +48,7 @@ function paneAction(e) {
     case 'aeqnow': autoEquip(true); break;
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
-    case 'usepot': usePotion(it.id); break;
+    case 'usepot': if (it) usePotion(it.id); if (!selectedItem()) UI.sel = null; break;
     case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
     case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
     case 'petsell': sendPetToSell(); break;
@@ -79,7 +83,11 @@ export function initPaneActions() {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
     e.preventDefault();
-    if (c.dataset.act === 'selbag') { const i = +c.dataset.i; if (G.ch.bag[i] && G.ch.bag[i].slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); } }
+    if (c.dataset.act === 'selbag') {
+      const i = +c.dataset.i, it = G.ch.bag[i];
+      if (it && it.slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); }
+      else if (drinkable(it)) { usePotion(it.id); persist(); hudTick(); }
+    }
     else if (unequipSlot(c.dataset.slot)) UI.sel = null;
     renderPane();
   });
