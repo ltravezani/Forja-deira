@@ -8903,7 +8903,15 @@ const postMat = new THREE.ShaderMaterial({
   },
   vertexShader: FS_VERT,
   fragmentShader: `
-    uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tBloomA; uniform sampler2D tBloomB;
+    // A profundidade precisa de amostrador highp: no GLSL ES o sampler2D é lowp por padrão e GPUs de
+    // celular (Mali, Adreno) devolvem a leitura em meia precisão. Perto de 1,0 isso vira degraus de
+    // ~0,0005, e as normais reconstruídas dos degraus desenhavam linhas horizontais no chão.
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+    uniform highp sampler2D tDepth;
+    #else
+    uniform sampler2D tDepth;
+    #endif
+    uniform sampler2D tColor; uniform sampler2D tBloomA; uniform sampler2D tBloomB;
     uniform vec2 uTexel; uniform float uWidth; uniform float uNear; uniform float uFar; uniform vec2 uFade;
     uniform float uInk; uniform vec2 uEdge; uniform float uOutline; uniform float uBloom; uniform float uVignette;
     uniform vec3 uTint; uniform float uSat; uniform float uAspect;
@@ -8911,7 +8919,7 @@ const postMat = new THREE.ShaderMaterial({
     uniform mat4 uCamWorld; uniform float uTime; uniform vec3 uHFog; uniform vec3 uHFogP;
     uniform mat4 uProjInv; uniform float uNormalEdge; uniform float uSilWidth;
     varying vec2 vUv;
-    float lin(vec2 uv) { float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+    float lin(vec2 uv) { highp float d = texture2D(tDepth, uv).x; return uNear * uFar / (uFar - d * (uFar - uNear)); }
     // posição em espaço de visão reconstruída da profundidade
     vec3 vpos(vec2 uv) { vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).x * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
     void main() {
