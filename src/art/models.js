@@ -3,7 +3,6 @@
 import { GEO, part, pivot } from './geometry.js';
 import { animateGltf, buildGltfHumanoid, hasGltf } from './gltfModels.js';
 import { disposeObject, glowMat, toon, toonOwn } from './materials.js';
-import { toonMaterial } from './stylize.js';
 import { texDetail, texRock } from './textures.js';
 
 /** Atalho: conjunto de textura de detalhe por tipo de superfície. */
@@ -564,24 +563,6 @@ export function addContactShadow(m, spec) {
   m.blob = blob;
 }
 
-/** Asas (item ou evolução de 3ª classe): membrana com brilho suave. */
-export function attachWings(model, color, size) {
-  const holder = pivot(model.torso || model.body, 0, 0.55, -0.28);
-  const mat = toonMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.88, emissive: new THREE.Color(color), emissiveIntensity: 0.5 }, { rim: 0.5 });
-  const wings = [];
-  for (const sx of [-1, 1]) {
-    const p = pivot(holder, sx * 0.1, 0, 0);
-    const w = new THREE.Mesh(GEO.wing, mat);
-    w.scale.set(sx * size, size, size);
-    w.position.y = 0.1;
-    p.add(w);
-    p.rotation.y = sx * 0.5;
-    wings.push(p);
-  }
-  model.wingPivots = wings;
-  return holder;
-}
-
 /** Anima qualquer modelo. s: {t, dt, moving, run, attack (0..1), dead, speed, cast}; nos animados escolhe o clipe. */
 export function animateModel(m, s) {
   const t = s.t;
@@ -640,11 +621,7 @@ export function animateModel(m, s) {
     m.arms[0].rotation.x = -k * 2.2 + Math.sin(ph * 0.6) * 0.3 * mv;
     m.arms[1].rotation.x = -k * 2.2 - Math.sin(ph * 0.6) * 0.3 * mv;
   }
-  if (m.wingPivots) {
-    const f = Math.sin(t * (mv ? 7 : 2.4)) * 0.22;
-    m.wingPivots[0].rotation.y = -0.5 - f;
-    m.wingPivots[1].rotation.y = 0.5 + f;
-  }
+  if (m.wingRig) m.wingRig.update(t, mv);
   if (m.fx) for (const fx of m.fx) fx.update(t);
 }
 export function flashModel(m, color, k) {

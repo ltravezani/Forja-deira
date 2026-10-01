@@ -113,7 +113,7 @@ export function buildItemModel(kind, o) {
     part(GEO.oct, toon(tintHex(0x9a7a3a, col, 0.2), 0, 0, { metal: 0.9, rough: 0.3 }), 0.24, 0.34, 0.08, 0, -0.16, 0, h);
     part(GEO.oct, gem, 0.14, 0.2, 0.1, 0, -0.16, 0.02, h, false);
     part(GEO.sphS, halo, 0.36, 0.36, 0.36, 0, -0.16, 0, h, false);
-  } else if (kind === 'wings') {
+  } else if (kind === 'wings' || kind === 'wings2') {
     h.position.y = 0.1; h.rotation.x = -1.1;
     const m = shared('wing|' + col, () => toonMaterial({ color: col, side: THREE.DoubleSide, transparent: true, opacity: 0.9, emissive: new THREE.Color(col), emissiveIntensity: 0.45 }, { rim: 0.5 }));
     for (const sx of [-1, 1]) {
@@ -183,7 +183,7 @@ const SPARK_FS = 'uniform vec3 uColor; uniform float uK; varying float vA;' +
   ' gl_FragColor = vec4(uColor * (a + cr * 0.8) * vA * uK, 1.0); }';
 
 /** Nuvem de faíscas subindo pelo eixo mais longo de uma caixa (coordenadas locais do alvo). */
-function sparkles(parent, box, n, color, k, size) {
+export function sparkles(parent, box, n, color, k, size) {
   const sz = new THREE.Vector3(); box.getSize(sz);
   const ax = sz.x >= sz.y && sz.x >= sz.z ? [1, 0, 0] : sz.y >= sz.z ? [0, 1, 0] : [0, 0, 1];
   const seed = new Float32Array(n * 4);

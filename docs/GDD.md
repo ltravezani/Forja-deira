@@ -163,6 +163,8 @@ Atributos dos itens: **+nível (0–15)**, **Sorte** (+5% crítico, +25% no Soul
 
 Requisito de atributo: `(15 + 38·tier + 4·plus) × (1 para armas, 0,7 para armaduras)`.
 
+**Asas.** Presas entre as escápulas (`art/wings.js`). Asas de Pena, do Espírito, do Tempo e Celestiais são de penas (fileiras de penas com textura de haste e barbas, fundidas numa malha por fileira); Dracônicas e da Tempestade são de membrana com dedos de osso. A asa normal é pequena. No Ferreiro, uma asa normal **+12 ou mais** pode virar **Ascendida** com 10 Jewels de cada tipo (Bless, Soul, Chaos e Life, gastas mesmo na falha): chance de 10% no +12 e +5% a cada nível acima (25% no +15). Sucesso: a asa fica bem maior, ganha mais penas, segunda fileira de coberteiras, ossos dourados, joia nas costas e faíscas, soma +10% de dano, +6% de absorção e +5% de HP e mantém o +nível (o refino continua até +15). Falha: volta a +0, a menos que o Talismã da Sorte esteja ligado. Do +10 em diante as penas pulsam na cor do refino.
+
 ### 6.2 Raridade e Magic Find
 
 Chance-base de raridade, dado que caiu um item: Mágico 20%, Excelente 4,5%, Ancestral 1,1%, Lendário 0,28%.

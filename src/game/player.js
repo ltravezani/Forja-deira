@@ -1,6 +1,7 @@
 // ---------- jogador: status, modelo, movimento, alvo e recuperação ----------
 import { attachHeroAura, attachRefineFx, refineColor, refineK } from '../art/items.js';
-import { animateModel, attachWings, buildHumanoid, disposeModel, flashModel } from '../art/models.js';
+import { animateModel, buildHumanoid, disposeModel, flashModel } from '../art/models.js';
+import { attachWings } from '../art/wings.js';
 import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
 import { $, dist2, R, TILE } from '../core/util.js';
@@ -80,8 +81,9 @@ function playerLook(ch) {
 export function buildCharacterModel(ch) {
   const m = buildHumanoid(playerLook(ch));
   const w = ch.equip.wings;
-  if (w) attachWings(m, parseInt(R.RARITY[w.rarity].color.slice(1), 16), 0.75 + w.tier * 0.08);
-  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], 0.8);
+  // Asas Dracônicas e da Tempestade são de membrana; as outras, de penas
+  if (w) attachWings(m, { color: parseInt(R.RARITY[w.rarity].color.slice(1), 16), tier: w.tier, stage: w.stage || 0, plus: w.plus || 0, style: w.tier === 2 || w.tier === 4 ? 'membrane' : 'feather' });
+  else if (ch.tier >= 2) attachWings(m, { color: { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], tier: 1, stage: 0, style: ch.cls === 'dk' || ch.cls === 'nc' ? 'membrane' : 'feather' });
   m.orb = m.weapon ? m.weapon.children.find((c) => c.userData.orb) || null : null;
   applyRefine(m, ch.equip);
   return m;

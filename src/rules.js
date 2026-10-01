@@ -378,9 +378,14 @@
   const BUFF_POTIONS = ['spd', 'cdr', 'str', 'agi', 'vit', 'ene'];
   /** Talismãs: consumidos no Ferreiro. */
   const TALISMANS = {
-    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
+    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
 
+  /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
+  function wingBonus(it) {
+    const t = it.tier, p = it.plus || 0, up = it.stage ? 1 : 0;
+    return { dmg: 12 + t * 5 + p + up * 10, red: 12 + t * 3 + p * 0.5 + up * 6, hp: up * 5 };
+  }
   function plusBonus(p) {
     return p * 3 + (p > 9 ? (p - 9) * (p - 8) : 0);
   }
@@ -392,7 +397,7 @@
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
     else if (it.slot === 'pendant') base = PENDANT_NAMES[it.tier];
-    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)];
+    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)] + (it.stage ? ' Ascendidas' : '');
     else base = PIECE[it.slot] + ' ' + (it.slot === 'armor' ? 'de ' : 'de ') + SET_NAMES[it.cls][it.tier];
     const pre = it.rarity === 'comum' ? '' : RARITY[it.rarity].name + ' ';
     return pre + base + (it.plus ? ' +' + it.plus : '');
@@ -424,8 +429,10 @@
       add('dmgPct', 2 + t);
       if (it.addOpt) add('dmgPct', it.addOpt / 4);
     } else if (it.slot === 'wings') {
-      add('dmgPct', 12 + t * 5 + (it.plus || 0));
-      add('dmgRed', 12 + t * 3 + (it.plus || 0) * 0.5);
+      const wb = wingBonus(it);
+      add('dmgPct', wb.dmg);
+      add('dmgRed', wb.red);
+      if (wb.hp) add('hpPct', wb.hp);
     } else {
       add('armorDef', Math.round(3 + t * 8 + t * t * 1.2 + pb / 1.4));
       if (it.addOpt) add('armorDef', it.addOpt);
@@ -445,7 +452,11 @@
     if (s.armorDef) L.push(['Defesa', s.armorDef]);
     if (it.slot === 'ring') L.push(['HP máximo', '+' + Math.round(12 + it.tier * 30 + plusBonus(it.plus || 0) * (1 + it.tier * 0.2) * 2)]);
     if (it.slot === 'pendant') L.push(['Dano', '+' + (2 + it.tier) + '%']);
-    if (it.slot === 'wings') { L.push(['Dano', '+' + (12 + it.tier * 5 + (it.plus || 0)) + '%']); L.push(['Absorção', '+' + (12 + it.tier * 3 + (it.plus || 0) * 0.5) + '%']); }
+    if (it.slot === 'wings') {
+      const wb = wingBonus(it);
+      L.push(['Dano', '+' + wb.dmg + '%']); L.push(['Absorção', '+' + wb.red + '%']);
+      if (wb.hp) L.push(['HP máximo', '+' + wb.hp + '%']);
+    }
     return L;
   }
   function itemValue(it) {
@@ -453,7 +464,7 @@
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     const r = RARITY[it.rarity].order;
-    return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3));
+    return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
   /** Gold recebido ao vender `n` unidades (padrão: a pilha toda) — metade do valor. */
   function sellValue(it, n) {
@@ -698,8 +709,28 @@
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
-  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos). */
-  const talismanUseful = (jewel) => jewel === 'chaos';
+  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos e evolução de asa). */
+  const talismanUseful = (jewel) => jewel === 'chaos' || jewel === 'wing';
+  /**
+   * Evolução de asa no Ferreiro: asa normal +12 ou mais vira asa Ascendida.
+   * Custa 10 de cada Jewel (gastas mesmo na falha). Chance 10% no +12 e +5% a
+   * cada +nível acima (25% no +15). Falha: a asa volta a +0 (o Talismã da
+   * Sorte mantém o +nível). Sucesso: mantém o +nível e continua refinável até +15.
+   */
+  const WING_UP = { minPlus: 12, jewels: { bless: 10, soul: 10, chaos: 10, life: 10 }, base: 0.1, perPlus: 0.05 };
+  function wingUpgradeChance(it) {
+    if (!it || it.slot !== 'wings' || it.stage || (it.plus || 0) < WING_UP.minPlus) return 0;
+    return Math.round((WING_UP.base + (Math.min(15, it.plus) - WING_UP.minPlus) * WING_UP.perPlus) * 100) / 100;
+  }
+  function applyWingUpgrade(it, roll, opts) {
+    const ch = wingUpgradeChance(it);
+    if (ch <= 0) return { ok: false, invalid: true, chance: 0 };
+    const ok = roll < ch;
+    if (ok) { it.stage = 1; return { ok, chance: ch }; }
+    if (opts && opts.talisman) return { ok, chance: ch, protected: true };
+    it.plus = 0;
+    return { ok, chance: ch };
+  }
   /**
    * Aplica uma Jewel. opts.talisman: Talismã da Sorte em uso — se a fusão Chaos
    * falhar, o item mantém o +nível (protected: true) em vez de voltar a +0.
@@ -932,7 +963,7 @@
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenLevel, rollEdenDrop,
-    upgradeChance, applyUpgrade, talismanUseful, monsterStats,
+    upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
