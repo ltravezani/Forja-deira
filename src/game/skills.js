@@ -16,7 +16,7 @@ import { face } from './movement.js';
 import { recalc } from './player.js';
 import { spawnProjectile } from './projectiles.js';
 import { inSafe } from './zones.js';
-import { walkableR } from '../world/grid.js';
+import { lineClear, walkableR } from '../world/grid.js';
 
 export function skillUnlocked(id) {
   const sk = R.SKILLS[id];
@@ -24,15 +24,28 @@ export function skillUnlocked(id) {
 }
 export function resetCooldowns() { G.cds = {}; G.skillQueue = null; }
 export function cdLeft(id) { return Math.max(0, (G.cds[id] || 0) - G.time); }
-/** Monstro vivo mais próximo do herói dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
-function autoTargetPoint(range, fx, fz) {
+/**
+ * Monstro vivo mais próximo do herói, dentro do alcance e à vista (sem parede no meio).
+ * Monstros atrás de paredes do labirinto são ignorados: mirar neles só gasta a habilidade na parede.
+ */
+const _cands = [];
+export function visibleMonster(range) {
   const p = G.player;
-  let best = null, bd = Infinity;
+  _cands.length = 0;
   for (const m of G.monsters) {
     if (m.dead) continue;
     const d = dist2(m, p), r = range + (m.radius || 0);
-    if (d <= r * r && d < bd) { bd = d; best = m; }
+    if (d <= r * r) _cands.push({ m, d });
   }
+  if (!_cands.length) return null;
+  _cands.sort((a, b) => a.d - b.d);
+  for (const c of _cands) if (lineClear(G.L, p.x, p.z, c.m.x, c.m.z, 0)) { _cands.length = 0; return c.m; }
+  _cands.length = 0;
+  return null;
+}
+/** Monstro à vista mais próximo dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
+function autoTargetPoint(range, fx, fz) {
+  const p = G.player, best = visibleMonster(range);
   if (best) return { x: best.x, z: best.z };
   if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };

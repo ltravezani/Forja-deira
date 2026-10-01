@@ -8,7 +8,7 @@ import { autoEquip, autoEquipOn } from '../game/inventory.js';
 import { updateWorld } from '../game/world.js';
 import { updateHover } from '../input/picking.js';
 import { Drag } from '../ui/dragdrop.js';
-import { renderPane } from '../ui/drawer.js';
+import { renderPaneIfChanged } from '../ui/drawer.js';
 import { hudTick } from '../ui/hud.js';
 import { updateOverlay } from '../ui/labels.js';
 import { drawMinimap } from '../ui/minimap.js';
@@ -29,7 +29,7 @@ export function updatePlayScene(dt) {
   if (G.autoEqT > 0 && (G.autoEqT -= dt) <= 0) { G.autoEqT = 0; if (autoEquipOn()) guard('auto-equipar', autoEquip, false); }
   if ((T.pane -= dt) <= 0) {
     T.pane = L.paneInterval;
-    if (UI.paneDirty && !$('#drawer').hidden && !paneBusy()) guard('painel', renderPane);
+    if (UI.paneDirty && !$('#drawer').hidden && !paneBusy()) guard('painel', renderPaneIfChanged);
   }
   return sim;
 }

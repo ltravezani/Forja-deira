@@ -19,7 +19,7 @@ import { enterDungeon, enterEden, enterTower, enterTown, inSafe } from './game/z
 import { edenState } from './game/eden.js';
 import { skillIconURI } from './ui/icons.js';
 import { closeModal, openNpc } from './ui/npcDialogs.js';
-import { findPath } from './world/grid.js';
+import { findPath, lineClear } from './world/grid.js';
 import { getLevelMeshes } from './world/level.js';
 
 export function installDebugHook(loopStats) {
@@ -28,6 +28,6 @@ export function installDebugHook(loopStats) {
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
-    enterEden, edenState,
+    enterEden, edenState, lineClear,
   };
 }

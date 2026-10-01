@@ -230,7 +230,7 @@ input, select { font-family: inherit; }
 .tabs button { background: transparent; border: 1px solid transparent; border-bottom: none; padding: 7px 10px; font-size: 14px; color: var(--muted); border-radius: 4px 4px 0 0; }
 .tabs button.on { color: var(--gold); background: var(--panel-2); border-color: var(--edge); }
 .tabs .x { margin-left: auto; font-size: 18px; }
-.pane { flex: 1; overflow-y: auto; padding: 14px 16px 24px; }
+.pane { flex: 1; overflow-y: auto; padding: 14px 16px 24px; contain: content; }
 .pane h3 { font-family: var(--f-display); font-weight: 400; font-size: 24px; margin: 4px 0 8px; color: var(--gold); letter-spacing: .01em; }
 .pane h4 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 700; }
 .pane p { margin: 6px 0; line-height: 1.45; color: #d9d0bf; }
@@ -269,12 +269,14 @@ input, select { font-family: inherit; }
 .cell .p { position: absolute; left: 2px; top: 0; font-size: 10px; font-family: var(--f-num); color: var(--gold); }
 .cell .n { position: absolute; right: 2px; top: 0; font-size: 9px; color: #b9a4ff; font-weight: 700; }
 .cell.bad .gl { opacity: .5; filter: grayscale(.6); }
-.cell.rf { border-color: var(--rf) !important; animation: rfPulse 2.2s ease-in-out infinite; }
+/* brilho do refino: o pulso anima só a opacidade de uma camada própria (não repinta a célula a cada quadro) */
+.cell.rf { border-color: var(--rf) !important; box-shadow: inset 0 0 6px color-mix(in srgb, var(--rf) 45%, transparent), 0 0 6px color-mix(in srgb, var(--rf) 55%, transparent); }
+.cell.rf .gl::after { content: ''; position: absolute; inset: 0; border-radius: 3px; pointer-events: none; box-shadow: inset 0 0 12px color-mix(in srgb, var(--rf) 75%, transparent); opacity: 0; will-change: opacity; animation: rfPulse 2.2s ease-in-out infinite; }
 .cell.rf .p { color: var(--rf); text-shadow: 0 0 4px var(--rf), 0 1px 2px #000; font-weight: 700; }
 .cell.rf .gl img { filter: drop-shadow(0 2px 2px rgba(0,0,0,.7)) drop-shadow(0 0 4px var(--rf)); }
-.cell.rf15 { animation-duration: 1.4s; }
-.cell.rf15::before { content: ''; position: absolute; inset: -40%; z-index: 1; pointer-events: none; background: linear-gradient(115deg, transparent 40%, color-mix(in srgb, var(--rf) 55%, transparent) 50%, transparent 60%); animation: rfSweep 2.6s linear infinite; }
-@keyframes rfPulse { 0%, 100% { box-shadow: inset 0 0 6px color-mix(in srgb, var(--rf) 45%, transparent), 0 0 4px color-mix(in srgb, var(--rf) 40%, transparent); } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--rf) 75%, transparent), 0 0 9px var(--rf); } }
+.cell.rf15 .gl::after { animation-duration: 1.4s; }
+.cell.rf15::before { content: ''; position: absolute; inset: -40%; z-index: 1; pointer-events: none; background: linear-gradient(115deg, transparent 40%, color-mix(in srgb, var(--rf) 55%, transparent) 50%, transparent 60%); will-change: transform; animation: rfSweep 2.6s linear infinite; }
+@keyframes rfPulse { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes rfSweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
@@ -459,7 +461,7 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
   .castbar { bottom: 170px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cell.rf, .cell.rf15::before { animation: none; }
+  .cell.rf .gl::after, .cell.rf15::before { animation: none; }
   .toast.show { animation-duration: .01s; }
   #hurtfx.low { animation: none; opacity: .3; }
 }
@@ -6430,6 +6432,7 @@ const CONFIG = {
   auto: {
     skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
+    scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
   },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
@@ -11512,7 +11515,7 @@ return { animateCritter, buildCritter, buildVillager, mergeModelParts };
 })();
 
 // ---- game/skills.js ----
-const { castSkill, castSlot, cdLeft, flushSkillBuffer, requestCast, resetCooldowns, skillUnlocked } = (() => {
+const { castSkill, castSlot, cdLeft, flushSkillBuffer, requestCast, resetCooldowns, skillUnlocked, visibleMonster } = (() => {
 // ---------- habilidades ----------
 
 function skillUnlocked(id) {
@@ -11521,15 +11524,28 @@ function skillUnlocked(id) {
 }
 function resetCooldowns() { G.cds = {}; G.skillQueue = null; }
 function cdLeft(id) { return Math.max(0, (G.cds[id] || 0) - G.time); }
-/** Monstro vivo mais próximo do herói dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
-function autoTargetPoint(range, fx, fz) {
+/**
+ * Monstro vivo mais próximo do herói, dentro do alcance e à vista (sem parede no meio).
+ * Monstros atrás de paredes do labirinto são ignorados: mirar neles só gasta a habilidade na parede.
+ */
+const _cands = [];
+function visibleMonster(range) {
   const p = G.player;
-  let best = null, bd = Infinity;
+  _cands.length = 0;
   for (const m of G.monsters) {
     if (m.dead) continue;
     const d = dist2(m, p), r = range + (m.radius || 0);
-    if (d <= r * r && d < bd) { bd = d; best = m; }
+    if (d <= r * r) _cands.push({ m, d });
   }
+  if (!_cands.length) return null;
+  _cands.sort((a, b) => a.d - b.d);
+  for (const c of _cands) if (lineClear(G.L, p.x, p.z, c.m.x, c.m.z, 0)) { _cands.length = 0; return c.m; }
+  _cands.length = 0;
+  return null;
+}
+/** Monstro à vista mais próximo dentro do alcance; sem nenhum, vale o ponto dado (ou à frente do herói). */
+function autoTargetPoint(range, fx, fz) {
+  const p = G.player, best = visibleMonster(range);
   if (best) return { x: best.x, z: best.z };
   if (fx != null) return { x: fx, z: fz };
   return { x: p.x + Math.sin(p.rot) * 4, z: p.z + Math.cos(p.rot) * 4 };
@@ -11954,7 +11970,7 @@ function flushSkillBuffer() {
   G.skillQueue = null;
   if (G.time <= q.until) castSlot(q.i, q.tx, q.tz);
 }
-return { castSkill, castSlot, cdLeft, flushSkillBuffer, requestCast, resetCooldowns, skillUnlocked };
+return { castSkill, castSlot, cdLeft, flushSkillBuffer, requestCast, resetCooldowns, skillUnlocked, visibleMonster };
 })();
 
 // ---- ui/feedback.js ----
@@ -12169,6 +12185,8 @@ function hudTick() {
   setText('expTxt', 'EXP ' + pct.toFixed(2) + '%' + (ch.points ? ' · ' + ch.points + ' pontos livres' : ''));
   setHtml('lvlTxt', '<b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
   setText('goldTxt', fmt(ch.gold));
+  const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
+  if (ig && ig.textContent !== gt) ig.textContent = gt;
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();
@@ -14589,32 +14607,33 @@ function toggleAutoSkill(id) {
   else if (autoSkillAllowed(id)) ch.autoSkills.push(id);
 }
 
-/** Algum monstro vivo dentro do alcance da habilidade? */
-function monsterNear(p, reach) {
-  for (const m of G.monsters) {
-    if (m.dead) continue;
-    const r = reach + (m.radius || 0);
-    if (dist2(m, p) <= r * r) return true;
-  }
-  return false;
-}
+/** Alcance em que a habilidade procura alvo sozinha. */
+const reachOf = (sk) => Math.max(sk.range || 0, sk.radius || 0) || CONFIG.auto.skillReach;
 /**
  * Lança sozinha a primeira habilidade marcada como automática que estiver pronta,
  * com MP/AG suficientes e um monstro ao alcance. As de recarga longa (buffs,
  * invocações, golpes fortes) têm prioridade; as rápidas preenchem o resto.
  */
-function autoCast() {
+function autoCast(dt) {
   const p = G.player, ch = G.ch, st = G.st;
   if (!ch.autoSkills || !ch.autoSkills.length || !p || !p.alive || p.dash || G.skillQueue) return;
   if (G.time < p.lockUntil || G.zone === 'town' || inSafe()) return;
   const ids = ch.autoSkills.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
+  if (!ids.length) return;
+  if ((scanT -= dt) > 0) return;
+  scanT = CONFIG.auto.scanInterval;
+  // um só alvo por varredura: o monstro à vista mais próximo (paredes bloqueiam)
+  const m = visibleMonster(Math.max(...ids.map((id) => reachOf(R.SKILLS[id]))));
+  if (!m) return;
+  const d2 = dist2(m, p);
   ids.sort((a, b) => R.SKILLS[b].cd - R.SKILLS[a].cd);
   for (const id of ids) {
     const sk = R.SKILLS[id], c = R.skillCost(st, sk);
     if (G.mp < c.mp || G.ag < c.ag) continue;
     if (sk.kind === 'heal' && G.hp > st.maxHp * CONFIG.auto.healBelow) continue;
-    if (!monsterNear(p, Math.max(sk.range || 0, sk.radius || 0) || CONFIG.auto.skillReach)) continue;
-    if (castSkill(id, null, null, { auto: true })) return;
+    const r = reachOf(sk) + (m.radius || 0);
+    if (d2 > r * r) continue;
+    if (castSkill(id, null, null, { auto: true })) { scanT = 0; return; }
   }
 }
 
@@ -14631,10 +14650,10 @@ function autoPetSell() {
   sendPetToSell((it) => autoSellable(it, base));
 }
 
-let sellTick = 0;
+let sellTick = 0, scanT = 0;
 function updateAutomation(dt) {
   if (!G.ch || !G.player) return;
-  autoCast();
+  autoCast(dt);
   sellTick -= dt;
   if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell) autoPetSell(); }
 }
@@ -17057,7 +17076,7 @@ function cellHtml(it, attrs, sel, ctx) {
     if (ctx && ctx.base != null && classOk(it)) {
       if (!reqOk(it)) up = '<span class="u r" title="Requisito não atendido">!</span>';
       else {
-        const d = cpWith(it) - ctx.base;
+        const d = (ctx.cp ? ctx.cp.get(it) : cpWith(it)) - ctx.base;
         if (d > 0) up = '<span class="u up" title="+' + fmt(d) + ' CP">▲</span>';
         else if (d < 0) up = '<span class="u dn" title="' + fmt(d) + ' CP">▼</span>';
       }
@@ -17139,11 +17158,15 @@ function paneInv() {
   const cnt = { all: ch.bag.length, mine: 0, other: 0, mat: 0 };
   ch.bag.forEach((it) => cnt[bagCat(it)]++);
   const f = UI.bagFilter || 'all';
-  const ups = ch.bag.filter((it) => classOk(it) && reqOk(it) && cpWith(it) > base).length;
-  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
+  // CP com cada peça da mochila, calculado uma vez por desenho (setas ▲▼ e contagem de melhorias)
+  const cpMap = new Map();
+  ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
+  let ups = 0;
+  cpMap.forEach((v) => { if (v > base) ups++; });
+  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · <span id="invGold">' + fmt(ch.gold) + '</span> Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const ctx = { base };
+  const ctx = { base, cp: cpMap };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {
@@ -17163,7 +17186,7 @@ return { paneInv, selectedItem };
 })();
 
 // ---- ui/drawer.js ----
-const { closeDrawer, initDrawer, openTab, refreshPaneSoon, renderPane } = (() => {
+const { closeDrawer, initDrawer, openTab, refreshPaneSoon, renderPane, renderPaneIfChanged } = (() => {
 // ---------- painel lateral (abas), menu do HUD e redesenho do painel ----------
 
 function openTab(t) {
@@ -17179,17 +17202,24 @@ function openTab(t) {
 function markMenu(t) {
   document.querySelectorAll('.menu [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
 }
-function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); }
+function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; }
 function refreshPaneSoon() { UI.paneDirty = true; }
-function renderPane() {
+/** Redesenho periódico (painel marcado como sujo): pula quando o HTML não mudou. */
+function renderPaneIfChanged() { renderPane(true); }
+function renderPane(onlyIfChanged) {
   UI.paneDirty = false;
   const pane = $('#pane');
   const st = pane.scrollTop;
   const f = { char: paneChar, inv: paneInv, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
   if (!f) return;
-  pane.innerHTML = f();
+  const html = f();
+  // nada mudou: não recria os ~60 elementos do painel (cada troca refaz layout, ícones e filtros)
+  if (onlyIfChanged === true && html === lastHtml && pane.firstChild) return;
+  lastHtml = html;
+  pane.innerHTML = html;
   pane.scrollTop = st;
 }
+let lastHtml = '';
 
 /** Abas do painel lateral e botões do menu do HUD. */
 function initDrawer() {
@@ -17199,7 +17229,7 @@ function initDrawer() {
   $('#btnPortal').addEventListener('click', townPortal);
   $('#btnPet').addEventListener('click', sendPetToSell);
 }
-return { closeDrawer, initDrawer, openTab, refreshPaneSoon, renderPane };
+return { closeDrawer, initDrawer, openTab, refreshPaneSoon, renderPane, renderPaneIfChanged };
 })();
 
 // ---- game/loot.js ----
@@ -17321,7 +17351,8 @@ function pickup(l) {
   removeLootVisual(l);
   const i = G.loot.indexOf(l);
   if (i >= 0) G.loot.splice(i, 1);
-  refreshPaneSoon();
+  // Gold não redesenha o painel inteiro: o HUD atualiza o valor no Inventário (hudTick)
+  if (l.type !== 'gold') refreshPaneSoon();
   return true;
 }
 /** Arco ao cair + rotação e pulsar do feixe de raridade. */
@@ -18282,7 +18313,7 @@ function installDebugHook(loopStats) {
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
-    enterEden, edenState,
+    enterEden, edenState, lineClear,
   };
 }
 return { installDebugHook };
@@ -18805,7 +18836,7 @@ function updatePlayScene(dt) {
   if (G.autoEqT > 0 && (G.autoEqT -= dt) <= 0) { G.autoEqT = 0; if (autoEquipOn()) guard('auto-equipar', autoEquip, false); }
   if ((T.pane -= dt) <= 0) {
     T.pane = L.paneInterval;
-    if (UI.paneDirty && !$('#drawer').hidden && !paneBusy()) guard('painel', renderPane);
+    if (UI.paneDirty && !$('#drawer').hidden && !paneBusy()) guard('painel', renderPaneIfChanged);
   }
   return sim;
 }

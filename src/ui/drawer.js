@@ -19,17 +19,24 @@ export function openTab(t) {
 function markMenu(t) {
   document.querySelectorAll('.menu [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
 }
-export function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); }
+export function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; }
 export function refreshPaneSoon() { UI.paneDirty = true; }
-export function renderPane() {
+/** Redesenho periódico (painel marcado como sujo): pula quando o HTML não mudou. */
+export function renderPaneIfChanged() { renderPane(true); }
+export function renderPane(onlyIfChanged) {
   UI.paneDirty = false;
   const pane = $('#pane');
   const st = pane.scrollTop;
   const f = { char: paneChar, inv: paneInv, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
   if (!f) return;
-  pane.innerHTML = f();
+  const html = f();
+  // nada mudou: não recria os ~60 elementos do painel (cada troca refaz layout, ícones e filtros)
+  if (onlyIfChanged === true && html === lastHtml && pane.firstChild) return;
+  lastHtml = html;
+  pane.innerHTML = html;
   pane.scrollTop = st;
 }
+let lastHtml = '';
 
 /** Abas do painel lateral e botões do menu do HUD. */
 export function initDrawer() {

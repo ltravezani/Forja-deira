@@ -18,7 +18,7 @@ function cellHtml(it, attrs, sel, ctx) {
     if (ctx && ctx.base != null && classOk(it)) {
       if (!reqOk(it)) up = '<span class="u r" title="Requisito não atendido">!</span>';
       else {
-        const d = cpWith(it) - ctx.base;
+        const d = (ctx.cp ? ctx.cp.get(it) : cpWith(it)) - ctx.base;
         if (d > 0) up = '<span class="u up" title="+' + fmt(d) + ' CP">▲</span>';
         else if (d < 0) up = '<span class="u dn" title="' + fmt(d) + ' CP">▼</span>';
       }
@@ -100,11 +100,15 @@ export function paneInv() {
   const cnt = { all: ch.bag.length, mine: 0, other: 0, mat: 0 };
   ch.bag.forEach((it) => cnt[bagCat(it)]++);
   const f = UI.bagFilter || 'all';
-  const ups = ch.bag.filter((it) => classOk(it) && reqOk(it) && cpWith(it) > base).length;
-  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · ' + fmt(ch.gold) + ' Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
+  // CP com cada peça da mochila, calculado uma vez por desenho (setas ▲▼ e contagem de melhorias)
+  const cpMap = new Map();
+  ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
+  let ups = 0;
+  cpMap.forEach((v) => { if (v > base) ups++; });
+  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · <span id="invGold">' + fmt(ch.gold) + '</span> Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
   h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
   h += '<div class="bag" id="bagGrid">';
-  const ctx = { base };
+  const ctx = { base, cp: cpMap };
   if (f === 'all') {
     for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
   } else {

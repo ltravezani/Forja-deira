@@ -130,7 +130,8 @@ export function pickup(l) {
   removeLootVisual(l);
   const i = G.loot.indexOf(l);
   if (i >= 0) G.loot.splice(i, 1);
-  refreshPaneSoon();
+  // Gold não redesenha o painel inteiro: o HUD atualiza o valor no Inventário (hudTick)
+  if (l.type !== 'gold') refreshPaneSoon();
   return true;
 }
 /** Arco ao cair + rotação e pulsar do feixe de raridade. */
