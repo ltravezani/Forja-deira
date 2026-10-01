@@ -74,6 +74,8 @@ export function hudTick() {
   setText('expTxt', 'EXP ' + pct.toFixed(2) + '%' + (ch.points ? ' · ' + ch.points + ' pontos livres' : ''));
   setHtml('lvlTxt', '<b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
   setText('goldTxt', fmt(ch.gold));
+  const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
+  if (ig && ig.textContent !== gt) ig.textContent = gt;
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();

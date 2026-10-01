@@ -82,6 +82,26 @@ with sync_playwright() as p:
     check(ev('G.projectiles.every((p) => Number.isFinite(p.x))'), 'projéteis válidos')
     check(ev('Number.isFinite(G.hp) && Number.isFinite(G.mp) && Number.isFinite(G.player.x)'), 'HP/MP/posição finitos')
 
+    # habilidade automática: ignora monstro atrás da parede, lança no que está à vista
+    wall = ev("""(() => {
+      const L = G.L, T = 2, ok = (x, z) => x > 0 && z > 0 && x < L.W - 1 && z < L.H - 1 && L.grid[z * L.W + x] === 1;
+      for (let z = 1; z < L.H - 1; z++) for (let x = 1; x < L.W - 5; x++) for (let k = 2; k <= 4; k++) {
+        if (ok(x, z) && ok(x + k, z) && !D.lineClear(L, x * T, z * T, (x + k) * T, z * T, 0)) return { ax: x * T, az: z * T, bx: (x + k) * T, bz: z * T };
+      }
+      return null;
+    })()""")
+    check(wall is not None, 'achou parede para testar a mira automática')
+    if wall:
+        ev("""(() => { const p = G.player, w = %s; p.x = w.ax; p.z = w.az; p.path = null; p.target = null;
+          const m = D.spawnMonster(Object.keys(D.MON)[0], w.bx, w.bz, 1); m.speed = 0; m.aggro = false; m.hp = m.maxHp = 1e9;
+          G.cds = {}; G.skillQueue = null; G.mp = G.st.maxMp; G.ch.autoSkills = ['ball']; window.__wallMon = m; return 0; })()""" % json.dumps(wall))
+        wait_game(0.8)
+        check(not ev("G.cds.ball"), 'auto não ataca monstro atrás da parede')
+        ev("""(() => { const m = window.__wallMon, p = G.player; for (const [dx, dz] of [[0, 3], [0, -3], [3, 0], [-3, 0], [2, 2], [-2, -2], [0, 1.5], [0, -1.5]]) { if (D.lineClear(G.L, p.x, p.z, p.x + dx, p.z + dz, 0)) { m.x = p.x + dx; m.z = p.z + dz; break; } } return 0; })()""")
+        wait_game(0.8)
+        check(ev("!!G.cds.ball"), 'auto ataca monstro à vista')
+        ev("(G.ch.autoSkills = [], D.killMonster(window.__wallMon), G.hp = G.st.maxHp, 0)")
+
     if pg.is_visible('#modal'): print('  (modal aberto: %s)' % pg.inner_text('#dialog')[:120].replace('\n', ' '))
     # inventário: equipar com clique duplo
     ev("(G.ch.bag.push(D.R.makeEquip(99, 5, 'excelente', 'dw', 0, 'elite')), 0)")

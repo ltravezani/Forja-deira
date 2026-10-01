@@ -75,6 +75,7 @@ export const CONFIG = {
   auto: {
     skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
+    scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
   },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
