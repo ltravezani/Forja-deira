@@ -68,13 +68,15 @@ const ICON_SHAPE = {
   ring: '<circle cx="32" cy="40" r="14" fill="none" class="ms" stroke-width="6"/><circle cx="32" cy="40" r="14" fill="none" stroke="#fff5" stroke-width="1.5"/><path class="g" d="M32 12 L41 21 L32 30 L23 21 Z"/><path d="M32 12 L32 30 M23 21 L41 21" stroke="#fff8" stroke-width="1"/>',
   pendant: '<path d="M14 6 Q32 34 50 6" stroke="#c9b28a" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path class="m" d="M32 26 L45 40 L32 59 L19 40 Z"/><path d="M32 26 L32 59 M19 40 L45 40" stroke="#fff7" stroke-width="1"/><circle class="g" cx="32" cy="24" r="3"/>',
   wings: '<path class="m" d="M31 32 Q15 4 3 12 Q10 19 7 27 Q14 29 11 37 Q19 37 19 46 Q27 40 31 38Z"/><path class="m" d="M33 32 Q49 4 61 12 Q54 19 57 27 Q50 29 53 37 Q45 37 45 46 Q37 40 33 38Z"/><path d="M29 30 Q18 16 8 14 M29 34 Q18 28 11 29 M29 37 Q22 36 15 38 M35 30 Q46 16 56 14 M35 34 Q46 28 53 29 M35 37 Q42 36 49 38" stroke="#0005" stroke-width="1.2" fill="none"/><circle class="g" cx="32" cy="35" r="3"/>',
+  // Asas Ascendidas (evoluídas no Ferreiro): maiores, borda dourada e joia
+  wings2: '<path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/><g transform="matrix(-1 0 0 1 64 0)"><path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path class="g" d="M32 26 L38 34 L32 44 L26 34 Z"/><path d="M32 28 L32 42" stroke="#fff9" stroke-width="1"/>',
   jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
   // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
   talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
   potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
 };
 /** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', jewel: '#20183a', potion: '#2a1a1a' };
+const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
 const _iconCache = {};
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -86,6 +88,7 @@ function iconKind(it) {
   if (it.kind === 'potion') return 'potion';
   if (it.kind === 'talisman') return 'talisman';
   if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
+  if (it.slot === 'wings' && it.stage) return 'wings2';
   return it.slot;
 }
 export function iconURI(kind, col) {

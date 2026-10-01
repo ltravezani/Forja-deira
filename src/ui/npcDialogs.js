@@ -71,6 +71,21 @@ function takeTalisman() {
   t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
   return true;
 }
+/** Evolução de asa (asa normal +12 → Ascendida): custo, chance e o que acontece na falha. */
+function wingUpSection(sel, cnt, useT, tal) {
+  const W = R.WING_UP, pl = sel.plus || 0;
+  let h = '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evoluir asa</h4>';
+  if (sel.stage) return h + '<p class="note">Esta asa já é Ascendida: maior, com mais penas e +10% de dano, +6% de absorção e +5% de HP. Continue refinando até +15.</p>';
+  const c = R.wingUpgradeChance(sel);
+  const need = Object.keys(W.jewels);
+  const have = need.every((j) => cnt(j) >= W.jewels[j]);
+  h += '<p class="note">Vira <b>' + esc(R.itemName(Object.assign({}, sel, { stage: 1, plus: 0 }))) + '</b>: asa maior e mais detalhada, +10% de dano, +6% de absorção e +5% de HP. Mantém o +nível no sucesso.</p>';
+  h += '<p class="note">Custo: ' + need.map((j) => '<span style="color:' + R.JEWELS[j].color + '">' + W.jewels[j] + ' ' + R.JEWELS[j].name + '</span> (' + cnt(j) + ')').join(' · ') + '. As joias são gastas mesmo se falhar.</p>';
+  h += '<p class="note">Chance: 10% com a asa +12 e +5% a cada nível acima (+13: 15%, +14: 20%, +15: 25%).</p>';
+  const fail = useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: a asa volta a +0.' + (tal ? ' Ligue o Talismã da Sorte acima para proteger.' : '');
+  h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
+  return h;
+}
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 export function openNpc(id) {
   if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
@@ -117,7 +132,7 @@ export function openNpc(id) {
       h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
       // Talismã da Sorte: liga/desliga; protege a fusão Chaos (a única que volta o item a +0)
       const tg = { kind: 'talisman', id: 'luck' };
-      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
+      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
       h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
@@ -126,6 +141,7 @@ export function openNpc(id) {
         h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
       });
       h += '</div>';
+      if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
     } else h += '<p class="note">Você não tem equipamentos.</p>';
   } else if (id === 'merchant') {
     const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1);
@@ -170,6 +186,22 @@ function npcAction(e) {
       if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
       else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
       else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
+      recalc(); buildPlayerModel();
+      break;
+    }
+    case 'wingup': {
+      const it = UI.smithSel, W = R.WING_UP;
+      if (!it || R.wingUpgradeChance(it) <= 0) break;
+      const stacks = Object.keys(W.jewels).map((j) => ch.bag.find((x) => x.kind === 'jewel' && x.id === j));
+      if (stacks.some((x, i) => !x || x.qty < W.jewels[Object.keys(W.jewels)[i]])) { log('Faltam Jewels para evoluir a asa.', 'warn'); break; }
+      Object.keys(W.jewels).forEach((j, i) => { const x = stacks[i]; x.qty -= W.jewels[j]; if (!x.qty) ch.bag.splice(ch.bag.indexOf(x), 1); });
+      const talisman = UI.smithTalisman && R.talismanUseful('wing') && takeTalisman();
+      const r = R.applyWingUpgrade(it, Math.random(), { talisman });
+      if (r.ok) {
+        log('A asa evoluiu! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Asa Ascendida', R.itemName(it));
+        if (G.player) emit(G.player.x, 1.4, G.player.z, { n: 90, color: 0xfff0b0, speed: 3, up: 3, life: 1.4, size: 1.1, grav: 1, spread: 1.6 });
+      } else if (r.protected) { log('A evolução falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'A asa continua em +' + (it.plus || 0)); }
+      else { log('A evolução falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it) + ' voltou a +0.', 'warn'); Sfx.hurt(); }
       recalc(); buildPlayerModel();
       break;
     }

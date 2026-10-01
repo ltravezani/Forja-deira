@@ -5748,9 +5748,14 @@ if (document.currentScript) document.currentScript.remove();
   const BUFF_POTIONS = ['spd', 'cdr', 'str', 'agi', 'vit', 'ene'];
   /** Talismãs: consumidos no Ferreiro. */
   const TALISMANS = {
-    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
+    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
 
+  /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
+  function wingBonus(it) {
+    const t = it.tier, p = it.plus || 0, up = it.stage ? 1 : 0;
+    return { dmg: 12 + t * 5 + p + up * 10, red: 12 + t * 3 + p * 0.5 + up * 6, hp: up * 5 };
+  }
   function plusBonus(p) {
     return p * 3 + (p > 9 ? (p - 9) * (p - 8) : 0);
   }
@@ -5762,7 +5767,7 @@ if (document.currentScript) document.currentScript.remove();
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
     else if (it.slot === 'pendant') base = PENDANT_NAMES[it.tier];
-    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)];
+    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)] + (it.stage ? ' Ascendidas' : '');
     else base = PIECE[it.slot] + ' ' + (it.slot === 'armor' ? 'de ' : 'de ') + SET_NAMES[it.cls][it.tier];
     const pre = it.rarity === 'comum' ? '' : RARITY[it.rarity].name + ' ';
     return pre + base + (it.plus ? ' +' + it.plus : '');
@@ -5794,8 +5799,10 @@ if (document.currentScript) document.currentScript.remove();
       add('dmgPct', 2 + t);
       if (it.addOpt) add('dmgPct', it.addOpt / 4);
     } else if (it.slot === 'wings') {
-      add('dmgPct', 12 + t * 5 + (it.plus || 0));
-      add('dmgRed', 12 + t * 3 + (it.plus || 0) * 0.5);
+      const wb = wingBonus(it);
+      add('dmgPct', wb.dmg);
+      add('dmgRed', wb.red);
+      if (wb.hp) add('hpPct', wb.hp);
     } else {
       add('armorDef', Math.round(3 + t * 8 + t * t * 1.2 + pb / 1.4));
       if (it.addOpt) add('armorDef', it.addOpt);
@@ -5815,7 +5822,11 @@ if (document.currentScript) document.currentScript.remove();
     if (s.armorDef) L.push(['Defesa', s.armorDef]);
     if (it.slot === 'ring') L.push(['HP máximo', '+' + Math.round(12 + it.tier * 30 + plusBonus(it.plus || 0) * (1 + it.tier * 0.2) * 2)]);
     if (it.slot === 'pendant') L.push(['Dano', '+' + (2 + it.tier) + '%']);
-    if (it.slot === 'wings') { L.push(['Dano', '+' + (12 + it.tier * 5 + (it.plus || 0)) + '%']); L.push(['Absorção', '+' + (12 + it.tier * 3 + (it.plus || 0) * 0.5) + '%']); }
+    if (it.slot === 'wings') {
+      const wb = wingBonus(it);
+      L.push(['Dano', '+' + wb.dmg + '%']); L.push(['Absorção', '+' + wb.red + '%']);
+      if (wb.hp) L.push(['HP máximo', '+' + wb.hp + '%']);
+    }
     return L;
   }
   function itemValue(it) {
@@ -5823,7 +5834,7 @@ if (document.currentScript) document.currentScript.remove();
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     const r = RARITY[it.rarity].order;
-    return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3));
+    return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
   /** Gold recebido ao vender `n` unidades (padrão: a pilha toda) — metade do valor. */
   function sellValue(it, n) {
@@ -6068,8 +6079,28 @@ if (document.currentScript) document.currentScript.remove();
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
-  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos). */
-  const talismanUseful = (jewel) => jewel === 'chaos';
+  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos e evolução de asa). */
+  const talismanUseful = (jewel) => jewel === 'chaos' || jewel === 'wing';
+  /**
+   * Evolução de asa no Ferreiro: asa normal +12 ou mais vira asa Ascendida.
+   * Custa 10 de cada Jewel (gastas mesmo na falha). Chance 10% no +12 e +5% a
+   * cada +nível acima (25% no +15). Falha: a asa volta a +0 (o Talismã da
+   * Sorte mantém o +nível). Sucesso: mantém o +nível e continua refinável até +15.
+   */
+  const WING_UP = { minPlus: 12, jewels: { bless: 10, soul: 10, chaos: 10, life: 10 }, base: 0.1, perPlus: 0.05 };
+  function wingUpgradeChance(it) {
+    if (!it || it.slot !== 'wings' || it.stage || (it.plus || 0) < WING_UP.minPlus) return 0;
+    return Math.round((WING_UP.base + (Math.min(15, it.plus) - WING_UP.minPlus) * WING_UP.perPlus) * 100) / 100;
+  }
+  function applyWingUpgrade(it, roll, opts) {
+    const ch = wingUpgradeChance(it);
+    if (ch <= 0) return { ok: false, invalid: true, chance: 0 };
+    const ok = roll < ch;
+    if (ok) { it.stage = 1; return { ok, chance: ch }; }
+    if (opts && opts.talisman) return { ok, chance: ch, protected: true };
+    it.plus = 0;
+    return { ok, chance: ch };
+  }
   /**
    * Aplica uma Jewel. opts.talisman: Talismã da Sorte em uso — se a fusão Chaos
    * falhar, o item mantém o +nível (protected: true) em vez de voltar a +0.
@@ -6302,7 +6333,7 @@ if (document.currentScript) document.currentScript.remove();
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenLevel, rollEdenDrop,
-    upgradeChance, applyUpgrade, talismanUseful, monsterStats,
+    upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
@@ -8047,7 +8078,7 @@ return { BACKUP_KEY, CLOUD_KEY, Cloud, cloudDebug, cloudEnabled, cloudTick, forg
 })();
 
 // ---- art/models.js ----
-const { addContactShadow, animateModel, attachBossSigil, attachWings, buildBeast, buildHumanoid, buildModel, disposeModel, flashModel } = (() => {
+const { addContactShadow, animateModel, attachBossSigil, buildBeast, buildHumanoid, buildModel, disposeModel, flashModel } = (() => {
 // ---------- armas ----------
 /** Arma presa à mão. Retorna o grupo da arma (com orbe marcado em userData.orb). */
 
@@ -8609,24 +8640,6 @@ function addContactShadow(m, spec) {
   m.blob = blob;
 }
 
-/** Asas (item ou evolução de 3ª classe): membrana com brilho suave. */
-function attachWings(model, color, size) {
-  const holder = pivot(model.torso || model.body, 0, 0.55, -0.28);
-  const mat = toonMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.88, emissive: new THREE.Color(color), emissiveIntensity: 0.5 }, { rim: 0.5 });
-  const wings = [];
-  for (const sx of [-1, 1]) {
-    const p = pivot(holder, sx * 0.1, 0, 0);
-    const w = new THREE.Mesh(GEO.wing, mat);
-    w.scale.set(sx * size, size, size);
-    w.position.y = 0.1;
-    p.add(w);
-    p.rotation.y = sx * 0.5;
-    wings.push(p);
-  }
-  model.wingPivots = wings;
-  return holder;
-}
-
 /** Anima qualquer modelo. s: {t, dt, moving, run, attack (0..1), dead, speed, cast}; nos animados escolhe o clipe. */
 function animateModel(m, s) {
   const t = s.t;
@@ -8685,11 +8698,7 @@ function animateModel(m, s) {
     m.arms[0].rotation.x = -k * 2.2 + Math.sin(ph * 0.6) * 0.3 * mv;
     m.arms[1].rotation.x = -k * 2.2 - Math.sin(ph * 0.6) * 0.3 * mv;
   }
-  if (m.wingPivots) {
-    const f = Math.sin(t * (mv ? 7 : 2.4)) * 0.22;
-    m.wingPivots[0].rotation.y = -0.5 - f;
-    m.wingPivots[1].rotation.y = 0.5 + f;
-  }
+  if (m.wingRig) m.wingRig.update(t, mv);
   if (m.fx) for (const fx of m.fx) fx.update(t);
 }
 function flashModel(m, color, k) {
@@ -8763,7 +8772,7 @@ function attachBossSigil(model, color, worldRadius) {
   model.sigil = holder;
   return holder;
 }
-return { addContactShadow, animateModel, attachBossSigil, attachWings, buildBeast, buildHumanoid, buildModel, disposeModel, flashModel };
+return { addContactShadow, animateModel, attachBossSigil, buildBeast, buildHumanoid, buildModel, disposeModel, flashModel };
 })();
 
 // ---- world/grid.js ----
@@ -9688,7 +9697,7 @@ return { hitStop, simDelta };
 })();
 
 // ---- art/items.js ----
-const { attachHeroAura, attachRefineFx, buildItemModel, refineColor, refineK } = (() => {
+const { attachHeroAura, attachRefineFx, buildItemModel, refineColor, refineK, sparkles } = (() => {
 // ---------- itens: modelos 3D do loot e brilho de refino (+10 a +15) ----------
 
 const D = (kind) => texDetail(kind);
@@ -9799,7 +9808,7 @@ function buildItemModel(kind, o) {
     part(GEO.oct, toon(tintHex(0x9a7a3a, col, 0.2), 0, 0, { metal: 0.9, rough: 0.3 }), 0.24, 0.34, 0.08, 0, -0.16, 0, h);
     part(GEO.oct, gem, 0.14, 0.2, 0.1, 0, -0.16, 0.02, h, false);
     part(GEO.sphS, halo, 0.36, 0.36, 0.36, 0, -0.16, 0, h, false);
-  } else if (kind === 'wings') {
+  } else if (kind === 'wings' || kind === 'wings2') {
     h.position.y = 0.1; h.rotation.x = -1.1;
     const m = shared('wing|' + col, () => toonMaterial({ color: col, side: THREE.DoubleSide, transparent: true, opacity: 0.9, emissive: new THREE.Color(col), emissiveIntensity: 0.45 }, { rim: 0.5 }));
     for (const sx of [-1, 1]) {
@@ -9981,7 +9990,292 @@ function attachHeroAura(root, plus, h, halo) {
     },
   };
 }
-return { attachHeroAura, attachRefineFx, buildItemModel, refineColor, refineK };
+return { attachHeroAura, attachRefineFx, buildItemModel, refineColor, refineK, sparkles };
+})();
+
+// ---- art/wings.js ----
+const { attachWings } = (() => {
+// ---------- asas do herói ----------
+// Dois estilos: penas (camadas de penas com textura de haste e barbas) e
+// membrana (dragão: dedos de osso e membrana recortada). A asa normal é
+// pequena e simples; a asa evoluída no Ferreiro (stage 1) é bem maior, ganha
+// mais penas, segunda fileira de coberteiras, ossos dourados, joia nas costas
+// e faíscas. O +nível de refino (+10 em diante) faz as penas pulsarem na cor
+// do refino, como o resto do equipamento.
+
+const WHITE = new THREE.Color(0xffffff);
+
+// ---------- textura de pena (canvas, tingida pela cor do material) ----------
+const _featherTex = {};
+function featherTexture(fancy) {
+  const key = fancy ? 'f' : 'n';
+  if (_featherTex[key]) return _featherTex[key];
+  const W = 64, H = 256, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  // contorno da pena: estreita na base, larga no meio, ponta arredondada (um lado mais largo)
+  const vane = new Path2D();
+  vane.moveTo(W / 2, 0);
+  vane.bezierCurveTo(W * 0.62, H * 0.18, W * 0.98, H * 0.45, W * 0.9, H * 0.82);
+  vane.quadraticCurveTo(W * 0.8, H, W * 0.5, H);
+  vane.quadraticCurveTo(W * 0.16, H * 0.97, W * 0.12, H * 0.8);
+  vane.bezierCurveTo(W * 0.06, H * 0.5, W * 0.36, H * 0.2, W / 2, 0);
+  g.save();
+  g.clip(vane);
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, '#9a9a9a'); gr.addColorStop(0.45, '#e2e2e2'); gr.addColorStop(1, '#ffffff');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // barbas: riscos diagonais saindo da haste em direção à ponta
+  g.strokeStyle = 'rgba(40,40,60,0.28)'; g.lineWidth = 1.2;
+  for (let y = 18; y < H; y += 7) {
+    g.beginPath(); g.moveTo(W / 2, y); g.quadraticCurveTo(W * 0.3, y + 8, 0, y + 22); g.stroke();
+    g.beginPath(); g.moveTo(W / 2, y + 3); g.quadraticCurveTo(W * 0.72, y + 11, W, y + 25); g.stroke();
+  }
+  if (fancy) {
+    // pena evoluída: borda clara, faixa escura perto da ponta e "olho" brilhante
+    g.fillStyle = 'rgba(30,20,50,0.45)'; g.fillRect(0, H * 0.72, W, H * 0.07);
+    const eye = g.createRadialGradient(W / 2, H * 0.88, 2, W / 2, H * 0.88, W * 0.3);
+    eye.addColorStop(0, '#ffffff'); eye.addColorStop(0.45, 'rgba(120,110,160,0.9)'); eye.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = eye; g.fillRect(0, H * 0.74, W, H * 0.26);
+  }
+  g.restore();
+  g.lineWidth = fancy ? 5 : 3; g.strokeStyle = fancy ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.55)';
+  g.stroke(vane);
+  // haste
+  g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(W / 2, 0); g.quadraticCurveTo(W * 0.47, H * 0.6, W * 0.5, H * 0.96); g.stroke();
+  // pequenos cortes na borda (pena de verdade não é lisa)
+  g.globalCompositeOperation = 'destination-out';
+  for (const [x, y, s] of [[0.14, 0.62, 1], [0.9, 0.55, -1], [0.86, 0.74, -1]]) {
+    g.beginPath(); g.moveTo(x * W, y * H); g.lineTo(x * W + s * 9, y * H + 4); g.lineTo(x * W, y * H + 10); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  _featherTex[key] = t;
+  return t;
+}
+
+// ---------- geometria: penas fundidas por fileira (1 chamada de desenho por fileira) ----------
+// Pena base: plano de 1×1 da raiz (y=0) até a ponta (y=-1), curvada para trás.
+const FEATHER = (() => {
+  const g = new THREE.PlaneGeometry(1, 1, 1, 5);
+  g.translate(0, -0.5, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const v = -p.getY(i); p.setZ(i, -0.12 * v * v); }
+  g.computeVertexNormals();
+  return g;
+})();
+const _geoCache = new Map();
+/** Junta penas {x, y, z, rot, len, w} numa geometria só (cacheada por chave; compartilhada entre modelos). */
+function featherRow(key, list) {
+  let g = _geoCache.get(key);
+  if (g) return g;
+  const P = FEATHER.attributes.position, N = FEATHER.attributes.normal, U = FEATHER.attributes.uv, I = FEATHER.index;
+  const pos = [], nor = [], uv = [], idx = [];
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3();
+  list.forEach((f, k) => {
+    e.set(f.tilt || 0, 0, f.rot);
+    q.setFromEuler(e);
+    m.compose(new THREE.Vector3(f.x, f.y, f.z), q, new THREE.Vector3(f.w, f.len, f.len));
+    nm.getNormalMatrix(m);
+    const base = k * P.count;
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(m); pos.push(v.x, v.y, v.z);
+      v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z);
+      uv.push(U.getX(i), U.getY(i));
+    }
+    for (let i = 0; i < I.count; i++) idx.push(base + I.getX(i));
+  });
+  g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  g.userData.shared = true;
+  _geoCache.set(key, g);
+  return g;
+}
+
+/** Leque de n penas ao longo de um segmento: posições, ângulos (rad, 0 = para baixo) e comprimentos interpolados. */
+function fan(n, x0, x1, r0, r1, l0, l1, w, z, dz) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = n > 1 ? i / (n - 1) : 0;
+    out.push({ x: x0 + (x1 - x0) * t, y: 0, z: z + i * dz, rot: r0 + (r1 - r0) * t, len: l0 + (l1 - l0) * t, w });
+  }
+  return out;
+}
+
+// Ângulos dos dois segmentos do "braço" da asa (ombro e punho)
+const A1 = 0.72, A2 = -0.38, L1 = 0.6, L2 = 0.7;
+
+function featherWing(side, o, M) {
+  const up = o.stage >= 1, S = up ? 'u' : 'n';
+  const inner = pivot(side, 0, 0, 0);
+  const R1 = up ? 0.88 : A1; // a evoluída se ergue mais
+  inner.rotation.z = R1;
+  const outer = pivot(inner, L1, 0, 0);
+  outer.rotation.z = A2;
+  // osso do braço (cone afinando para fora)
+  part(GEO.cone, M.bone, 0.07, L1 + 0.04, 0.07, L1 / 2, 0, 0, inner, false).rotation.z = -Math.PI / 2;
+  part(GEO.cone, M.bone, 0.05, L2, 0.05, L2 / 2, 0, 0, outer, false).rotation.z = -Math.PI / 2;
+  const row = (seg, key, list, mat) => { const mh = new THREE.Mesh(featherRow(key, list), mat); seg.add(mh); return mh; };
+  // ângulos no espaço do segmento: rot = ângulo no mundo − rotação acumulada do segmento
+  const a1 = R1, a12 = R1 + A2, k = up ? 1.12 : 1;
+  // rêmiges secundárias (braço) e primárias (mão)
+  row(inner, 'sec' + S, fan(up ? 6 : 5, 0.06, 0.6, -0.3 - a1, 0.12 - a1, 0.5 * k, 0.66 * k, 0.36, 0, 0.012), M.main);
+  row(outer, 'pri' + S, fan(up ? 7 : 6, 0.02, 0.66, 0.3 - a12, 1.38 - a12, 0.72 * k, 1.05 * k, 0.32, 0.006, 0.012), M.main);
+  // coberteiras (mais curtas e claras, por cima)
+  row(inner, 'cov' + S, fan(up ? 6 : 5, 0.02, 0.6, -0.4 - a1, 0.1 - a1, 0.3 * k, 0.36 * k, 0.38, 0.05, 0.006), M.cover);
+  row(outer, 'covo' + S, fan(up ? 6 : 5, 0, 0.6, 0.25 - a12, 1.25 - a12, 0.34 * k, 0.46 * k, 0.34, 0.05, 0.006), M.cover);
+  if (up) {
+    // segunda fileira de coberteiras, penas do ombro e enfeites dourados
+    row(inner, 'cov2u', fan(6, 0, 0.58, -0.5 - a1, 0.05 - a1, 0.17, 0.22, 0.4, 0.09, 0.004), M.cover2);
+    row(outer, 'cov2ou', fan(5, 0, 0.5, 0.2 - a12, 1.1 - a12, 0.2, 0.26, 0.36, 0.09, 0.004), M.cover2);
+    row(inner, 'scapu', fan(3, -0.02, 0.1, -0.9 - a1, -0.55 - a1, 0.38, 0.46, 0.34, 0.02, 0.01), M.main);
+    part(GEO.cone4, M.bone, 0.07, 0.16, 0.07, L2 + 0.06, 0, 0, outer, false).rotation.z = -Math.PI / 2; // ponta da mão
+    part(GEO.sphS, M.bone, 0.1, 0.1, 0.1, 0, 0, 0, outer, false); // punho
+  }
+  return { inner, outer, rest: R1 };
+}
+
+function membraneGeometry(up) {
+  const key = 'mem' + (up ? 'u' : 'n');
+  let g = _geoCache.get(key);
+  if (g) return g;
+  const E = [0.55, 0.32];
+  const tips = up ? [[1.62, 0.66], [1.55, -0.1], [1.18, -0.66], [0.66, -0.8]] : [[1.4, 0.55], [1.25, -0.25], [0.8, -0.6]];
+  const body = up ? [0.08, -0.55] : [0.08, -0.45];
+  const s = new THREE.Shape();
+  s.moveTo(0, 0); s.lineTo(E[0], E[1]); s.lineTo(tips[0][0], tips[0][1]);
+  const pts = tips.concat([body]);
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    // borda recortada: cada vão entre dedos curva para dentro, na direção do punho
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    s.quadraticCurveTo(mx + (E[0] - mx) * 0.28, my + (E[1] - my) * 0.28, b[0], b[1]);
+  }
+  s.lineTo(0, 0);
+  g = new THREE.ShapeGeometry(s, 12);
+  // UV normalizado (a textura de membrana cobre a asa inteira)
+  g.computeBoundingBox();
+  const bb = g.boundingBox, uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (uv.getY(i) - bb.min.y) / (bb.max.y - bb.min.y));
+  g.userData.shared = true;
+  g.userData.E = E; g.userData.tips = tips;
+  _geoCache.set(key, g);
+  return g;
+}
+/** Osso entre dois pontos do plano da asa. */
+function bone(parent, mat, a, b, r) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
+  const m = part(GEO.cone, mat, r, L, r, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.01, parent, false);
+  m.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+  return m;
+}
+function membraneWing(side, o, M) {
+  const up = o.stage >= 1;
+  const inner = pivot(side, 0, 0, 0);
+  const geo = membraneGeometry(up);
+  inner.add(new THREE.Mesh(geo, M.main));
+  const E = geo.userData.E;
+  bone(inner, M.bone, [0, 0], E, 0.08);
+  for (const t of geo.userData.tips) bone(inner, M.bone, E, t, up ? 0.045 : 0.04);
+  // garra no punho
+  const claw = part(GEO.cone4, M.bone, 0.06, 0.18, 0.06, E[0] + 0.02, E[1] + 0.09, 0.01, inner, false);
+  claw.rotation.z = -0.3;
+  if (up) {
+    // espinhos ao longo do braço e veias de energia
+    for (let i = 1; i <= 3; i++) {
+      const sp = part(GEO.cone4, M.bone, 0.045, 0.14, 0.045, E[0] * i / 4, E[1] * i / 4 + 0.07, 0.01, inner, false);
+      sp.rotation.z = 0.5;
+    }
+    for (const t of geo.userData.tips) bone(inner, M.glow, E, [(E[0] + t[0]) / 2 + 0.02, (E[1] + t[1]) / 2 - 0.08], 0.025);
+  }
+  return { inner, outer: null, rest: 0.1 };
+}
+
+/**
+ * Prende um par de asas nas costas do modelo.
+ * o: {color, stage (0 normal, 1 evoluída), tier, plus, style ('feather'|'membrane')}
+ * Devolve o grupo; o modelo ganha model.wingRig para a animação.
+ */
+function attachWings(model, o) {
+  const up = o.stage >= 1;
+  const style = o.style || 'feather';
+  // entre as escápulas: no humanoide animado o osso do peito fica na altura do peito;
+  // no procedural o tronco começa na cintura
+  const gl = model.kind === 'gltf';
+  const holder = pivot(model.torso || model.body, 0, gl ? 0.08 : 0.5, gl ? -0.2 : -0.26);
+  holder.rotation.x = -0.22; // pontas inclinadas para trás, longe da cabeça
+  const size = (up ? 0.86 : 0.56) + (o.tier || 0) * (up ? 0.035 : 0.025);
+  holder.scale.setScalar(size);
+  const col = new THREE.Color(o.color);
+  const fancy = up && style === 'feather';
+  const tex = style === 'feather' ? featherTexture(fancy) : null;
+  const mk = (c, ei, op) => {
+    const m = toonOwn(c.getHex(), c.getHex(), ei, style === 'membrane' ? { side: THREE.DoubleSide, rim: 0.6, map: texDetail('membrane'), rough: 0.8 } : { side: THREE.DoubleSide, rim: 0.55 });
+    if (tex) { m.map = tex; m.alphaTest = 0.5; }
+    if (op) { m.transparent = true; m.opacity = op; }
+    m.needsUpdate = true;
+    return m;
+  };
+  const M = {
+    main: mk(col.clone(), up ? 0.32 : 0.18, style === 'membrane' && !up ? 0.92 : 0),
+    cover: mk(col.clone().lerp(WHITE, up ? 0.35 : 0.2), up ? 0.36 : 0.2),
+    cover2: mk(col.clone().lerp(WHITE, 0.6), 0.4),
+    bone: up ? toonOwn(0xd8b45a, 0x6a4a10, 0.4, { metal: 0.85, rough: 0.35 }) : toonOwn(col.clone().multiplyScalar(0.45).getHex(), 0, 0, { rough: 0.7 }),
+    glow: glowMat(col.clone().lerp(WHITE, 0.4).getHex(), 0.85),
+  };
+  const sides = [];
+  for (const sx of [-1, 1]) {
+    const side = pivot(holder, sx * 0.1, 0, 0);
+    side.scale.x = sx; // asa esquerda espelhada
+    const sweep = pivot(side, 0, 0, 0);
+    const w = style === 'membrane' ? membraneWing(sweep, o, M) : featherWing(sweep, o, M);
+    sides.push({ sweep, ...w });
+  }
+  // asa evoluída: joia entre as asas e faíscas descendo pelas penas
+  let gem = null, pts = [];
+  if (up) {
+    part(GEO.box, M.bone, 0.26, 0.18, 0.06, 0, 0, 0.02, holder, false);
+    gem = part(GEO.oct, M.glow, 0.17, 0.24, 0.17, 0, 0.01, -0.04, holder, false);
+    for (const s of sides) {
+      const box = new THREE.Box3(new THREE.Vector3(0.1, -0.9, -0.1), new THREE.Vector3(1.6, 0.6, 0.1));
+      pts.push(sparkles(s.sweep, box, 16, col.clone().lerp(WHITE, 0.5).getHex(), 0.5, 0.14));
+    }
+  }
+  // refino +10..+15: as penas pulsam na cor do refino e soltam mais faíscas
+  const rk = refineK(o.plus || 0);
+  const rc = rk ? new THREE.Color(refineColor(o.plus)) : null;
+  if (rk) for (const s of sides) pts.push(sparkles(s.sweep, new THREE.Box3(new THREE.Vector3(0.1, -0.8, -0.1), new THREE.Vector3(1.4, 0.5, 0.1)), Math.round(6 + rk * 18), refineColor(o.plus), rk, 0.1 + rk * 0.06));
+  const flapMats = [M.main, M.cover, M.cover2];
+  const baseEI = flapMats.map((m) => m.emissiveIntensity);
+  model.wingRig = {
+    holder,
+    update(t, moving) {
+      // idle: respira devagar; andando: bate mais rápido e mais aberto
+      const sp = moving ? 6.5 : up ? 1.8 : 2.2, amp = moving ? 0.28 : up ? 0.14 : 0.1;
+      const f = Math.sin(t * sp);
+      for (const s of sides) {
+        s.sweep.rotation.y = 0.55 - f * amp;
+        s.inner.rotation.z = s.rest + Math.sin(t * sp + 0.4) * amp * 0.4;
+        if (s.outer) s.outer.rotation.z = A2 + Math.sin(t * sp - 0.7) * amp * 0.6;
+      }
+      if (gem) { gem.rotation.y = t * 1.6; gem.material.opacity = 0.7 + 0.25 * Math.sin(t * 3); }
+      if (rk) {
+        const k = rk * (0.18 + 0.14 * Math.sin(t * 3));
+        flapMats.forEach((m, i) => { m.emissive.copy(col).lerp(rc, 0.25 + rk * 0.35); m.emissiveIntensity = baseEI[i] + k; });
+      }
+      for (const p of pts) { p.material.uniforms.uTime.value = t; p.material.uniforms.uScale.value = renderer.domElement.height * 0.9; }
+    },
+  };
+  model.wingRig.update(0, false);
+  return holder;
+}
+return { attachWings };
 })();
 
 // ---- engine/skillfx.js ----
@@ -10715,7 +11009,7 @@ const AFFIX = {
   explosivo: { name: 'Explosivo', explode: true },
 };
 const NPCS = {
-  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
+  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels e evolução de asas', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
   merchant: { name: 'Lira', role: 'Mercadora · poções e compra de itens', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas! E se o seu pet estiver ocupado, eu compro o que você carrega.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
@@ -11730,13 +12024,15 @@ const ICON_SHAPE = {
   ring: '<circle cx="32" cy="40" r="14" fill="none" class="ms" stroke-width="6"/><circle cx="32" cy="40" r="14" fill="none" stroke="#fff5" stroke-width="1.5"/><path class="g" d="M32 12 L41 21 L32 30 L23 21 Z"/><path d="M32 12 L32 30 M23 21 L41 21" stroke="#fff8" stroke-width="1"/>',
   pendant: '<path d="M14 6 Q32 34 50 6" stroke="#c9b28a" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path class="m" d="M32 26 L45 40 L32 59 L19 40 Z"/><path d="M32 26 L32 59 M19 40 L45 40" stroke="#fff7" stroke-width="1"/><circle class="g" cx="32" cy="24" r="3"/>',
   wings: '<path class="m" d="M31 32 Q15 4 3 12 Q10 19 7 27 Q14 29 11 37 Q19 37 19 46 Q27 40 31 38Z"/><path class="m" d="M33 32 Q49 4 61 12 Q54 19 57 27 Q50 29 53 37 Q45 37 45 46 Q37 40 33 38Z"/><path d="M29 30 Q18 16 8 14 M29 34 Q18 28 11 29 M29 37 Q22 36 15 38 M35 30 Q46 16 56 14 M35 34 Q46 28 53 29 M35 37 Q42 36 49 38" stroke="#0005" stroke-width="1.2" fill="none"/><circle class="g" cx="32" cy="35" r="3"/>',
+  // Asas Ascendidas (evoluídas no Ferreiro): maiores, borda dourada e joia
+  wings2: '<path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/><g transform="matrix(-1 0 0 1 64 0)"><path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path class="g" d="M32 26 L38 34 L32 44 L26 34 Z"/><path d="M32 28 L32 42" stroke="#fff9" stroke-width="1"/>',
   jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
   // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
   talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
   potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
 };
 /** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', jewel: '#20183a', potion: '#2a1a1a' };
+const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
 const _iconCache = {};
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -11748,6 +12044,7 @@ function iconKind(it) {
   if (it.kind === 'potion') return 'potion';
   if (it.kind === 'talisman') return 'talisman';
   if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
+  if (it.slot === 'wings' && it.stage) return 'wings2';
   return it.slot;
 }
 function iconURI(kind, col) {
@@ -11969,6 +12266,21 @@ function takeTalisman() {
   t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
   return true;
 }
+/** Evolução de asa (asa normal +12 → Ascendida): custo, chance e o que acontece na falha. */
+function wingUpSection(sel, cnt, useT, tal) {
+  const W = R.WING_UP, pl = sel.plus || 0;
+  let h = '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evoluir asa</h4>';
+  if (sel.stage) return h + '<p class="note">Esta asa já é Ascendida: maior, com mais penas e +10% de dano, +6% de absorção e +5% de HP. Continue refinando até +15.</p>';
+  const c = R.wingUpgradeChance(sel);
+  const need = Object.keys(W.jewels);
+  const have = need.every((j) => cnt(j) >= W.jewels[j]);
+  h += '<p class="note">Vira <b>' + esc(R.itemName(Object.assign({}, sel, { stage: 1, plus: 0 }))) + '</b>: asa maior e mais detalhada, +10% de dano, +6% de absorção e +5% de HP. Mantém o +nível no sucesso.</p>';
+  h += '<p class="note">Custo: ' + need.map((j) => '<span style="color:' + R.JEWELS[j].color + '">' + W.jewels[j] + ' ' + R.JEWELS[j].name + '</span> (' + cnt(j) + ')').join(' · ') + '. As joias são gastas mesmo se falhar.</p>';
+  h += '<p class="note">Chance: 10% com a asa +12 e +5% a cada nível acima (+13: 15%, +14: 20%, +15: 25%).</p>';
+  const fail = useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: a asa volta a +0.' + (tal ? ' Ligue o Talismã da Sorte acima para proteger.' : '');
+  h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
+  return h;
+}
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 function openNpc(id) {
   if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
@@ -12015,7 +12327,7 @@ function openNpc(id) {
       h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
       // Talismã da Sorte: liga/desliga; protege a fusão Chaos (a única que volta o item a +0)
       const tg = { kind: 'talisman', id: 'luck' };
-      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
+      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão Chaos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão Chaos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
       h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
@@ -12024,6 +12336,7 @@ function openNpc(id) {
         h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
       });
       h += '</div>';
+      if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
     } else h += '<p class="note">Você não tem equipamentos.</p>';
   } else if (id === 'merchant') {
     const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1);
@@ -12068,6 +12381,22 @@ function npcAction(e) {
       if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
       else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
       else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
+      recalc(); buildPlayerModel();
+      break;
+    }
+    case 'wingup': {
+      const it = UI.smithSel, W = R.WING_UP;
+      if (!it || R.wingUpgradeChance(it) <= 0) break;
+      const stacks = Object.keys(W.jewels).map((j) => ch.bag.find((x) => x.kind === 'jewel' && x.id === j));
+      if (stacks.some((x, i) => !x || x.qty < W.jewels[Object.keys(W.jewels)[i]])) { log('Faltam Jewels para evoluir a asa.', 'warn'); break; }
+      Object.keys(W.jewels).forEach((j, i) => { const x = stacks[i]; x.qty -= W.jewels[j]; if (!x.qty) ch.bag.splice(ch.bag.indexOf(x), 1); });
+      const talisman = UI.smithTalisman && R.talismanUseful('wing') && takeTalisman();
+      const r = R.applyWingUpgrade(it, Math.random(), { talisman });
+      if (r.ok) {
+        log('A asa evoluiu! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Asa Ascendida', R.itemName(it));
+        if (G.player) emit(G.player.x, 1.4, G.player.z, { n: 90, color: 0xfff0b0, speed: 3, up: 3, life: 1.4, size: 1.1, grav: 1, spread: 1.6 });
+      } else if (r.protected) { log('A evolução falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'A asa continua em +' + (it.plus || 0)); }
+      else { log('A evolução falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it) + ' voltou a +0.', 'warn'); Sfx.hurt(); }
       recalc(); buildPlayerModel();
       break;
     }
@@ -17098,8 +17427,9 @@ function playerLook(ch) {
 function buildCharacterModel(ch) {
   const m = buildHumanoid(playerLook(ch));
   const w = ch.equip.wings;
-  if (w) attachWings(m, parseInt(R.RARITY[w.rarity].color.slice(1), 16), 0.75 + w.tier * 0.08);
-  else if (ch.tier >= 2) attachWings(m, { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], 0.8);
+  // Asas Dracônicas e da Tempestade são de membrana; as outras, de penas
+  if (w) attachWings(m, { color: parseInt(R.RARITY[w.rarity].color.slice(1), 16), tier: w.tier, stage: w.stage || 0, plus: w.plus || 0, style: w.tier === 2 || w.tier === 4 ? 'membrane' : 'feather' });
+  else if (ch.tier >= 2) attachWings(m, { color: { dk: 0xff6a3a, dw: 0x7aa8ff, elf: 0x8affb0, de: 0xff2a6a, nc: 0xb04aff }[ch.cls], tier: 1, stage: 0, style: ch.cls === 'dk' || ch.cls === 'nc' ? 'membrane' : 'feather' });
   m.orb = m.weapon ? m.weapon.children.find((c) => c.userData.orb) || null : null;
   applyRefine(m, ch.equip);
   return m;

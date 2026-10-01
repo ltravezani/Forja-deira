@@ -54,7 +54,7 @@ export const AFFIX = {
   explosivo: { name: 'Explosivo', explode: true },
 };
 export const NPCS = {
-  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
+  smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Jewels e evolução de asas', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'Bless leva até +6 sem falhar. Soul é sorte. Chaos… Chaos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
   merchant: { name: 'Lira', role: 'Mercadora · poções e compra de itens', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas! E se o seu pet estiver ocupado, eu compro o que você carrega.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
