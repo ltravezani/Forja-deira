@@ -11,6 +11,7 @@ import { updateNpcs, updatePortals } from './npcs.js';
 import { updatePlayer } from './player.js';
 import { updateProjectiles } from './projectiles.js';
 import { updateTownLife } from './townlife.js';
+import { updateEden } from './eden.js';
 import { paintMinimapTile } from '../ui/minimap.js';
 import { updateTorchLights } from '../world/level.js';
 
@@ -38,7 +39,7 @@ function runDelayed(dt) {
   }
 }
 
-const AMBIENT = { forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
+const AMBIENT = { eden: 0xe8ff9a, forest: 0xd8ff8a, caves: 0x8ad0ff, ruins: 0xd8c8a8, castle: 0xff8a8a, abyss: 0xff7a2a, tw_granite: 0xd8e0ff, tw_arcane: 0xc89aff, tw_storm: 0x9af4ff, tw_void: 0xff6ad0 };
 /** Partículas de ambiente: vaga-lumes na floresta, brasas no abismo, poeira nas ruínas. */
 function ambient(p) {
   if (G.zone === 'town' || Math.random() >= 0.3) return;
@@ -74,6 +75,7 @@ export function updateWorld(dt) {
   runDelayed(dt);
   updateNpcs(dt);
   if (G.zone === 'town') updateTownLife(dt);
+  if (G.zone === 'eden') updateEden(dt);
   updateLootVisuals(dt);
   updatePortals(dt);
   const p = G.player;

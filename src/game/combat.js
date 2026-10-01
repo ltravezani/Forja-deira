@@ -10,7 +10,8 @@ import { floatText } from '../engine/overlay.js';
 import { shake, world } from '../engine/renderer.js';
 import { hitStop } from './feel.js';
 import { autoEquipOn, potionCount } from './inventory.js';
-import { dropLoot } from './loot.js';
+import { dropEdenRoll, dropLoot } from './loot.js';
+import { onEdenBossKilled, onEdenKill, onMiniKilled, openChest } from './eden.js';
 import { aggroPack, QUERY_PAD, queryMonsters } from './monsters.js';
 import { face } from './movement.js';
 import { makePortal } from './npcs.js';
@@ -146,24 +147,26 @@ export function respawn() {
   p.model.root.position.y = 0;
   p.model.dead = false;
   if (p.model.blob) p.model.blob.visible = true;
-  G.buffs = []; recalc();
+  G.buffs = G.buffs.filter((b) => b.potion); recalc(); // poções de reforço continuam valendo depois da queda
   enterTown();
 }
 
 export function killMonster(m) {
   if (m.dead) return;
   m.dead = true; m.deadT = 0; m.hp = 0;
-  const src = m.boss ? 'boss' : m.elite ? 'elite' : 'normal';
+  const src = m.boss ? 'boss' : m.mini ? 'mini' : m.elite ? 'elite' : 'normal';
   grantKillRewards(m);
   if (m.elite || m.boss) hitStop(CONFIG.feel.hitStop);
   emit(m.x, 1, m.z, { n: m.boss ? 80 : 18, color: m.boss ? 0xffa040 : 0xc8b8ff, speed: m.boss ? 9 : 5, life: 0.7, size: 1, grav: -4 });
   if (m.affix && m.affix.explode) scheduleExplosion(m);
   dropMonsterLoot(m, src);
   if (m.boss) onBossKilled(m);
+  else if (m.mini) onMiniKilled(m);
+  if (G.zone === 'eden') onEdenKill(m);
 }
 function grantKillRewards(m) {
   const ch = G.ch;
-  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.elite ? 2.5 : 1);
+  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
   const before = ch.level;
   if (R.gainExp(ch, Math.floor(exp))) onLevelUp(before);
   if (G.st.lifeKill) G.hp = Math.min(G.st.maxHp, G.hp + G.st.maxHp / 8);
@@ -184,6 +187,7 @@ function dropMonsterLoot(m, src) {
   const ch = G.ch;
   const seed = R.hash32(G.L.seed, m.id, G.killCount++);
   if (G.zone === 'tower') { dropTowerLoot(m, src, seed); return; }
+  if (G.zone === 'eden') { dropEdenRoll(m.x, m.z, R.rollEdenDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls }), src); return; }
   const drop = R.rollDrop({ seed, mLevel: m.level, src, mf: G.st.mf, favorCls: ch.cls });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
@@ -215,6 +219,7 @@ function onBossKilled(m) {
   shake(1.2);
   Sfx.boom();
   if (G.zone === 'tower') { onTowerBossKilled(m); return; }
+  if (G.zone === 'eden') { onEdenBossKilled(m); return; }
   if (G.zone !== 'dungeon') { toast('Chefe derrotado', m.name); persist(); return; }
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
@@ -325,6 +330,7 @@ export function basicAttack(m) {
 }
 export function breakBarrel(b) {
   if (b.broken) return;
+  if (b.chest) { openChest(b); return; } // baús do Éden abrem em vez de quebrar
   b.broken = true;
   world.remove(b.mesh);
   emit(b.x, 0.6, b.z, { n: 24, color: b.color, speed: 5, up: 1.2, life: 0.6, size: 0.9, grav: -12 });

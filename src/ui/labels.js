@@ -3,7 +3,7 @@
 // A largura dos rótulos de loot é lida uma vez, numa fase de leitura antes das
 // escritas do quadro, para não forçar reflow a cada item.
 import { CONFIG } from '../core/config.js';
-import { G, S } from '../core/state.js';
+import { allPortals, G, S } from '../core/state.js';
 import { overlay, toScreen } from '../engine/overlay.js';
 import { mouse } from '../input/inputState.js';
 
@@ -44,8 +44,7 @@ function updateNpcLabels() {
     const s = toScreen(n.x, (n.model.height || 2.2) + 0.5, n.z);
     place(n.label, n, s.x, s.y, s.vis);
   }
-  for (const pt of [G.exitPortal, G.townPortal]) {
-    if (!pt) continue;
+  for (const pt of allPortals()) {
     const s = toScreen(pt.x, 4, pt.z);
     place(pt.label, pt, s.x, s.y, s.vis);
   }
@@ -73,12 +72,12 @@ function barFor(m, named) {
 function updateMonsterBars() {
   for (const m of G.monsters) {
     const hover = mouse.hover === m;
-    const show = !m.dead && !m.boss && (m.elite || G.time - m.lastHit < 5 || hover);
+    const show = !m.dead && !m.boss && (m.elite || m.mini || G.time - m.lastHit < 5 || hover);
     if (!show) {
       if (m.bar) { m.bar.remove(); m.bar = m.barFill = m.barName = null; }
       continue;
     }
-    const bar = barFor(m, m.elite || hover);
+    const bar = barFor(m, m.elite || m.mini || hover);
     const s = toScreen(m.x, m.model.height + 0.5, m.z);
     place(bar, m, s.x, s.y, s.vis);
     const pct = Math.max(0, Math.round((m.hp / m.maxHp) * 100));

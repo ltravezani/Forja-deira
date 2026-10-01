@@ -1,10 +1,11 @@
 // ---------- NPCs e cidade ----------
+import { CONFIG } from '../core/config.js';
 import { GEO } from '../art/geometry.js';
 import { disposeObject, glowMat } from '../art/materials.js';
 import { animateModel, buildHumanoid, disposeModel } from '../art/models.js';
 import { mergeModelParts } from '../art/townfolk.js';
-import { G } from '../core/state.js';
-import { esc, rand, TILE } from '../core/util.js';
+import { allPortals, G } from '../core/state.js';
+import { esc, R, rand, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
 import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
@@ -39,6 +40,32 @@ export function spawnNpcs(L) {
   // portal da cidade
   const pp = L.portal;
   if (pp) G.townPortal = makePortal(pp.x * TILE, pp.z * TILE, 0x9a7aff, 'Portal das Masmorras', () => openNpc('portal'));
+  if (L.eden) G.edenPortal = makeEdenPortal(L.eden.x * TILE, L.eden.z * TILE);
+}
+/** Tempo restante no formato "2h 05min" (ou "12min", "40s"). */
+export function fmtWait(ms) {
+  const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? h + 'h ' + String(m).padStart(2, '0') + 'min' : m ? m + 'min' : s + 's';
+}
+/**
+ * Portal do Éden na cidade: verde e cheio de vida quando liberado; adormecido
+ * (apagado, com o tempo restante no rótulo) nas 3 horas seguintes a uma entrada.
+ */
+function makeEdenPortal(x, z) {
+  const pt = makePortal(x, z, 0x7aff9a, 'Portal do Éden', () => openNpc('eden'));
+  pt.wait = -1; pt.labelT = 0;
+  pt.update = (dt) => {
+    pt.labelT -= dt;
+    if (pt.labelT > 0) return;
+    pt.labelT = 1;
+    const left = G.ch ? R.edenRemaining(G.ch, Date.now()) : 0;
+    const asleep = left > 0;
+    pt.label.textContent = asleep ? 'Portal do Éden · ' + fmtWait(left) : 'Portal do Éden';
+    pt.color = asleep ? 0x4a6a58 : 0x7aff9a;
+    pt.ring.material.color.setHex(asleep ? 0x2a4a38 : 0x7aff9a).multiplyScalar(asleep ? 1 : CONFIG.style.glowCore);
+    pt.disc.material.color.setHex(asleep ? 0x1a2a20 : 0x7aff9a);
+  };
+  return pt;
 }
 // geometrias do portal: criadas uma vez e compartilhadas por todos os portais
 let portalGeo = null;
@@ -165,8 +192,8 @@ export function updateNpcs(dt) {
 }
 export function updatePortals(dt) {
   if (G.townTower) updateTownTower(G.townTower, dt);
-  for (const pt of [G.exitPortal, G.townPortal]) {
-    if (!pt) continue;
+  for (const pt of allPortals()) {
+    if (pt.update) pt.update(dt);
     pt.ring.rotation.z += dt * 1.5;
     pt.disc.material.opacity = 0.3 + Math.sin(G.time * 4) * 0.1;
     if (Math.random() < 0.5) emit(pt.x + (rand() - 0.5) * 2, 0.3, pt.z + (rand() - 0.5) * 2, { n: 1, color: pt.color, speed: 0.5, up: 3, life: 1, size: 0.8, grav: 1.5 });
@@ -176,8 +203,7 @@ export function updatePortals(dt) {
 export function clearNpcs() {
   for (const n of G.npcs) { world.remove(n.model.root); if (n.model.mixer) disposeModel(n.model); else disposeObject(n.model.root, true); n.label.remove(); }
   G.npcs.length = 0;
-  removePortal(G.exitPortal);
-  removePortal(G.townPortal);
+  for (const pt of allPortals()) removePortal(pt);
   removeTownTower(G.townTower);
-  G.exitPortal = G.townPortal = G.townTower = null;
+  G.exitPortal = G.townPortal = G.edenPortal = G.hubPortal = G.townTower = null;
 }

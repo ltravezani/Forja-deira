@@ -150,6 +150,8 @@ input, select { font-family: inherit; }
 .menu button:hover::after, .menu button:focus-visible::after { opacity: 1; }
 .buffs { display: flex; gap: 4px; }
 .buff { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(40,30,60,.85); border: 1px solid #5c4a7a; }
+.buff.pot { background: rgba(20,52,30,.88); border-color: #6ac87a; color: #d8ffd0; }
+.buffs { flex-wrap: wrap; max-width: 520px; }
 
 .bossbar { position: absolute; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 420px)); min-width: 220px; text-align: center; }
 .bossbar h3 { margin: 0 0 4px; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: #ffb27a; text-shadow: 0 2px 3px #000; }

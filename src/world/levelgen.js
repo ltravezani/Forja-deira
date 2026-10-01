@@ -364,6 +364,14 @@ export function genTown() {
   const tower = { x: cx + 11, z: cz + 11 };
   block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
   for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
+  // Portal do Éden: no fim da rua de baixo, entre a Kora (arena) e o Varek (torre)
+  const eden = { x: cx + 1, z: cz + 14 };
+  for (let i = props.length - 1; i >= 0; i--) {
+    const p = props[i];
+    if (Math.hypot(p.x - eden.x, p.z - eden.z) >= 3) continue;
+    if (grid[Math.round(p.z) * W + Math.round(p.x)] === 2) grid[Math.round(p.z) * W + Math.round(p.x)] = 1;
+    props.splice(i, 1);
+  }
   const npcs = [
     { id: 'tower', x: cx + 8, z: cz + 8 },
     { id: 'smith', x: cx - 7, z: cz - 6 },
@@ -373,6 +381,6 @@ export function genTown() {
     { id: 'duel', x: cx - 5, z: cz + 9 },
   ];
   // garante que NPCs e portal estejam livres
-  for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, tower, isPath, spots, pen, bunting, town: { cx, cz } };
+  for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }, eden])) grid[n.z * W + n.x] = 1;
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, isPath, spots, pen, bunting, town: { cx, cz } };
 }

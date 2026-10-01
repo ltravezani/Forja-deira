@@ -105,6 +105,20 @@ export function addToBag(it) {
   bag.push(it);
   return true;
 }
+/**
+ * Poção de reforço (Éden): 10 minutos de efeito. Beber de novo a mesma poção
+ * renova o tempo (não acumula); poções diferentes valem juntas.
+ */
+function drinkBuff(id, D) {
+  const bid = 'pot:' + id;
+  G.buffs = G.buffs.filter((b) => b.id !== bid);
+  G.buffs.push({ id: bid, name: D.name.replace('Poção de ', ''), until: G.time + D.dur, stats: D.buff, potion: true });
+  recalc();
+  const col = parseInt(D.color.slice(1), 16);
+  emit(G.player.x, 1, G.player.z, { n: 30, color: col, speed: 2.5, up: 3, life: 0.9, size: 0.9, grav: 1, spread: 0.8 });
+  floatText(G.player.x, 2.8, G.player.z, D.name.replace('Poção de ', '') + '!', 'heal');
+  log(D.name + ': ' + D.desc, 'sys');
+}
 export function potionCount(id) { const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id); return p ? p.qty : 0; }
 /** Bebe uma poção (Q/E); pequena recarga para não gastar várias num clique duplo. */
 export function usePotion(id) {
@@ -114,6 +128,7 @@ export function usePotion(id) {
   G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
   if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
+  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });

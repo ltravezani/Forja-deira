@@ -136,6 +136,14 @@ export function buildItemModel(kind, o) {
     part(GEO.cyl, glass, 0.12, 0.14, 0.12, 0, 0.42, 0, h, false);
     part(GEO.cyl, toon(0x8a6a42, 0, 0, { rough: 0.95 }), 0.13, 0.08, 0.13, 0, 0.52, 0, h, false); // rolha
     part(GEO.sphS, toon(0xffffff, 0xffffff, 0.8), 0.06, 0.1, 0.03, -0.1, 0.28, 0.13, h, false); // brilho do vidro
+  } else if (kind === 'talisman') {
+    // medalhão dourado em pé, com um trevo de quatro folhas que brilha
+    h.position.y = 0.32;
+    part(GEO.cyl, gold, 0.5, 0.07, 0.5, 0, 0, 0, h).rotation.x = Math.PI / 2;
+    part(GEO.cyl, toon(0x0e3a1a, 0, 0, { rough: 0.6 }), 0.4, 0.075, 0.4, 0, 0, 0.004, h).rotation.x = Math.PI / 2;
+    for (const [x, y] of [[0, 0.09], [0, -0.09], [0.09, 0], [-0.09, 0]]) part(GEO.sphS, gem, 0.12, 0.12, 0.05, x, y, 0.045, h, false);
+    part(GEO.torusF, gold, 0.16, 0.16, 0.3, 0, 0.29, 0, h).rotation.y = Math.PI / 2;
+    part(GEO.sphS, halo, 0.75, 0.75, 0.4, 0, 0, 0, h, false);
   } else if (kind === 'gold') {
     const coin = toon(0xffd24a, 0xaa7a00, 0.35, { metal: 0.9, rough: 0.3, env: 1.2 });
     const n = Math.min(7, 2 + (o.amount || 1));

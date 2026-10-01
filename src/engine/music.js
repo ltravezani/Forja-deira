@@ -42,6 +42,15 @@ export const MUSIC_THEMES = {
     wind: { vol: 0.02, cutoff: 700 },
     echo: { time: 0.55, fb: 0.35, mix: 0.35 },
   },
+  // O Éden: lídio luminoso, sinos e harpa suaves sobre o vento da mata
+  eden: {
+    bpm: 70, root: 53, scale: [0, 2, 4, 6, 7, 9, 11], chords: [0, 4, 5, 3], barsPerChord: 2,
+    pad: { type: 'sine', vol: 0.06, cutoff: 1500 },
+    bass: { type: 'sine', vol: 0.07 },
+    lead: { type: 'triangle', vol: 0.045, oct: 2, density: 0.3, dur: 1.4, bell: true },
+    wind: { vol: 0.018, cutoff: 900 },
+    echo: { time: 0.5, fb: 0.4, mix: 0.4 },
+  },
   caves: {
     bpm: 60, root: 45, scale: [0, 2, 3, 7, 8], chords: [0, 4, 2, 3], barsPerChord: 2,
     pad: { type: 'sine', vol: 0.05, cutoff: 900 },

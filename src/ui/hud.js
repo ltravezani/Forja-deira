@@ -57,6 +57,8 @@ function setVar(id, name, v) { const k = id + '--' + name; if (last.get(k) !== v
 /** Força a próxima atualização a reescrever tudo (troca de personagem). */
 export function resetHudCache() { last.clear(); }
 
+/** Tempo de buff: "42s" ou "9:58" (poções de reforço duram 10 minutos). */
+const buffLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : Math.ceil(s) + 's');
 export function hudTick() {
   const ch = G.ch, st = G.st;
   if (!ch || !st) return;
@@ -75,7 +77,7 @@ export function hudTick() {
   setText('mfTxt', st.mf + '%');
   updateSlotStates(ch, st);
   updateBossBar();
-  setHtml('buffs', G.buffs.map((x) => '<span class="buff">' + esc(x.name) + ' ' + Math.ceil(x.until - G.time) + 's</span>').join('') +
+  setHtml('buffs', G.buffs.map((x) => '<span class="buff' + (x.potion ? ' pot' : '') + '">' + esc(x.name) + ' ' + buffLeft(x.until - G.time) + '</span>').join('') +
     (G.pet && G.pet.away > G.time ? '<span class="buff">Pet vendendo ' + Math.ceil(G.pet.away - G.time) + 's</span>' : ''));
   updateLowHp(hpFrac, G.player.alive);
 }

@@ -367,6 +367,18 @@
     mp: { name: 'Poção de Mana', pct: 0.3, flat: 40, price: 50 },
     // Não é bebida: consumida na tela de queda para renascer no mesmo lugar com HP/MP cheios.
     rez: { name: 'Poção da Ressurreição', pct: 1, flat: 0, price: 50000, revive: true },
+    // Poções de reforço (só caem no Éden): bebidas no inventário, duram 10 minutos.
+    spd: { name: 'Poção de Velocidade', price: 20000, buff: { atkRatePct: 10 }, dur: 600, color: '#ffd84a', desc: 'Velocidade de ataque +10% por 10 minutos.' },
+    cdr: { name: 'Poção de Recarga', price: 20000, buff: { cdPct: -10 }, dur: 600, color: '#5ae8ff', desc: 'Tempo de recarga das habilidades -10% por 10 minutos.' },
+    str: { name: 'Poção de Força', price: 20000, buff: { str: 50 }, dur: 600, color: '#ff6a3a', desc: 'Força +50 por 10 minutos.' },
+    agi: { name: 'Poção de Agilidade', price: 20000, buff: { agi: 50 }, dur: 600, color: '#7aff5a', desc: 'Agilidade +50 por 10 minutos.' },
+    vit: { name: 'Poção de Vitalidade', price: 20000, buff: { vit: 50 }, dur: 600, color: '#ff5aa8', desc: 'Vitalidade +50 por 10 minutos.' },
+    ene: { name: 'Poção de Energia', price: 20000, buff: { ene: 50 }, dur: 600, color: '#a87aff', desc: 'Energia +50 por 10 minutos.' },
+  };
+  const BUFF_POTIONS = ['spd', 'cdr', 'str', 'agi', 'vit', 'ene'];
+  /** Talismãs: consumidos no Ferreiro. */
+  const TALISMANS = {
+    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
 
   function plusBonus(p) {
@@ -375,6 +387,7 @@
   function itemName(it) {
     if (it.kind === 'jewel') return JEWELS[it.id].name;
     if (it.kind === 'potion') return POTIONS[it.id].name;
+    if (it.kind === 'talisman') return TALISMANS[it.id].name;
     let base;
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
@@ -438,6 +451,7 @@
   function itemValue(it) {
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
+    if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3));
   }
@@ -613,6 +627,67 @@
   }
 
   // ---------------------------------------------------------------------------
+  // O Éden: mapa aberto com três caminhos e o Guardião do Éden. Uma entrada a
+  // cada 3 horas; a dificuldade acompanha o nível do personagem na entrada.
+  // ---------------------------------------------------------------------------
+  const EDEN = {
+    cooldownMs: 3 * 60 * 60 * 1000,
+    hpMult: 1.25, dmgMult: 1.1,            // monstros um pouco mais duros que os de masmorra do mesmo nível
+    // nível dos monstros = nível de entrada + bônus por trecho (início dos caminhos → Coração do Éden)
+    lvl: { path: 0, pathEnd: 3, heart: 5, mini: 6, boss: 8 },
+    rare: { normal: 0.1, elite: 0.15, mini: 0.4, boss: 0.75, chest: 0.3, secret: 0.6 }, // joia ou item Ancestral
+    bossRareRolls: 2,
+    legend: { mini: 0.05, boss: 0.05 },     // item Lendário (só mini chefes e chefe final)
+    talisman: 0.07,                          // Talismã da Sorte (sempre no chefe final)
+    buffPotion: { normal: 0.15, elite: 0.15, mini: 0.15, boss: 0.15, chest: 0.4, secret: 0.6 },
+  };
+  /** Milissegundos que faltam para poder entrar de novo (0 = liberado). */
+  function edenRemaining(ch, now) {
+    const last = ch && Number.isFinite(ch.edenLast) ? ch.edenLast : 0;
+    if (!last) return 0;
+    return clamp(last + EDEN.cooldownMs - now, 0, EDEN.cooldownMs);
+  }
+  /** Nível dos monstros num trecho do Éden. part: path|heart|mini|boss; t: 0..1 ao longo do caminho. */
+  function edenLevel(entry, part, t) {
+    const L = EDEN.lvl, e = Math.max(1, Math.floor(entry || 1));
+    if (part === 'path') return e + Math.round(L.path + (L.pathEnd - L.path) * clamp(t || 0, 0, 1));
+    return e + (L[part] || 0);
+  }
+  /**
+   * Drop do Éden (determinístico pela seed). src: normal|elite|mini|boss|chest|secret.
+   * Joia ou item Ancestral (10%, mais em mini chefes e no chefe), Lendário só em mini
+   * chefes e no chefe (5%), Talismã da Sorte (7%, sempre no chefe), poções de reforço (15%),
+   * além de Gold e poções de vida/mana como numa masmorra.
+   */
+  function rollEdenDrop(opts) {
+    const { seed, mLevel, src, mf, favorCls } = opts;
+    const rnd = mulberry32(seed);
+    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, log: [] };
+    const boss = src === 'boss', mini = src === 'mini', chest = src === 'chest' || src === 'secret';
+    const equipSrc = boss ? 'boss' : mini || chest ? 'elite' : src;
+    if (rnd() < DROP_CHANCE.gold || boss || mini || chest) {
+      const g = goldAmount(mLevel, boss || mini ? 'boss' : src === 'elite' || chest ? 'elite' : 'normal', rnd());
+      out.gold = mini ? Math.floor(g / 2) : src === 'secret' ? g * 2 : g;
+    }
+    const rolls = boss ? EDEN.bossRareRolls : 1;
+    for (let i = 0; i < rolls; i++) {
+      const r = rnd(), p = EDEN.rare[src] || EDEN.rare.normal;
+      out.log.push({ what: 'raro', roll: r, threshold: p });
+      if (r >= p) continue;
+      if (rnd() < 0.5) out.jewels.push(JEWEL_IDS[Math.floor(rnd() * JEWEL_IDS.length)]);
+      else out.items.push(makeEquip(hash32(seed, 'anc', i), mLevel, 'ancestral', favorCls, mf, equipSrc));
+    }
+    const pl = EDEN.legend[src] || 0;
+    if (pl) { const r = rnd(); out.log.push({ what: 'lendario', roll: r, threshold: pl }); if (r < pl) out.items.push(makeEquip(hash32(seed, 'leg'), mLevel, 'lendario', favorCls, mf, equipSrc)); }
+    const rt = rnd();
+    if (boss || rt < EDEN.talisman) out.talismans = 1;
+    const rb = rnd();
+    if (rb < (EDEN.buffPotion[src] || 0)) out.potions.push(BUFF_POTIONS[Math.floor(rnd() * BUFF_POTIONS.length)]);
+    if (!boss && rnd() < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
   // Aprimoramento (+nível)
   // ---------------------------------------------------------------------------
   function upgradeChance(it, jewel) {
@@ -623,14 +698,23 @@
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
-  function applyUpgrade(it, jewel, roll) {
+  /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos). */
+  const talismanUseful = (jewel) => jewel === 'chaos';
+  /**
+   * Aplica uma Jewel. opts.talisman: Talismã da Sorte em uso — se a fusão Chaos
+   * falhar, o item mantém o +nível (protected: true) em vez de voltar a +0.
+   */
+  function applyUpgrade(it, jewel, roll, opts) {
     const ch = upgradeChance(it, jewel);
     if (ch <= 0) return { ok: false, invalid: true, chance: 0 };
     const ok = roll < ch;
     if (jewel === 'life') { if (ok) it.addOpt += 4; return { ok, chance: ch }; }
     if (ok) it.plus += 1;
     else if (jewel === 'soul') it.plus = Math.max(6, it.plus - 1);
-    else if (jewel === 'chaos') it.plus = 0;
+    else if (jewel === 'chaos') {
+      if (opts && opts.talisman) return { ok, chance: ch, protected: true };
+      it.plus = 0;
+    }
     return { ok, chance: ch };
   }
 
@@ -657,7 +741,7 @@
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
-      unlockedFloors: {}, towerBest: 1,
+      unlockedFloors: {}, towerBest: 1, edenLast: 0,
     };
   }
   function className(ch) {
@@ -736,7 +820,7 @@
     }
     out.minDmg += out.dmgLvl; out.maxDmg += out.dmgLvl;
     if (out.maxDmg < out.minDmg) out.maxDmg = out.minDmg;
-    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60), 0.2, 1.2);
+    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60) / (1 + (b.atkRatePct || 0) / 100), 0.18, 1.2);
     out.mfTable = rarityTable(out.mf, 'normal');
     return out;
   }
@@ -843,11 +927,12 @@
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
-    upgradeChance, applyUpgrade, monsterStats,
+    EDEN, edenRemaining, edenLevel, rollEdenDrop,
+    upgradeChance, applyUpgrade, talismanUseful, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
