@@ -8,6 +8,7 @@ import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
+import { toggleAutoSkill } from '../game/automation.js';
 import { autoEquip, autoEquipOn, bagCat, equipFromBag, unequipSlot, usePotion } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { returnToTitle } from '../game/session.js';
@@ -55,6 +56,9 @@ function paneAction(e) {
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
     case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;
+    case 'autoskill': toggleAutoSkill(b.dataset.id); break;
+    case 'autoLoot': ch.autoLoot = b.dataset.v === '1'; break;
+    case 'autoPetSell': ch.autoPetSell = b.dataset.v === '1'; break;
     case 'node': ch.tree[b.dataset.id] = (ch.tree[b.dataset.id] || 0) + 1; recalc(); break;
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;

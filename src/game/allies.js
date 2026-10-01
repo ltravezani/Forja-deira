@@ -33,12 +33,12 @@ export function spawnAlly(kind, x, z, dur) {
 }
 /** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
 export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
-/** Manda o pet vender na cidade tudo que `petSellable` aceita. */
-export function sendPetToSell() {
+/** Manda o pet vender na cidade tudo que `petSellable` aceita (ou o filtro dado, na venda automática). */
+export function sendPetToSell(filter) {
   const pet = G.pet;
   if (!pet) return false;
   if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
-  const sell = G.ch.bag.filter(petSellable);
+  const sell = G.ch.bag.filter(typeof filter === 'function' ? filter : petSellable);
   if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
@@ -46,7 +46,7 @@ export function sendPetToSell() {
   pet.gold = total;
   pet.model.root.visible = false;
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
-  log('Pet partiu para a cidade com ' + sell.length + ' itens. Volta em 18s.', 'sys');
+  log('Pet partiu para a cidade com ' + sell.length + ' itens' + (typeof filter === 'function' ? ' (venda automática)' : '') + '. Volta em 18s.', 'sys');
   refreshPaneSoon();
   return true;
 }

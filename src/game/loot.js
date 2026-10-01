@@ -8,7 +8,7 @@ import { fmt, R, rand } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
-import { addToBag, autoEquipOn, classOk } from './inventory.js';
+import { addToBag, autoEquipOn, BAG_SIZE, classOk } from './inventory.js';
 import { pathTo } from './movement.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { glyph } from '../ui/icons.js';
@@ -97,12 +97,18 @@ export function spacePickup() {
   for (const l of G.loot) { const d = (l.x - p.x) ** 2 + (l.z - p.z) ** 2; if (d < bd) { bd = d; best = l; } }
   if (best) { p.target = { type: 'loot', l: best }; pathTo(best.x, best.z); }
 }
-/** Gold, poções e jewels são coletados só de passar por cima. */
+/**
+ * Gold, poções e jewels são coletados só de passar por cima. Com "Pegar drops
+ * automaticamente" ligado, tudo (itens também) num raio maior, sem mover o herói.
+ */
 export function autoPickup(p) {
-  const C = CONFIG.loot, r2 = C.autoPickupRadius * C.autoPickupRadius;
+  const C = CONFIG.loot, all = !!(G.ch && G.ch.autoLoot);
+  const r = all ? C.autoLootRadius : C.autoPickupRadius, r2 = r * r;
+  const bagFull = G.ch.bag.length >= BAG_SIZE;
   for (let i = G.loot.length - 1; i >= 0; i--) {
     const l = G.loot[i];
-    if (l.type !== 'item' && G.time - l.born > C.autoPickupDelay && (l.x - p.x) ** 2 + (l.z - p.z) ** 2 < r2) pickup(l);
+    if (l.type === 'item' && (!all || bagFull)) continue;
+    if (G.time - l.born > C.autoPickupDelay && (l.x - p.x) ** 2 + (l.z - p.z) ** 2 < r2) pickup(l);
   }
 }
 function removeLootVisual(l) {

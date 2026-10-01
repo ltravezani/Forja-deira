@@ -247,6 +247,7 @@ input, select { font-family: inherit; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .statrow { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
 .statrow b { font-family: var(--f-num); font-size: 17px; }
+.autorow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
 .pts { color: var(--ok); font-family: var(--f-num); }
 .note { font-size: 13px; color: var(--muted); }
 .warnbox { font-size: 13px; color: #ffc6a8; background: rgba(120,40,20,.25); border: 1px solid rgba(255,120,80,.3); padding: 8px 10px; border-radius: 3px; }
@@ -6013,6 +6014,7 @@ if (document.currentScript) document.currentScript.remove();
   // ---------------------------------------------------------------------------
   const EDEN = {
     cooldownMs: 3 * 60 * 60 * 1000,
+    levelCutPct: 15,                         // os monstros partem de 15% abaixo do nível do personagem
     hpMult: 1.25, dmgMult: 1.1,            // monstros um pouco mais duros que os de masmorra do mesmo nível
     // nível dos monstros = nível de entrada + bônus por trecho (início dos caminhos → Coração do Éden)
     lvl: { path: 0, pathEnd: 3, heart: 5, mini: 6, boss: 8 },
@@ -6027,6 +6029,10 @@ if (document.currentScript) document.currentScript.remove();
     const last = ch && Number.isFinite(ch.edenLast) ? ch.edenLast : 0;
     if (!last) return 0;
     return clamp(last + EDEN.cooldownMs - now, 0, EDEN.cooldownMs);
+  }
+  /** Nível de entrada do Éden: nível do personagem menos 15% (ex.: 360 → 306). */
+  function edenEntryLevel(level) {
+    return Math.max(1, Math.floor(Math.max(1, Math.floor(level || 1)) * (100 - EDEN.levelCutPct) / 100));
   }
   /** Nível dos monstros num trecho do Éden. part: path|heart|mini|boss; t: 0..1 ao longo do caminho. */
   function edenLevel(entry, part, t) {
@@ -6143,6 +6149,7 @@ if (document.currentScript) document.currentScript.remove();
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
       unlockedFloors: {}, towerBest: 1, edenLast: 0,
+      autoSkills: [], autoLoot: false, autoPetSell: false,
     };
   }
   function className(ch) {
@@ -6332,7 +6339,7 @@ if (document.currentScript) document.currentScript.remove();
     plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
-    EDEN, edenRemaining, edenLevel, rollEdenDrop,
+    EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
@@ -6417,6 +6424,12 @@ const CONFIG = {
     spaceSeekRadius: 16,    // m: se nada estiver perto, anda até o mais próximo
     spaceRepeat: 0.25,      // s: repetição ao segurar Espaço
     pickupReach: 1.5,       // m: ao clicar num item
+    autoLootRadius: 6,      // m: com "Pegar drops automaticamente" ligado (inclui itens)
+    autoPetSellMin: 5,      // itens vendáveis na mochila para o pet partir sozinho (ou mochila quase cheia)
+  },
+  auto: {
+    skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
+    healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
   },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
@@ -7717,6 +7730,11 @@ function sanitizeCharacter(ch) {
   if (!ch.unlockedFloors || typeof ch.unlockedFloors !== 'object') ch.unlockedFloors = {};
   ch.towerBest = Math.max(1, Math.floor(num(ch.towerBest, 1)));
   ch.edenLast = Math.max(0, num(ch.edenLast, 0));
+  // automação (Habilidades e Drops); saves antigos começam tudo desligado
+  if (!Array.isArray(ch.autoSkills)) ch.autoSkills = [];
+  ch.autoSkills = ch.autoSkills.filter((id, i, a) => R.SKILLS[id] && R.SKILLS[id].cls === ch.cls && a.indexOf(id) === i);
+  ch.autoLoot = ch.autoLoot === true;
+  ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
   ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
@@ -10616,12 +10634,12 @@ function spawnAlly(kind, x, z, dur) {
 }
 /** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
 const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
-/** Manda o pet vender na cidade tudo que `petSellable` aceita. */
-function sendPetToSell() {
+/** Manda o pet vender na cidade tudo que `petSellable` aceita (ou o filtro dado, na venda automática). */
+function sendPetToSell(filter) {
   const pet = G.pet;
   if (!pet) return false;
   if (pet.away > G.time) { log('O pet ainda está na cidade vendendo.', 'warn'); return false; }
-  const sell = G.ch.bag.filter(petSellable);
+  const sell = G.ch.bag.filter(typeof filter === 'function' ? filter : petSellable);
   if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
@@ -10629,7 +10647,7 @@ function sendPetToSell() {
   pet.gold = total;
   pet.model.root.visible = false;
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
-  log('Pet partiu para a cidade com ' + sell.length + ' itens. Volta em 18s.', 'sys');
+  log('Pet partiu para a cidade com ' + sell.length + ' itens' + (typeof filter === 'function' ? ' (venda automática)' : '') + '. Volta em 18s.', 'sys');
   refreshPaneSoon();
   return true;
 }
@@ -11880,7 +11898,8 @@ const EFFECTS = {
   },
 };
 
-function castSkill(id, tx, tz) {
+/** opts.auto: lançada pela automação; não cancela o caminho que o jogador mandou andar. */
+function castSkill(id, tx, tz, opts) {
   const p = G.player, ch = G.ch, st = G.st;
   if (!p.alive || inSafe()) { if (p.alive) floatText(p.x, 2.6, p.z, 'Habilidades desativadas na zona segura', 'info'); return false; }
   const sk = R.SKILLS[id];
@@ -11906,7 +11925,7 @@ function castSkill(id, tx, tz) {
   p.rot += dr * 0.6;
   p.castFace = p.rotTarget;
   p.castMove = HEAVY[sk.kind] ? 0 : CONFIG.player.castMove;
-  if (HEAVY[sk.kind]) p.path = null;
+  if (HEAVY[sk.kind] && !(opts && opts.auto)) p.path = null;
   const ctx = { p, sk, id, tx, tz, dx, dz, d, mult: sk.mult, col: CLASS_COLOR[ch.cls], cost };
   const fx = EFFECTS[sk.kind];
   if (!fx || fx(ctx) === false) { G.mp += cost.mp; G.ag += cost.ag; G.cds[id] = 0; p.lockUntil = G.time; return false; }
@@ -12315,8 +12334,8 @@ function openNpc(id) {
     h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
       '<p class="note">Drops: só Gold (igual a um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Jewel aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Gold e Jewels.</p>';
   } else if (id === 'eden') {
-    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = Math.max(1, ch.level);
-    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível agora) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
+    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = R.edenEntryLevel(ch.level);
+    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível − 15%) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
       (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
     h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
@@ -14554,6 +14573,74 @@ function edenState() { return E; }
 return { clearEden, edenState, onEdenBossKilled, onEdenKill, onMiniKilled, openChest, spawnEden, updateEden };
 })();
 
+// ---- game/automation.js ----
+const { autoSkillAllowed, autoSkillOn, toggleAutoSkill, updateAutomation } = (() => {
+// ---------- automação: habilidades automáticas, coleta de drops e venda pelo pet ----------
+
+/** Habilidades que deslocam o herói: ficam de fora da automação (o movimento é sempre do jogador). */
+const MOVES_HERO = { blink: 1, dash: 1 };
+const autoSkillAllowed = (id) => !!R.SKILLS[id] && !MOVES_HERO[R.SKILLS[id].kind];
+const autoSkillOn = (id) => Array.isArray(G.ch.autoSkills) && G.ch.autoSkills.includes(id);
+function toggleAutoSkill(id) {
+  const ch = G.ch;
+  if (!Array.isArray(ch.autoSkills)) ch.autoSkills = [];
+  const i = ch.autoSkills.indexOf(id);
+  if (i >= 0) ch.autoSkills.splice(i, 1);
+  else if (autoSkillAllowed(id)) ch.autoSkills.push(id);
+}
+
+/** Algum monstro vivo dentro do alcance da habilidade? */
+function monsterNear(p, reach) {
+  for (const m of G.monsters) {
+    if (m.dead) continue;
+    const r = reach + (m.radius || 0);
+    if (dist2(m, p) <= r * r) return true;
+  }
+  return false;
+}
+/**
+ * Lança sozinha a primeira habilidade marcada como automática que estiver pronta,
+ * com MP/AG suficientes e um monstro ao alcance. As de recarga longa (buffs,
+ * invocações, golpes fortes) têm prioridade; as rápidas preenchem o resto.
+ */
+function autoCast() {
+  const p = G.player, ch = G.ch, st = G.st;
+  if (!ch.autoSkills || !ch.autoSkills.length || !p || !p.alive || p.dash || G.skillQueue) return;
+  if (G.time < p.lockUntil || G.zone === 'town' || inSafe()) return;
+  const ids = ch.autoSkills.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
+  ids.sort((a, b) => R.SKILLS[b].cd - R.SKILLS[a].cd);
+  for (const id of ids) {
+    const sk = R.SKILLS[id], c = R.skillCost(st, sk);
+    if (G.mp < c.mp || G.ag < c.ag) continue;
+    if (sk.kind === 'heal' && G.hp > st.maxHp * CONFIG.auto.healBelow) continue;
+    if (!monsterNear(p, Math.max(sk.range || 0, sk.radius || 0) || CONFIG.auto.skillReach)) continue;
+    if (castSkill(id, null, null, { auto: true })) return;
+  }
+}
+
+/** Itens que o pet leva sozinho: os mesmos da venda manual, menos melhorias para o herói. */
+function autoSellable(it, base) {
+  return petSellable(it) && !(classOk(it) && reqOk(it) && cpWith(it) > base);
+}
+function autoPetSell() {
+  const pet = G.pet, ch = G.ch;
+  if (!pet || pet.away > G.time || G.autoEqT > 0) return;
+  const base = cpOf(ch);
+  const n = ch.bag.filter((it) => autoSellable(it, base)).length;
+  if (!n || (n < CONFIG.loot.autoPetSellMin && ch.bag.length < BAG_SIZE - 2)) return;
+  sendPetToSell((it) => autoSellable(it, base));
+}
+
+let sellTick = 0;
+function updateAutomation(dt) {
+  if (!G.ch || !G.player) return;
+  autoCast();
+  sellTick -= dt;
+  if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell) autoPetSell(); }
+}
+return { autoSkillAllowed, autoSkillOn, toggleAutoSkill, updateAutomation };
+})();
+
 // ---- ui/minimap.js ----
 const { drawMinimap, paintMinimapTile, resetMinimap } = (() => {
 // ---------- minimapa ----------
@@ -15992,6 +16079,7 @@ function updateWorld(dt) {
   updateFrustum();
   rebuildMonsterGrid();
   updatePlayer(dt);
+  updateAutomation(dt);
   if (G.zone !== 'town') updateMonsters(dt);
   updateAllies(dt);
   updateProjectiles(dt);
@@ -16805,12 +16893,12 @@ function enterTower(floor) {
 }
 /**
  * O Éden: mapa aberto com três caminhos até o Coração do Éden. Uma entrada a cada
- * 3 horas (marcada no save ao entrar). Os monstros acompanham o nível de entrada.
+ * 3 horas (marcada no save ao entrar). Os monstros partem de 15% abaixo do nível de entrada.
  */
 function enterEden() {
   const ch = G.ch;
   clearWorld();
-  const entry = Math.max(1, ch.level);
+  const entry = R.edenEntryLevel(ch.level);
   G.zone = 'eden'; G.biome = 'eden'; G.floor = 1; G.edenLvl = entry;
   ch.edenLast = Date.now();
   Music.play('eden');
@@ -16879,7 +16967,8 @@ function paneChar() {
 function paneSkills() {
   const ch = G.ch, st = G.st;
   const pts = R.treePoints(ch) - R.treeSpent(ch);
-  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.</p>';
+  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.</p>' +
+    '<p class="note"><b>Auto</b>: a habilidade sai sozinha quando houver um monstro ao alcance (o herói não anda sozinho; Teleporte e investidas ficam de fora).</p>';
   R.skillsFor(ch.cls).forEach((id) => {
     const sk = R.SKILLS[id];
     const ok = skillUnlocked(id);
@@ -16887,6 +16976,7 @@ function paneSkills() {
     const c = R.skillCost(st, sk);
     h += '<div class="skill' + (ok ? '' : ' locked') + '"><img class="skic" src="' + skillIconURI(id) + '" alt=""><div><span class="t">' + esc(sk.name) + '</span> <span class="c">· MP ' + c.mp + ' · AG ' + c.ag + ' · recarga ' + sk.cd + 's' + (sk.mult ? ' · ×' + sk.mult : '') + (st.boosts[id] ? ' · +' + st.boosts[id] + '%' : '') + '</span><div class="c">' + esc(sk.desc) + '</div>' +
       (ok ? '' : '<div class="c" style="color:var(--danger)">Requer nível ' + sk.lvl + (sk.tier ? ' e ' + R.CLASSES[ch.cls].tiers[sk.tier] : '') + '</div>') + '</div><div>' +
+      (ok && autoSkillAllowed(id) ? '<button class="btn sm' + (autoSkillOn(id) ? ' gold' : '') + '" data-act="autoskill" data-id="' + id + '" aria-pressed="' + autoSkillOn(id) + '" title="Lançar sozinha perto de monstros">Auto: ' + (autoSkillOn(id) ? 'sim' : 'não') + '</button> ' : '') +
       (ok ? (inBar >= 0 ? '<button class="btn sm" data-act="unbar" data-id="' + id + '">Slot ' + (inBar + 1) + ' ✕</button>' : '<button class="btn sm" data-act="bar" data-id="' + id + '"' + (ch.skillBar.length >= 6 ? ' disabled' : '') + '>Pôr na barra</button>') : '') + '</div></div>';
   });
   h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 10 níveis, +10 por reset, +5 por evolução. Até 5 ranks por nó.</p><div class="tree">';
@@ -16907,7 +16997,13 @@ function paneSkills() {
 
 // ---------- tabela de drops ----------
 function paneLoot() {
+  const ch = G.ch;
   let h = '<h3>Drops</h3>';
+  const yesNo = (act, on) => '<span class="row" role="group"><button class="btn sm' + (on ? ' gold' : '') + '" data-act="' + act + '" data-v="1" aria-pressed="' + on + '">Sim</button><button class="btn sm' + (on ? '' : ' gold') + '" data-act="' + act + '" data-v="0" aria-pressed="' + !on + '">Não</button></span>';
+  h += '<h4>Automação</h4>' +
+    '<div class="autorow"><span>Pegar drops do chão automaticamente</span>' + yesNo('autoLoot', !!ch.autoLoot) + '</div>' +
+    '<div class="autorow"><span>Enviar pet para vender automaticamente</span>' + yesNo('autoPetSell', !!ch.autoPetSell) + '</div>' +
+    '<p class="note">Coleta: tudo que cair a até ' + CONFIG.loot.autoLootRadius + ' m do herói, itens também (com a mochila cheia, os itens ficam no chão). Venda: o pet parte sozinho com ' + CONFIG.loot.autoPetSellMin + '+ itens vendáveis ou com a mochila quase cheia; leva o mesmo que na venda manual, menos Lendários, itens trancados e melhorias para você.</p>';
   {
     const st = G.st;
     const rows = ['comum', 'magico', 'excelente', 'ancestral', 'lendario'];
@@ -17192,12 +17288,18 @@ function spacePickup() {
   for (const l of G.loot) { const d = (l.x - p.x) ** 2 + (l.z - p.z) ** 2; if (d < bd) { bd = d; best = l; } }
   if (best) { p.target = { type: 'loot', l: best }; pathTo(best.x, best.z); }
 }
-/** Gold, poções e jewels são coletados só de passar por cima. */
+/**
+ * Gold, poções e jewels são coletados só de passar por cima. Com "Pegar drops
+ * automaticamente" ligado, tudo (itens também) num raio maior, sem mover o herói.
+ */
 function autoPickup(p) {
-  const C = CONFIG.loot, r2 = C.autoPickupRadius * C.autoPickupRadius;
+  const C = CONFIG.loot, all = !!(G.ch && G.ch.autoLoot);
+  const r = all ? C.autoLootRadius : C.autoPickupRadius, r2 = r * r;
+  const bagFull = G.ch.bag.length >= BAG_SIZE;
   for (let i = G.loot.length - 1; i >= 0; i--) {
     const l = G.loot[i];
-    if (l.type !== 'item' && G.time - l.born > C.autoPickupDelay && (l.x - p.x) ** 2 + (l.z - p.z) ** 2 < r2) pickup(l);
+    if (l.type === 'item' && (!all || bagFull)) continue;
+    if (G.time - l.born > C.autoPickupDelay && (l.x - p.x) ** 2 + (l.z - p.z) ** 2 < r2) pickup(l);
   }
 }
 function removeLootVisual(l) {
@@ -18964,6 +19066,9 @@ function paneAction(e) {
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
     case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
     case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;
+    case 'autoskill': toggleAutoSkill(b.dataset.id); break;
+    case 'autoLoot': ch.autoLoot = b.dataset.v === '1'; break;
+    case 'autoPetSell': ch.autoPetSell = b.dataset.v === '1'; break;
     case 'node': ch.tree[b.dataset.id] = (ch.tree[b.dataset.id] || 0) + 1; recalc(); break;
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
