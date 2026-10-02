@@ -410,6 +410,19 @@
     const k = it.slot === 'weapon' ? 1 : 0.7;
     return { stat, value: Math.floor((15 + it.tier * 38 + it.plus * 4) * k) };
   }
+  /** Tabela de opções excelentes do slot (armas e colares usam a ofensiva). */
+  function excPool(it) { return it.slot === 'weapon' || it.slot === 'pendant' ? EXC_WEAPON : EXC_ARMOR; }
+  /**
+   * Opções excelentes ativas. Lendário (fora asas) tem TODAS as opções do slot,
+   * então nunca perde para um Excelente/Ancestral da mesma base por azar no sorteio.
+   */
+  function excOpts(it) {
+    if (!it || !it.slot) return [];
+    if (it.rarity === 'lendario' && it.slot !== 'wings') return Object.keys(excPool(it));
+    return it.exc || [];
+  }
+  /** Dano % extra do +nível no colar (antes o +nível não fazia nada no colar). */
+  function pendantPlus(it) { return Math.round(plusBonus(it.plus || 0) * (1 + it.tier * 0.2) / 10); }
   function itemStats(it) {
     const o = {};
     const add = (k, v) => (o[k] = (o[k] || 0) + v);
@@ -426,7 +439,7 @@
       add('maxHp', 12 + t * 30 + pb * 2);
       if (it.addOpt) add('hpPct', it.addOpt / 4);
     } else if (it.slot === 'pendant') {
-      add('dmgPct', 2 + t);
+      add('dmgPct', 2 + t + pendantPlus(it));
       if (it.addOpt) add('dmgPct', it.addOpt / 4);
     } else if (it.slot === 'wings') {
       const wb = wingBonus(it);
@@ -438,8 +451,8 @@
       if (it.addOpt) add('armorDef', it.addOpt);
     }
     if (it.luck) { add('critPct', 5); }
-    const excSet = it.slot === 'weapon' || it.slot === 'pendant' ? EXC_WEAPON : EXC_ARMOR;
-    (it.exc || []).forEach((e) => { const d = excSet[e]; if (d) for (const k in d.s) add(k, d.s[k]); });
+    const excSet = excPool(it);
+    excOpts(it).forEach((e) => { const d = excSet[e]; if (d) for (const k in d.s) add(k, d.s[k]); });
     if (it.anc) add(it.anc.stat, it.anc.value);
     if (it.legend && LEGEND[it.legend]) for (const k in LEGEND[it.legend].s) add(k, LEGEND[it.legend].s[k]);
     return o;
@@ -451,7 +464,7 @@
     if (s.wizRise) L.push(['Aumento de magia', s.wizRise + '%']);
     if (s.armorDef) L.push(['Defesa', s.armorDef]);
     if (it.slot === 'ring') L.push(['HP máximo', '+' + Math.round(12 + it.tier * 30 + plusBonus(it.plus || 0) * (1 + it.tier * 0.2) * 2)]);
-    if (it.slot === 'pendant') L.push(['Dano', '+' + (2 + it.tier) + '%']);
+    if (it.slot === 'pendant') L.push(['Dano', '+' + (2 + it.tier + pendantPlus(it)) + '%']);
     if (it.slot === 'wings') {
       const wb = wingBonus(it);
       L.push(['Dano', '+' + wb.dmg + '%']); L.push(['Absorção', '+' + wb.red + '%']);
@@ -545,7 +558,7 @@
     if (slot === 'weapon') it.skill = ord >= 1 ? rnd() < 0.5 : rnd() < 0.1;
     if (ord >= 2 && slot !== 'wings') {
       const pool = Object.keys(slot === 'weapon' || slot === 'pendant' ? EXC_WEAPON : EXC_ARMOR);
-      const n = ord === 2 ? 1 + Math.floor(rnd() * 2) : ord === 3 ? 2 : 2 + Math.floor(rnd() * 2);
+      const n = ord === 2 ? 1 + Math.floor(rnd() * 2) : ord === 3 ? 2 : (rnd(), pool.length); // lendário: todas (rnd() mantém a sequência das seeds)
       while (it.exc.length < n) { const e = pool[Math.floor(rnd() * pool.length)]; if (it.exc.indexOf(e) < 0) it.exc.push(e); }
     }
     if (ord === 3) {
@@ -965,7 +978,7 @@
     expToNext, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
-    plusBonus, itemName, itemReq, itemStats, itemLines, itemValue, sellValue,
+    plusBonus, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,

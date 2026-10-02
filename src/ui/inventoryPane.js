@@ -53,7 +53,7 @@ function itemDetail(it, where) {
     if (it.skill) h += '<div class="ln">Habilidade (+10% dano de habilidades)</div>';
     if (it.addOpt) h += '<div class="ln">Opção adicional +' + it.addOpt + '</div>';
     const exSet = it.slot === 'weapon' || it.slot === 'pendant' ? R.EXC_WEAPON : R.EXC_ARMOR;
-    (it.exc || []).forEach((e) => (h += '<div class="ln exc">' + esc(exSet[e].t) + '</div>'));
+    R.excOpts(it).forEach((e) => (h += '<div class="ln exc">' + esc(exSet[e].t) + '</div>'));
     if (it.anc) h += '<div class="ln anc">Ancestral: ' + statLabel(it.anc.stat) + ' +' + it.anc.value + '</div>';
     if (it.legend) h += '<div class="ln leg">Lendário: ' + esc(R.LEGEND[it.legend].t) + '</div>';
     const req = R.itemReq(it);
