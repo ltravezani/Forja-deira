@@ -145,3 +145,40 @@ test('classes novas: 3 evoluções, habilidades e árvore completas', () => {
   assert.ok(st.lifeSteal > 0 && st.maxDmg > 0);
 });
 
+
+test('Lendário (+0, sem Sorte) nunca dá menos CP que Excelente da mesma base e mesma opção adicional', () => {
+  const pieces = ['weapon', 'armor', 'helm', 'gloves', 'boots', 'ring', 'pendant'];
+  for (const cls of CLASSES) {
+    for (const level of [50, 400, 1000]) {
+      const ch = R.newCharacter('T', cls);
+      ch.level = level;
+      ch.points = level * 5;
+      R.autoDistribute(ch, level * 5);
+      const cp = (it) => { ch.equip[it.slot] = it; return R.combatPower(R.deriveStats(ch, [])); };
+      for (const slot of pieces) {
+        const gcls = slot === 'ring' || slot === 'pendant' ? null : R.gearCls(cls, slot);
+        const pool = Object.keys(slot === 'weapon' || slot === 'pendant' ? R.EXC_WEAPON : R.EXC_ARMOR);
+        for (const tier of [0, 4, 9]) for (const addOpt of [0, 16]) {
+          const base = { slot, cls: gcls, tier, plus: 0, skill: slot === 'weapon', anc: null, addOpt };
+          // melhor Excelente possível: com Sorte e o melhor par de opções excelentes
+          let best = 0;
+          for (let a = 0; a < pool.length; a++) for (let b = a + 1; b < pool.length; b++) {
+            best = Math.max(best, cp({ ...base, rarity: 'excelente', luck: true, exc: [pool[a], pool[b]], legend: null }));
+          }
+          for (const legend of Object.keys(R.LEGEND)) {
+            const leg = { ...base, rarity: 'lendario', luck: false, exc: [], legend };
+            const c0 = cp(leg);
+            assert.ok(c0 >= best, cls + ' nv' + level + ' ' + slot + ' t' + tier + ' opt' + addOpt + ' ' + legend + ': ' + c0 + ' < ' + best);
+            if (level === 1000) assert.ok(cp({ ...leg, plus: 10 }) > c0, slot + ': +10 precisa aumentar CP');
+          }
+        }
+      }
+    }
+  }
+});
+
+test('+nível do colar aumenta o dano', () => {
+  const p = { slot: 'pendant', cls: null, tier: 5, rarity: 'excelente', plus: 0, exc: [] };
+  const d0 = R.itemStats(p).dmgPct, d10 = R.itemStats({ ...p, plus: 10 }).dmgPct, d15 = R.itemStats({ ...p, plus: 15 }).dmgPct;
+  assert.ok(d10 > d0 && d15 > d10, d0 + ' ' + d10 + ' ' + d15);
+});
