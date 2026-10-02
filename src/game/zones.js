@@ -19,9 +19,11 @@ import { BIOMES, floorLevel, towerBiome } from '../world/biomes.js';
 import { gy, walkable } from '../world/grid.js';
 import { kit, kitMat } from '../world/kit.js';
 import { buildLevel } from '../world/level.js';
-import { genDungeon, genTower, genTown } from '../world/levelgen.js';
+import { genDungeon, genTown } from '../world/levelgen.js';
+import { genTower, TOWER_LAYOUTS } from '../world/towergen.js';
 import { genEden } from '../world/edengen.js';
 import { clearEden, spawnEden } from './eden.js';
+import { clearTower, spawnTowerEvents } from './tower.js';
 
 /** A cidade é a única zona segura. */
 export function inSafe() { return G.zone === 'town'; }
@@ -44,6 +46,7 @@ export function clearWorld() {
   clearFx();
   clearCombatFx();
   clearEden();
+  clearTower();
   resetFloatText();
 }
 function placePlayer(L) {
@@ -116,7 +119,8 @@ export function enterTower(floor) {
   G.ch.towerBest = Math.max(G.ch.towerBest || 1, floor);
   Music.play(biome);
   const seed = R.hash32('tower', biome, floor, G.ch.name, Date.now());
-  G.L = genTower(biome, floor, seed);
+  G.L = genTower(biome, floor, seed, G.towerLayout);
+  G.towerLayout = G.L.layout;
   buildLevel(G.L);
   resize();
   placePlayer(G.L);
@@ -140,10 +144,12 @@ export function enterTower(floor) {
     }
     pack++;
   });
+  spawnTowerEvents(G.L, lvl);
   G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
-  setZoneText('Torre Infinita · Andar ' + floor, B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
-  log('Torre Infinita, andar ' + floor + ' (' + B.name + '). Derrote o chefe no salão central para subir.', 'sys');
-  toast('Torre Infinita', 'Andar ' + floor + ' · ' + B.name);
+  const plan = TOWER_LAYOUTS[G.L.layout];
+  setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
+  log('Torre Infinita, andar ' + floor + ': ' + plan.name + ' (' + B.name + '). ' + plan.hint + ' Fique atento: emboscadas e invasões podem surgir a qualquer momento.', 'sys');
+  toast('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name);
   persist();
 }
 /**

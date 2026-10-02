@@ -16,6 +16,8 @@ export const MON = {
   lavademon: { name: 'Demônio de Magma', model: 'golem', o: { stone: 0x3a2020, core: 0xff6a1a, scale: 0.95 }, speed: 3.4, range: 2.2, atkT: 1.4, mod: { hp: 1.7, dmg: 1.3, def: 1.3 } },
   hound: { name: 'Cão Infernal', model: 'beast', o: { fur: 0x5a1a10, dark: 0x2a0a08, eye: 0xffcc00, flame: true, scale: 1.1 }, speed: 6.6, range: 1.9, atkT: 0.85, mod: { hp: 1, dmg: 1.1 } },
   herald: { name: 'Arauto do Vazio', model: 'floater', o: { body: 0x7a3aff, eye: 0xff66ff }, ranged: { speed: 10, color: 0xbb66ff }, speed: 4, range: 10, atkT: 1.7, mod: { hp: 1, dmg: 1.3 } },
+  // Torre Infinita: foge do herói, quase não bate e some se não for pego
+  tw_thief: { name: 'Ladrão de Ouro', model: 'humanoid', o: { gltf: 'barbarian', skinK: 0.75, tintK: 0.6, skin: 0x8abf4a, cloth: 0x4a3418, armor: 0xd8a83a, trim: 0xffd86a, head: 'goblin', weapon: 'club', scale: 0.78 }, flee: true, speed: 5, range: 1.5, atkT: 9, mod: { hp: 2.6, dmg: 0.1, def: 1.2 } },
   // chefes
   queen: { name: 'Rainha Aracnídea', model: 'spider', o: { body: 0x5a1a5a, belly: 0x8a2a6a, eye: 0x40ff80, scale: 2.4 }, boss: true, speed: 4.4, range: 3.2, atkT: 1.2, mod: { hp: 16, dmg: 1.8, def: 1.4 } },
   colossus: { name: 'Colosso de Cristal', model: 'golem', o: { stone: 0x5a6aa8, core: 0xbfffff, scale: 1.9 }, boss: true, speed: 3.2, range: 3.6, atkT: 1.6, mod: { hp: 18, dmg: 2, def: 1.6 } },

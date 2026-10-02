@@ -12,6 +12,7 @@ import { hitStop } from './feel.js';
 import { autoEquipOn, potionCount } from './inventory.js';
 import { dropEdenRoll, dropLoot } from './loot.js';
 import { onEdenBossKilled, onEdenKill, onMiniKilled, openChest } from './eden.js';
+import { onTowerKill } from './tower.js';
 import { aggroPack, QUERY_PAD, queryMonsters } from './monsters.js';
 import { face } from './movement.js';
 import { makePortal } from './npcs.js';
@@ -163,6 +164,7 @@ export function killMonster(m) {
   if (m.boss) onBossKilled(m);
   else if (m.mini) onMiniKilled(m);
   if (G.zone === 'eden') onEdenKill(m);
+  else if (G.zone === 'tower') onTowerKill(m);
 }
 function grantKillRewards(m) {
   const ch = G.ch;

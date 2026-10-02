@@ -12,6 +12,7 @@ import { updatePlayer } from './player.js';
 import { updateProjectiles } from './projectiles.js';
 import { updateTownLife } from './townlife.js';
 import { updateEden } from './eden.js';
+import { updateTower } from './tower.js';
 import { updateAutomation } from './automation.js';
 import { paintMinimapTile } from '../ui/minimap.js';
 import { updateTorchLights } from '../world/level.js';
@@ -78,6 +79,7 @@ export function updateWorld(dt) {
   updateNpcs(dt);
   if (G.zone === 'town') updateTownLife(dt);
   if (G.zone === 'eden') updateEden(dt);
+  if (G.zone === 'tower') updateTower(dt);
   updateLootVisuals(dt);
   updatePortals(dt);
   const p = G.player;

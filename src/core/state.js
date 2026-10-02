@@ -9,7 +9,7 @@ export const G = {
   monsters: [], projectiles: [], delayed: [], loot: [], allies: [], breakables: [], npcs: [],
   exitPortal: null, townPortal: null, edenPortal: null, hubPortal: null, townTower: null, time: 0, killCount: 0, lastHurt: -99, cast: null,
   explored: null, boss: null, selectedSlot: 0, dropLog: [], nextMonId: 1, showAllLabels: false,
-  cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0,
+  cds: {}, skillQueue: null, paused: false, autoEqT: 0, cp: 0, towerLayout: null,
 };
 /** Portais ativos (descida/subida, masmorras, Éden e o de volta para a cidade). */
 export function allPortals() { return [G.exitPortal, G.townPortal, G.edenPortal, G.hubPortal].filter(Boolean); }

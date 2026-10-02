@@ -61,6 +61,7 @@ export function spawnMonster(kind, x, z, level, opt) {
     model.mats.forEach((m) => { m.userData.baseEmissive = new THREE.Color(0x2050ff); m.userData.baseEI = 0.35; m.emissive.copy(m.userData.baseEmissive); m.emissiveIntensity = 0.35; });
     if (affix.scale) model.root.scale.multiplyScalar(affix.scale);
   }
+  if (T.flee) attachBossSigil(model, 0xffd86a, 1.1); // Ladrão de Ouro: brilho dourado no chão
   if (T.boss) {
     // selo rúnico no chão, do tamanho do corpo do chefe (compensa a escala do modelo)
     attachBossSigil(model, 0xff5a2a, BOSS_RADIUS * 1.45);
@@ -151,6 +152,7 @@ function updateIdle(m, d, dt, p, safe) {
 
 /** Perseguição e ataque: prepara o golpe (atkWind, telegrafado pela animação) e o resolve. */
 function updateEngaged(m, dx, dz, d, dt, slow, p) {
+  if (m.T.flee) { flee(m, dx, dz, d, dt, slow); return; }
   if (m.atkWind > 0) {
     m.atkWind -= dt;
     if (m.atkWind <= 0) resolveAttack(m, dx, dz, d, p);
@@ -162,6 +164,15 @@ function updateEngaged(m, dx, dz, d, dt, slow, p) {
     if (m.los) { m.path = null; stepToward(m, p.x, p.z, m.speed * slow, dt, m.moveR); return; }
     if (m.repath <= 0 || !m.path) { m.repath = 0.6 + rand() * 0.4; m.path = findPath(G.L, m.x, m.z, p.x, p.z, 1200); }
     if (m.path && m.path.length) { const n = m.path[0]; if (stepToward(m, n.x, n.z, m.speed * slow, dt, m.moveR)) m.path.shift(); }
+  }
+}
+/** Foge do herói: tenta a direção oposta e, se houver parede, desvia aos poucos para os lados. */
+function flee(m, dx, dz, d, dt, slow) {
+  if (d > 22) return;
+  const base = Math.atan2(-dz, -dx);
+  for (const off of [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6]) {
+    const a = base + off * (m.id % 2 ? 1 : -1), tx = m.x + Math.cos(a) * 2.5, tz = m.z + Math.sin(a) * 2.5;
+    if (walkableR(G.L, tx, tz, m.moveR) && lineClear(G.L, m.x, m.z, tx, tz, m.moveR)) { stepToward(m, tx, tz, m.speed * slow, dt, m.moveR); return; }
   }
 }
 function resolveAttack(m, dx, dz, d, p) {
