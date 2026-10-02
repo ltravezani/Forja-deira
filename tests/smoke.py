@@ -192,6 +192,70 @@ with sync_playwright() as p:
     check(ev("!!G.exitPortal && G.ch.towerBest >= 2"), 'chefe abre o portal e registra o recorde')
     ev("(D.G.loot.length = 0, G.exitPortal.onUse(), 0)")
     check(ev("G.zone === 'tower' && G.floor === 2") and ev("Math.min(...G.monsters.map((m) => m.level))") > lv1, 'sobe para o andar 2, mais difícil')
+    # Torre variada: planta muda a cada andar; emboscada, invasão, círculo selado, santuário e ladrão funcionam
+    layouts = []
+    for f in range(1, 7):
+        ev("D.enterTower(%d)" % f)
+        layouts.append(ev("G.towerLayout"))
+    check(all(layouts[i] != layouts[i + 1] for i in range(len(layouts) - 1)) and len(set(layouts)) >= 3, 'plantas da torre variam entre andares %s' % layouts)
+    tw = {}
+    for f in range(2, 60):
+        if all(k in tw for k in ('ambush', 'sealed', 'invasion', 'shrine', 'thief')): break
+        ev("D.enterTower(%d)" % f)
+        for t in ev("G.L.events.map((e) => e.type)"):
+            tw.setdefault(t, f)
+    check(len(tw) == 5, 'todos os eventos da torre sorteados em algum andar %s' % json.dumps(tw))
+    def tower_with(t):
+        for f in range(2, 120):
+            ev("D.enterTower(%d)" % f)
+            if ev("G.L.events.some((e) => e.type === '%s')" % t): return
+    step = "(function(n){ for (let i = 0; i < n; i++) D.updateWorld(0.05); return 0; })"
+    tele = "(function(x, z){ G.player.x = x; G.player.z = z; G.player.path = null; return 0; })"
+    tower_with('ambush')
+    ev("(G.player.invulnUntil = 1e12, 0)")
+    n0 = ev("G.monsters.length")
+    ev(tele + "(D.towerState().ambush[0].x, D.towerState().ambush[0].z)")
+    ev(step + "(2)")
+    check(ev("D.towerState().ambush[0].state === 1") and ev("G.monsters.length") > n0 and ev("D.towerState().ambush[0].mons.every((m) => m.aggro)"), 'emboscada surge em volta do herói')
+    ev("(D.towerState().ambush[0].mons.forEach((m) => D.killMonster(m)), 0)")
+    check(ev("D.towerState().ambush[0].state === 2"), 'emboscada vencida')
+    tower_with('invasion')
+    ev("(G.player.invulnUntil = 1e12, D.towerState().t = 999, 0)")
+    ev(step + "(2)")
+    check(ev("D.towerState().inv.state === 1 && !!D.towerState().inv.mesh"), 'invasão abre uma fenda')
+    ev(step + "(160)")
+    check(ev("D.towerState().inv.waves === 3 && D.towerState().inv.mons.length > 0 && D.towerState().inv.mons.every((m) => m.aggro || m.dead)"), 'invasão manda três ondas atrás do herói')
+    ev("(D.towerState().inv.mons.forEach((m) => D.killMonster(m)), 0)")
+    ev(step + "(30)")
+    check(ev("D.towerState().inv.state === 2 && !D.towerState().inv.mesh"), 'fenda fecha depois da invasão')
+    tower_with('sealed')
+    ev("(G.player.invulnUntil = 1e12, 0)")
+    floor0 = ev("G.L.grid.reduce((a, v) => a + (v === 1), 0)")
+    ev(tele + "(D.towerState().seals[0].x, D.towerState().seals[0].z)")
+    ev(step + "(2)")
+    check(ev("D.towerState().seals[0].state === 1") and ev("G.L.grid.reduce((a, v) => a + (v === 1), 0)") < floor0, 'círculo selado fecha a barreira')
+    check(ev("D.towerState().seals[0].mons.every((m) => m.dead || Math.hypot(m.x - D.towerState().seals[0].x, m.z - D.towerState().seals[0].z) < D.towerState().seals[0].r)"), 'guardiões do círculo ficam do lado de dentro')
+    ev("(D.towerState().seals[0].mons.forEach((m) => D.killMonster(m)), 0)")
+    ev(step + "(2)")
+    check(ev("D.towerState().seals[0].state === 2") and ev("G.L.grid.reduce((a, v) => a + (v === 1), 0)") == floor0, 'barreira cai e o chão volta ao normal')
+    tower_with('shrine')
+    ev(tele + "(D.towerState().shrines[0].x, D.towerState().shrines[0].z)")
+    ev(step + "(2)")
+    check(ev("D.towerState().shrines[0].used && G.buffs.some((b) => b.id === 'tower:shrine')"), 'santuário da torre concede a bênção')
+    tower_with('thief')
+    ev("(G.player.invulnUntil = 1e12, 0)")
+    th = "D.towerState().thief.m"
+    ev(tele + "(%s.x + 4, %s.z + 4)" % (th, th))
+    ev("(%s.aggro = true, 0)" % th)
+    x0 = ev("[%s.x, %s.z]" % (th, th))
+    ev(step + "(10)")
+    hp_ = ev("[G.player.x, G.player.z]")
+    x1 = ev("[%s.x, %s.z]" % (th, th))
+    check(((x1[0] - hp_[0]) ** 2 + (x1[1] - hp_[1]) ** 2) > ((x0[0] - hp_[0]) ** 2 + (x0[1] - hp_[1]) ** 2), 'Ladrão de Ouro foge do herói')
+    g0 = ev("G.loot.length")
+    ev("D.killMonster(%s)" % th)
+    check(ev("G.loot.length") >= g0 + 6 and ev("G.loot.every((l) => l.type === 'gold' || l.type === 'jewel')"), 'Ladrão de Ouro derrotado espalha Gold')
+    ev("(G.player.invulnUntil = 0, D.G.loot.length = 0, 0)")
     ev("D.enterTown()")
 
     # trocas de zona repetidas: nada deve acumular

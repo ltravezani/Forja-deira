@@ -3,7 +3,7 @@ import { R } from '../core/util.js';
 import { BIOMES } from './biomes.js';
 
 /** Busca em largura a partir de `sc` pelos tiles de chão (1); -1 = inalcançável. */
-function floodFrom(grid, W, H, sc) {
+export function floodFrom(grid, W, H, sc) {
   const dist = new Int32Array(W * H).fill(-1);
   const q = [sc.z * W + sc.x];
   dist[q[0]] = 0;
@@ -22,7 +22,7 @@ function floodFrom(grid, W, H, sc) {
  * baixos perto de paredes e decalques soltos. Adereços altos que isolariam
  * algum pedaço do chão são desfeitos. `avoid` = [[centro, raio], ...] livres.
  */
-function placeProps(grid, W, H, rnd, sc, avoid) {
+export function placeProps(grid, W, H, rnd, sc, avoid) {
   const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
   const props = [];
   const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
@@ -165,84 +165,6 @@ export function genDungeon(biomeId, floor, seed) {
     if (at(x, z) === 1 && nearWall(x, z) && !nearCenter(x, z, sc, 2)) breakables.push({ x, z });
   }
   return { W, H, grid, biome: biomeId, floor, seed, start: sc, boss: bossC, props, spawns, breakables, templates };
-}
-
-/**
- * Andar da Torre Infinita: planta circular. Um anel externo dividido em setores
- * por muretas radiais (cada uma com uma passagem), uma muralha grossa em volta
- * do salão central e o chefe no centro. A entrada fica na frente (+x/+z, perto
- * da câmera) e a porta do salão fica no fundo, então é preciso contornar o anel.
- */
-export function genTower(biomeId, floor, seed) {
-  const rnd = R.mulberry32(seed);
-  const W = 52, H = 52, c = 26;
-  const RO = 23.5, RI0 = 8.5, RI1 = 11.5; // raio externo, muralha do salão (de RI0 a RI1)
-  const grid = new Uint8Array(W * H);
-  const set = (x, z, v) => { if (x > 0 && z > 0 && x < W - 1 && z < H - 1) grid[z * W + x] = v; };
-  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return Math.abs(d); };
-  const FRONT = Math.PI / 4, BACK = FRONT + Math.PI; // ângulo (atan2(z, x)) da entrada e do fundo
-  // portas do salão: uma no fundo e, a partir do andar 4, às vezes outra de lado
-  const doors = [BACK + (rnd() - 0.5) * 1.2];
-  if (floor >= 4 && rnd() < 0.5) doors.push(BACK + (rnd() < 0.5 ? 1 : -1) * (1.4 + rnd() * 0.4));
-  // muretas radiais: 5 ou 6 setores, cada mureta com uma passagem em raio sorteado
-  const nSect = 5 + (rnd() < 0.5 ? 1 : 0), off = rnd() * Math.PI * 2;
-  const spokes = [];
-  for (let k = 0; k < nSect; k++) {
-    const a = off + (k / nSect) * Math.PI * 2;
-    if (angDiff(a, FRONT) < 0.35) continue; // não fecha a entrada
-    spokes.push({ a, gap: RI1 + 2 + rnd() * (RO - RI1 - 5) });
-  }
-  for (let z = 1; z < H - 1; z++) for (let x = 1; x < W - 1; x++) {
-    const dx = x - c, dz = z - c, d = Math.hypot(dx, dz), a = Math.atan2(dz, dx);
-    if (d >= RO) continue;
-    let v = 1;
-    if (d >= RI0 && d < RI1 && !doors.some((da) => angDiff(a, da) * d < 1.6)) v = 0;
-    if (d >= RI1) for (const sp of spokes) if (angDiff(a, sp.a) * d < 0.9 && Math.abs(d - sp.gap) > 1.6) v = 0;
-    grid[z * W + x] = v;
-  }
-  // pilares soltos no anel (2×2), longe da entrada e das passagens
-  const start = { x: Math.round(c + Math.cos(FRONT) * (RO - 3.5)), z: Math.round(c + Math.sin(FRONT) * (RO - 3.5)) };
-  const nPil = 3 + Math.floor(rnd() * 4);
-  for (let k = 0, tries = 0; k < nPil && tries < 60; tries++) {
-    const a = rnd() * Math.PI * 2, d = RI1 + 3 + rnd() * (RO - RI1 - 6);
-    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
-    if (Math.hypot(x - start.x, z - start.z) < 6 || spokes.some((sp) => angDiff(a, sp.a) * d < 3)) continue;
-    for (let dz = 0; dz < 2; dz++) for (let dx = 0; dx < 2; dx++) set(x + dx, z + dz, 0);
-    k++;
-  }
-  // salão do chefe: quatro colunas em volta do centro
-  for (let k = 0; k < 4; k++) {
-    const a = Math.PI / 4 + (k * Math.PI) / 2;
-    set(Math.round(c + Math.cos(a) * 5), Math.round(c + Math.sin(a) * 5), 0);
-  }
-  const boss = { x: c, z: c };
-  const props = placeProps(grid, W, H, rnd, start, [[start, 2], [boss, 4]]);
-  const at = (x, z) => (x < 0 || z < 0 || x >= W || z >= H ? 0 : grid[z * W + x]);
-  const nearWall = (x, z) => at(x - 1, z) === 0 || at(x + 1, z) === 0 || at(x, z - 1) === 0 || at(x, z + 1) === 0;
-  // bandos no anel (mais e maiores a cada andar), chefe no centro
-  const spawns = [{ x: boss.x, z: boss.z, boss: true, elite: false, size: 1 }];
-  const nPacks = 7 + Math.min(6, Math.floor(floor / 2));
-  for (let k = 0, tries = 0; k < nPacks && tries < 400; tries++) {
-    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
-    const d = Math.hypot(x - c, z - c);
-    if (at(x, z) !== 1 || d < RI1 + 1 || Math.hypot(x - start.x, z - start.z) < 8) continue;
-    if (spawns.some((s) => Math.abs(s.x - x) + Math.abs(s.z - z) < 5)) continue;
-    spawns.push({ x, z, boss: false, elite: rnd() < 0.14 + Math.min(0.16, floor * 0.01), size: 3 + Math.floor(rnd() * (3 + Math.min(5, floor / 3))) });
-    k++;
-  }
-  const breakables = [];
-  for (let k = 0; k < 14; k++) {
-    const x = 1 + Math.floor(rnd() * (W - 2)), z = 1 + Math.floor(rnd() * (H - 2));
-    if (at(x, z) === 1 && nearWall(x, z) && Math.hypot(x - start.x, z - start.z) > 3 && Math.hypot(x - c, z - c) > 6) breakables.push({ x, z });
-  }
-  // runas no chão: círculo sob o chefe e alguns selos no anel
-  const runes = [{ x: boss.x, z: boss.z, s: 7 }];
-  for (let k = 0; k < 6; k++) {
-    const a = rnd() * Math.PI * 2, d = RI1 + 2 + rnd() * (RO - RI1 - 4);
-    const x = Math.round(c + Math.cos(a) * d), z = Math.round(c + Math.sin(a) * d);
-    if (at(x, z) === 1) runes.push({ x, z, s: 2.4 + rnd() * 1.6 });
-  }
-  return { W, H, grid, biome: biomeId, floor, seed, start, boss, props, spawns, breakables, templates: [], tower: true, runes };
 }
 
 /**

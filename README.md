@@ -14,7 +14,12 @@ Excelentes, com masmorras procedurais.
 
 **Torre Infinita:** fale com o Guardião Varek, na parte de baixo da cidade, e suba andares sem fim.
 Cada andar é mais difícil, o bioma muda a cada 5 andares e só caem Gold e Jewels (10% por monstro);
-o chefe no salão central de cada andar tem 20% de chance de deixar Gold e Jewels. O recorde fica salvo.
+o chefe de cada andar tem 20% de chance de deixar Gold e Jewels. O recorde fica salvo.
+Cada andar sorteia uma planta diferente da anterior (Anel dos Sentinelas, Salões Entrelaçados, Claustros
+Concêntricos, Câmaras Suspensas ou Nave do Juramento) e esconde eventos: emboscadas que cercam o herói,
+uma invasão que abre uma fenda no meio do andar, círculos selados que só abrem depois de vencer os
+guardiões de dentro, santuários com bênçãos de 60 s e o Ladrão de Ouro, que foge e some se não for pego.
+Os eventos usam o mesmo número de bandos de antes: o andar fica mais imprevisível, não mais difícil.
 
 ## Jogar
 

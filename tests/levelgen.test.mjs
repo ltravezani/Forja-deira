@@ -37,22 +37,40 @@ test('cidade tem NPCs e portal em chão livre', async () => {
   for (const n of L.npcs.concat([L.portal, L.start])) assert.equal(L.grid[n.z * L.W + n.x], 1);
 });
 
-test('torre infinita: andar circular todo alcançável, chefe no salão central e bandos no anel', async () => {
-  const { genTower } = await load('world/levelgen.js');
+test('torre infinita: plantas variadas, tudo alcançável, chefe no fundo e eventos em chão livre', async () => {
+  const { genTower, TOWER_LAYOUTS } = await load('world/towergen.js');
   const { TOWER_ORDER, towerBiome } = await load('world/biomes.js');
-  for (let floor = 1; floor <= 24; floor++) {
+  const seenLayouts = new Set(), seenEvents = new Set();
+  let prev = null;
+  for (let run = 0; run < 4; run++) for (let floor = 1; floor <= 24; floor++) {
     const biome = towerBiome(floor);
     assert.ok(TOWER_ORDER.includes(biome));
-    const L = genTower(biome, floor, R.hash32('torre', floor));
-    assert.equal(L.grid[L.start.z * L.W + L.start.x], 1, 'andar ' + floor + ': entrada fora do chão');
+    const tag = 'andar ' + floor + ' (' + run + ')';
+    const L = genTower(biome, floor, R.hash32('torre', run, floor), prev);
+    assert.ok(TOWER_LAYOUTS[L.layout], tag + ': planta desconhecida');
+    assert.notEqual(L.layout, prev, tag + ': planta repetida no andar seguinte');
+    prev = L.layout;
+    seenLayouts.add(L.layout);
+    assert.equal(L.grid[L.start.z * L.W + L.start.x], 1, tag + ': entrada fora do chão');
     const seen = flood(L, L.start.x, L.start.z);
-    for (let i = 0; i < L.grid.length; i++) if (L.grid[i] === 1) assert.ok(seen[i], 'andar ' + floor + ': tile isolado ' + i);
+    for (let i = 0; i < L.grid.length; i++) if (L.grid[i] === 1) assert.ok(seen[i], tag + ': tile isolado ' + i);
     const boss = L.spawns.filter((s) => s.boss);
-    assert.equal(boss.length, 1, 'andar ' + floor + ': um chefe por andar');
-    assert.ok(seen[boss[0].z * L.W + boss[0].x], 'andar ' + floor + ': chefe inalcançável');
-    assert.ok(L.spawns.length >= 6, 'andar ' + floor + ': poucos bandos');
-    for (const s of L.spawns) assert.ok(seen[s.z * L.W + s.x], 'andar ' + floor + ': spawn inalcançável');
+    assert.equal(boss.length, 1, tag + ': um chefe por andar');
+    assert.ok(seen[boss[0].z * L.W + boss[0].x], tag + ': chefe inalcançável');
+    // entrada na frente da câmera (+x/+z), chefe longe dela
+    assert.ok(L.start.x + L.start.z > L.W, tag + ': entrada deveria ficar na frente');
+    assert.ok(L.boss.x + L.boss.z < L.start.x + L.start.z - 20, tag + ': chefe deveria ficar atrás, longe da entrada');
+    for (const s of L.spawns) assert.ok(seen[s.z * L.W + s.x], tag + ': spawn inalcançável');
+    // o orçamento de bandos é o mesmo de antes: comuns + emboscadas + círculo + invasão
+    const hostile = L.events.filter((e) => e.size).length;
+    assert.equal(L.spawns.length - 1 + hostile, 7 + Math.min(6, Math.floor(floor / 2)), tag + ': orçamento de bandos mudou');
+    for (const e of L.events) {
+      seenEvents.add(e.type);
+      if (e.x != null) assert.ok(seen[e.z * L.W + e.x], tag + ': evento ' + e.type + ' fora do chão');
+    }
   }
+  assert.equal(seenLayouts.size, Object.keys(TOWER_LAYOUTS).length, 'nem todas as plantas apareceram: ' + [...seenLayouts]);
+  for (const t of ['ambush', 'sealed', 'invasion', 'shrine', 'thief']) assert.ok(seenEvents.has(t), 'evento nunca sorteado: ' + t);
   assert.equal(towerBiome(1), TOWER_ORDER[0]);
   assert.equal(towerBiome(6), TOWER_ORDER[1]);
   assert.equal(towerBiome(21), TOWER_ORDER[0]);
