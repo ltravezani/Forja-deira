@@ -136,9 +136,10 @@ export function openNpc(id) {
       h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
-        const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '';
+        const need = R.upgradeCost(sel, j), short = c > 0 && cnt(j) < need;
+        const fee = (need > 1 ? ' · ' + need + ' joias' : '') + (j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '');
         const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
-        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
+        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) >= need ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + (c > 0 && j === 'chaos' ? 'Para +' + (pl + 1) + ': ' + need + ' Jewel' + (need > 1 ? 's' : '') + ' of Chaos' + (short ? ' <b style="color:#ff6b6b">(faltam ' + (need - cnt(j)) + ')</b>' : '') + '. ' : '') + fail + '</span></div>';
       });
       h += '</div>';
       if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
@@ -177,9 +178,11 @@ function npcAction(e) {
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
+      const need = it ? R.upgradeCost(it, j) : 1;
       if (!it || !stack) break;
+      if (stack.qty < need) { log('São necessárias ' + need + ' ' + R.JEWELS[j].name + ' para esta fusão (você tem ' + stack.qty + ').', 'warn'); break; }
       if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
-      stack.qty--; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
+      stack.qty -= need; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
       // Talismã da Sorte: gasto na tentativa de fusão Chaos com ele ligado
       const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
       const r = R.applyUpgrade(it, j, Math.random(), { talisman });

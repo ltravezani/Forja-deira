@@ -5732,7 +5732,7 @@ if (document.currentScript) document.currentScript.remove();
   const JEWELS = {
     bless: { name: 'Jewel of Bless', color: '#8fd3ff', desc: 'Aprimora itens de +0 até +6 (100%).' },
     soul: { name: 'Jewel of Soul', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
-    chaos: { name: 'Jewel of Chaos', color: '#ff6b9a', desc: 'Fusão +9 até +15. Falha: volta a +0 (nunca destrói).' },
+    chaos: { name: 'Jewel of Chaos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
     life: { name: 'Jewel of Life', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
   };
   const POTIONS = {
@@ -6100,6 +6100,14 @@ if (document.currentScript) document.currentScript.remove();
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
+  /**
+   * Quantas Jewels uma tentativa gasta (gastas mesmo na falha). Chaos cresce com
+   * o alvo: +10 → 1, +11 → 2, … +15 → 6. As demais custam 1 por tentativa.
+   */
+  function upgradeCost(it, jewel) {
+    if (jewel === 'chaos') return Math.max(1, (it.plus || 0) - 8);
+    return 1;
+  }
   /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos e evolução de asa). */
   const talismanUseful = (jewel) => jewel === 'chaos' || jewel === 'wing';
   /**
@@ -6355,7 +6363,7 @@ if (document.currentScript) document.currentScript.remove();
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
-    upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
+    upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
@@ -12391,9 +12399,10 @@ function openNpc(id) {
       h += '<div class="list" style="margin-top:6px">';
       ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
         const c = R.upgradeChance(sel, j);
-        const fee = j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '';
+        const need = R.upgradeCost(sel, j), short = c > 0 && cnt(j) < need;
+        const fee = (need > 1 ? ' · ' + need + ' joias' : '') + (j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' Gold' : '');
         const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
-        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + fail + '</span></div>';
+        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) >= need ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + (c > 0 && j === 'chaos' ? 'Para +' + (pl + 1) + ': ' + need + ' Jewel' + (need > 1 ? 's' : '') + ' of Chaos' + (short ? ' <b style="color:#ff6b6b">(faltam ' + (need - cnt(j)) + ')</b>' : '') + '. ' : '') + fail + '</span></div>';
       });
       h += '</div>';
       if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
@@ -12432,9 +12441,11 @@ function npcAction(e) {
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
+      const need = it ? R.upgradeCost(it, j) : 1;
       if (!it || !stack) break;
+      if (stack.qty < need) { log('São necessárias ' + need + ' ' + R.JEWELS[j].name + ' para esta fusão (você tem ' + stack.qty + ').', 'warn'); break; }
       if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
-      stack.qty--; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
+      stack.qty -= need; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
       // Talismã da Sorte: gasto na tentativa de fusão Chaos com ele ligado
       const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
       const r = R.applyUpgrade(it, j, Math.random(), { talisman });

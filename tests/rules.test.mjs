@@ -182,3 +182,11 @@ test('+nível do colar aumenta o dano', () => {
   const d0 = R.itemStats(p).dmgPct, d10 = R.itemStats({ ...p, plus: 10 }).dmgPct, d15 = R.itemStats({ ...p, plus: 15 }).dmgPct;
   assert.ok(d10 > d0 && d15 > d10, d0 + ' ' + d10 + ' ' + d15);
 });
+
+test('custo da fusão Chaos: +10 = 1 joia … +15 = 6 joias', () => {
+  const it = (plus) => ({ slot: 'weapon', plus, addOpt: 0 });
+  [[9, 1], [10, 2], [11, 3], [12, 4], [13, 5], [14, 6]].forEach(([p, n]) => assert.equal(R.upgradeCost(it(p), 'chaos'), n, '+' + (p + 1)));
+  assert.equal(R.upgradeCost(it(3), 'bless'), 1);
+  assert.equal(R.upgradeCost(it(7), 'soul'), 1);
+  assert.equal(R.upgradeCost(it(12), 'life'), 1);
+});
