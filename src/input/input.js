@@ -12,6 +12,7 @@ import { requestCast } from '../game/skills.js';
 import { KEYS, mouse } from './inputState.js';
 import { clickWorld, pickMonster, screenToGround } from './picking.js';
 import { closeDrawer, openTab } from '../ui/drawer.js';
+import { closeItemPopups } from '../ui/itemTooltip.js';
 import { closeModal } from '../ui/npcDialogs.js';
 import { togglePause } from '../ui/pause.js';
 
@@ -73,6 +74,7 @@ function onWheel(e) {
 
 function onEscape() {
   if (!$('#modal').hidden) closeModal();
+  else if (closeItemPopups()) { /* Esc fecha primeiro o menu ou os detalhes do item */ }
   else if (!$('#drawer').hidden) closeDrawer();
   else togglePause();
 }

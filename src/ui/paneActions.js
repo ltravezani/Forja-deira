@@ -15,14 +15,20 @@ import { returnToTitle } from '../game/session.js';
 import { Drag } from './dragdrop.js';
 import { renderPane } from './drawer.js';
 import { buildSlots, hudTick } from './hud.js';
-import { selectedItem } from './inventoryPane.js';
+import { ContextMenu, drinkable, ItemTooltip, selectedItem } from './itemTooltip.js';
 
-/** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
-const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !R.POTIONS[it.id].revive);
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
+  // o toque longo já abriu o menu de contexto: ignora o clique que vem junto
+  if (performance.now() < Drag.eatUntil) { Drag.eatUntil = 0; return; }
   const b = e.target.closest('[data-act]');
-  if (!b || b.disabled) return;
+  ContextMenu.close();
+  if (!b) {
+    // clique no vazio do inventário: tira a seleção (e fecha os detalhes)
+    if (UI.tab === 'inv' && UI.sel && e.currentTarget.id === 'pane' && !e.target.closest('#charPv,.cell.none')) { UI.sel = null; renderPane(); }
+    return;
+  }
+  if (b.disabled) return;
   const a = b.dataset.act, ch = G.ch;
   const it = selectedItem();
   switch (a) {
@@ -30,24 +36,28 @@ function paneAction(e) {
     case 'auto': R.autoDistribute(ch, ch.points); recalc(); if (autoEquipOn()) G.autoEqT = 0.3; break;
     case 'seleq': {
       const now = performance.now(), k = 'e' + b.dataset.slot;
-      if (UI.lastCell && UI.lastCell.k === k && now - UI.lastCell.t < CONFIG.input.doubleClickMs) { UI.lastCell = null; if (unequipSlot(b.dataset.slot)) UI.sel = null; break; }
+      if (UI.lastCell && UI.lastCell.k === k && now - UI.lastCell.t < CONFIG.input.doubleClickMs) { UI.lastCell = null; UI.tipOpen = false; if (unequipSlot(b.dataset.slot)) UI.sel = null; break; }
       UI.lastCell = { k, t: now };
       UI.sel = { where: 'eq', slot: b.dataset.slot };
+      ItemTooltip.open(true);
       break;
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.tipOpen = false; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
       // clique duplo numa poção: bebe direto do inventário
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; UI.tipOpen = false; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
+      if (UI.sel) ItemTooltip.open(true);
       break;
     }
     case 'bagf': UI.bagFilter = b.dataset.k; UI.sel = null; break;
     case 'aeqtoggle': S.settings.autoEquip = !autoEquipOn(); if (autoEquipOn()) autoEquip(true); persist(); break;
     case 'aeqnow': autoEquip(true); break;
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
+    case 'tipclose': UI.tipOpen = false; break;
+    case 'tipopen': ItemTooltip.open(false); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': if (it) usePotion(it.id); if (!selectedItem()) UI.sel = null; break;
     case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
@@ -82,19 +92,22 @@ function paneAction(e) {
 /** Cliques, botão direito e opções dentro do painel lateral. */
 export function initPaneActions() {
   $('#pane').addEventListener('click', paneAction);
-  // Botão direito equipa/desequipa; arrastar move entre mochila e equipamento.
+  // detalhes do item e menu de contexto ficam fora do painel, com os mesmos botões
+  $('#itemTip').addEventListener('click', paneAction);
+  $('#ctxMenu').addEventListener('click', paneAction);
+  $('#itemTipBg').addEventListener('click', () => { UI.tipOpen = false; ItemTooltip.sync(); });
+  // botão direito (ou toque longo, em dragdrop.js) abre o menu de contexto do item
   $('#pane').addEventListener('contextmenu', (e) => {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
     e.preventDefault();
-    if (c.dataset.act === 'selbag') {
-      const i = +c.dataset.i, it = G.ch.bag[i];
-      if (it && it.slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); }
-      else if (drinkable(it)) { usePotion(it.id); persist(); hudTick(); }
-    }
-    else if (unequipSlot(c.dataset.slot)) UI.sel = null;
-    renderPane();
+    if (performance.now() < Drag.eatUntil) return; // o toque longo já abriu o menu
+    const src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
+    if (ContextMenu.open(src, e.clientX, e.clientY)) renderPane();
   });
+  window.addEventListener('resize', () => { ContextMenu.close(); ItemTooltip.sync(); });
+  // clique fora fecha o menu de contexto
+  window.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctxMenu')) ContextMenu.close(); }, true);
 
   $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }
