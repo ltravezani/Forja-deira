@@ -359,7 +359,7 @@
   const JEWELS = {
     bless: { name: 'Jewel of Bless', color: '#8fd3ff', desc: 'Aprimora itens de +0 até +6 (100%).' },
     soul: { name: 'Jewel of Soul', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
-    chaos: { name: 'Jewel of Chaos', color: '#ff6b9a', desc: 'Fusão +9 até +15. Falha: volta a +0 (nunca destrói).' },
+    chaos: { name: 'Jewel of Chaos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
     life: { name: 'Jewel of Life', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
   };
   const POTIONS = {
@@ -714,6 +714,14 @@
     if (jewel === 'life') return it.addOpt < 16 && it.slot !== 'wings' ? 0.5 + (it.luck ? 0.1 : 0) : 0;
     return 0;
   }
+  /**
+   * Quantas Jewels uma tentativa gasta (gastas mesmo na falha). Chaos cresce com
+   * o alvo: +10 → 1, +11 → 2, … +15 → 6. As demais custam 1 por tentativa.
+   */
+  function upgradeCost(it, jewel) {
+    if (jewel === 'chaos') return Math.max(1, (it.plus || 0) - 8);
+    return 1;
+  }
   /** Talismã da Sorte só faz diferença onde a falha volta o item a +0 (fusão Chaos e evolução de asa). */
   const talismanUseful = (jewel) => jewel === 'chaos' || jewel === 'wing';
   /**
@@ -969,7 +977,7 @@
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
-    upgradeChance, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
+    upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };

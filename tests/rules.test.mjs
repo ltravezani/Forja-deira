@@ -145,3 +145,11 @@ test('classes novas: 3 evoluções, habilidades e árvore completas', () => {
   assert.ok(st.lifeSteal > 0 && st.maxDmg > 0);
 });
 
+
+test('custo da fusão Chaos: +10 = 1 joia … +15 = 6 joias', () => {
+  const it = (plus) => ({ slot: 'weapon', plus, addOpt: 0 });
+  [[9, 1], [10, 2], [11, 3], [12, 4], [13, 5], [14, 6]].forEach(([p, n]) => assert.equal(R.upgradeCost(it(p), 'chaos'), n, '+' + (p + 1)));
+  assert.equal(R.upgradeCost(it(3), 'bless'), 1);
+  assert.equal(R.upgradeCost(it(7), 'soul'), 1);
+  assert.equal(R.upgradeCost(it(12), 'life'), 1);
+});
