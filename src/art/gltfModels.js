@@ -84,6 +84,8 @@ export function loadGltfModels() {
 export function setGltfEnabled(on) { LIB.on = !!on; }
 /** Preferência salva: null = automático (animados, exceto na qualidade baixa). */
 export function applyCharSetting(st) { LIB.on = st.animChars != null ? !!st.animChars : st.quality !== 'baixa'; }
+/** Cena de um arquivo avulso (props) já carregado, mesmo com os personagens simples (ex.: ícones das armas). */
+export function gltfProp(name) { return LIB.ready ? LIB.props[name] || null : null; }
 export function gltfEnabled() { return LIB.ready && LIB.on; }
 /** Estatísticas para a ferramenta de medição (tempo de carga e tamanho embutido). */
 export function gltfStats() { return { ready: LIB.ready, on: LIB.on, loadMs: Math.round(LIB.loadMs), kb: Math.round(LIB.bytes / 1024) }; }

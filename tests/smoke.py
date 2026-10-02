@@ -118,6 +118,8 @@ with sync_playwright() as p:
         target.dblclick()
         time.sleep(0.3)
     check(ev('JSON.stringify(G.ch.equip)') != before, 'clique duplo equipa item')
+    check(ev("['dk', 'dw', 'elf'].every((cls) => [0, 9].every((tier) => { const g = D.glyph({ slot: 'weapon', cls, tier, rarity: 'comum' }); return g.d3 && g.src.startsWith('data:image/png'); }))"),
+          'armas do inventário usam ícones 3D (KayKit Fantasy Weapons Bits)')
     # pet: vende todo equipamento, menos Lendários; joias e poções ficam
     check(not pg.query_selector('[data-act="petpick"]'), 'sem a opção de vender itens selecionados')
     ev("(G.ch.bag.push(D.R.makeEquip(7, 5, 'excelente', 'dw', 0, 'elite'), D.R.makeEquip(8, 5, 'comum', 'dw', 0, 'normal'), D.R.makeEquip(9, 5, 'lendario', 'dw', 0, 'boss'), { kind: 'potion', id: 'rez', qty: 1, uid: 'prez' }, { kind: 'jewel', id: Object.keys(D.R.JEWELS)[0], qty: 1, uid: 'jx' }), 0)")
