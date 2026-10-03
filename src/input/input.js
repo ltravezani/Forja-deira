@@ -73,7 +73,8 @@ function onWheel(e) {
 }
 
 function onEscape() {
-  if (!$('#modal').hidden) closeModal();
+  // herói caído: a tela de queda só fecha pelos botões (Renascer/Ressurreição)
+  if (!$('#modal').hidden) { if (G.player && G.player.alive) closeModal(); }
   else if (closeItemPopups()) { /* Esc fecha primeiro o menu ou os detalhes do item */ }
   else if (!$('#drawer').hidden) closeDrawer();
   else togglePause();

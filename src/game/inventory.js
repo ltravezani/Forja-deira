@@ -120,12 +120,18 @@ function drinkBuff(id, D) {
 export function potionCount(id) { const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id); return p ? p.qty : 0; }
 /** Bebe uma poção (Q/E); pequena recarga para não gastar várias num clique duplo. */
 export function usePotion(id) {
+  if (!G.player || !G.player.alive) return; // caído: a tela de queda cuida (nada de "Sem poções")
   const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id);
-  if (!p || !G.player.alive) { floatText(G.player.x, 2.6, G.player.z, 'Sem poções', 'info'); return; }
+  // aviso com pausa curta: segurar Q/E não enche a tela de textos
+  const say = (t) => { if ((G.potMsgT || 0) <= G.time) { G.potMsgT = G.time + 0.6; floatText(G.player.x, 2.6, G.player.z, t, 'info'); } };
+  if (!p) { say('Sem poções'); return; }
   if (G.potCd > G.time) return;
-  G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
   if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
+  // vida/mana cheias: não gasta a poção
+  if (id === 'hp' && G.hp >= G.st.maxHp) { say('HP cheio'); return; }
+  if (id === 'mp' && G.mp >= G.st.maxMp) { say('MP cheio'); return; }
+  G.potCd = G.time + 0.5;
   if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
