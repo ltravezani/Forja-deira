@@ -5396,7 +5396,7 @@ if (document.currentScript) document.currentScript.remove();
     exp: 1500,
     maxLevel: 1000,
     resetLevel: 400,            // nível mínimo para reset
-    resetPoints: 2200,          // pontos livres concedidos por reset acumulado
+    resetPoints: 300,           // pontos livres concedidos por reset acumulado
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
     chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
@@ -6329,6 +6329,7 @@ if (document.currentScript) document.currentScript.remove();
     ch.level = 1; ch.exp = 0;
     ch.stats = Object.assign({}, CLASSES[ch.cls].base);
     ch.points = ch.resets * RATES.resetPoints + extra;
+    ch.tree = {}; // a árvore de maestria é zerada; os pontos voltam para redistribuir
     return { ok: true, points: ch.points };
   }
   function canEvolve(ch) {
@@ -12420,7 +12421,7 @@ function openNpc(id) {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
     h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP, nova habilidade e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' Gold. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% MF permanente e +10 pontos de árvore.</p>' +
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' Gold. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% MF permanente e +10 pontos de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
       (rs.ok ? '<button class="btn gold" data-npc="reset">Fazer reset</button>' : '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>');
     const spent = R.treeSpent(ch);
     h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4><button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 Gold</button>';
@@ -17574,7 +17575,7 @@ function paneChar() {
   h += '<h4>Evolução de classe</h4>';
   h += '<p>' + C.tiers.map((t, i) => (i === ch.tier ? '<b style="color:var(--gold)">' + t + '</b>' : t)).join(' → ') + '</p>';
   h += ev.next ? '<p class="note">Próxima: ' + esc(ev.name) + ' — requer nível ' + ev.next.level + ', ' + ev.next.bosses + ' chefes' + (ev.next.resets ? ', ' + ev.next.resets + ' reset' : '') + '. ' + (ev.ok ? '<b style="color:var(--ok)">Pronto: fale com o Mestre Orvan.</b>' : 'Falta: ' + esc(ev.reasons.join(', ')) + '.') + '</p>' : '<p class="note">Evolução máxima alcançada.</p>';
-  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
+  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos e árvore de maestria voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
   return h;
 }
 
