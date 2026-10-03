@@ -90,7 +90,7 @@ export function updateAllies(dt) {
         const k = a.kind === 'pet' ? 0.3 : UNDEAD[a.kind] ? UNDEAD[a.kind].k : 0.9;
         if (UNDEAD[a.kind]) slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), a.kind === 'deathknight' ? 0xff5a7a : 0xb0ffd0, { radius: 1.5, dur: 0.15 });
         if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
-        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
+        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z, ally: true });
       }
     } else {
       const d = Math.hypot(p.x - a.x, p.z - a.z);

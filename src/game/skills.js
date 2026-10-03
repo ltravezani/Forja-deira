@@ -115,10 +115,12 @@ const EFFECTS = {
   buff(ctx) {
     const { p, sk, id } = ctx;
     const col = sk.color || ctx.col;
+    // relançar só renova o tempo: o HP atual sobe apenas quando o buff começa
+    const had = G.buffs.some((b) => b.id === id);
     G.buffs = G.buffs.filter((b) => b.id !== id);
     G.buffs.push({ id, name: sk.name, until: G.time + sk.dur, stats: sk.buff });
     recalc();
-    if (sk.buff.hpPct) G.hp = Math.min(G.st.maxHp, G.hp * (1 + sk.buff.hpPct / 100));
+    if (sk.buff.hpPct && !had) G.hp = Math.min(G.st.maxHp, G.hp * (1 + sk.buff.hpPct / 100));
     emit(p.x, 0.2, p.z, { n: 40, color: col, speed: 2, up: 4, life: 1, size: 1, grav: 3, spread: 1.4 });
     spawnRing(p.x, p.z, 0.4, 2.6, col, 0.6);
     pillar(p.x, p.z, 1.1, 5, col, 0.8);

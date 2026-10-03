@@ -30,21 +30,24 @@ import { walkableR } from '../world/grid.js';
 const RANGE = { dk: 2.3, dw: 13, elf: 15, de: 2.4, nc: 12 };
 export function attackRange(m) { return RANGE[G.ch.cls] + (m ? m.radius : 0); }
 
-/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain}. Devolve o dano. */
+/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain, ally}. Devolve o dano. */
 export function hitMonster(m, mult, skillId, opts) {
   if (!m || m.dead) return 0;
   opts = opts || {};
   const r = R.rollDamage(G.st, rand, mult, skillId, m.def);
   if (!Number.isFinite(r.dmg)) return 0;
   m.hp -= r.dmg;
-  if (r.type !== 'normal') hitStop(CONFIG.feel.hitStop * 0.5);
+  // micro-pausa só nos golpes do herói (aliados não deixam o jogo em câmera lenta)
+  if (r.type !== 'normal' && !opts.ally) hitStop(CONFIG.feel.hitStop * 0.5);
+  m.lastHitAlly = !!opts.ally;
   m.hitFlash = 0.12;
   gltfHit(m.model);
   m.lastHit = G.time;
   aggroPack(m);
   const h = m.model.height;
   floatText(m.x, h + 0.3, m.z, fmt(r.dmg), r.type === 'exc' ? 'exc' : r.type === 'crit' ? 'crit' : '');
-  if (G.st.lifeSteal) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
+  // roubo de vida: só golpes do próprio herói, e nunca com ele caído
+  if (G.st.lifeSteal && !opts.ally && G.player.alive) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
   // drenagem das habilidades (Necromancer): cura uma fração do dano e o sangue voa até o herói
   if (opts.drain && G.player.alive) {
     G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * opts.drain / 100);
@@ -160,7 +163,7 @@ export function killMonster(m) {
   m.dead = true; m.deadT = 0; m.hp = 0;
   const src = m.boss ? 'boss' : m.mini ? 'mini' : m.elite ? 'elite' : 'normal';
   grantKillRewards(m);
-  if (m.elite || m.boss) hitStop(CONFIG.feel.hitStop);
+  if ((m.elite || m.boss) && !m.lastHitAlly) hitStop(CONFIG.feel.hitStop);
   emit(m.x, 1, m.z, { n: m.boss ? 80 : 18, color: m.boss ? 0xffa040 : 0xc8b8ff, speed: m.boss ? 9 : 5, life: 0.7, size: 1, grav: -4 });
   if (m.affix && m.affix.explode) scheduleExplosion(m);
   dropMonsterLoot(m, src);
