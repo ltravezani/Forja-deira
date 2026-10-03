@@ -14,6 +14,7 @@ import { autoEquipOn, potionCount } from './inventory.js';
 import { dropEdenRoll, dropLoot } from './loot.js';
 import { onEdenBossKilled, onEdenKill, onMiniKilled, openChest } from './eden.js';
 import { onTowerKill } from './tower.js';
+import { questEvent, questKill } from './quests.js';
 import { aggroPack, QUERY_PAD, queryMonsters } from './monsters.js';
 import { face } from './movement.js';
 import { makePortal } from './npcs.js';
@@ -168,6 +169,7 @@ export function killMonster(m) {
   else if (m.mini) onMiniKilled(m);
   if (G.zone === 'eden') onEdenKill(m);
   else if (G.zone === 'tower') onTowerKill(m);
+  questKill(m);
 }
 function grantKillRewards(m) {
   const ch = G.ch;
@@ -245,6 +247,7 @@ function onBossKilled(m) {
 function onTowerBossKilled(m) {
   const ch = G.ch, next = G.floor + 1;
   ch.towerBest = Math.max(ch.towerBest || 1, next);
+  questEvent('floor');
   toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
   const climb = () => enterTower(next);
   G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {

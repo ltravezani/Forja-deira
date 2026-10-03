@@ -14,6 +14,7 @@ import { updateCombatFx } from './engine/combatfx.js';
 import { updateParticles, updateRings } from './engine/effects.js';
 import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
+import { updateTelegraphs } from './engine/telegraph.js';
 import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
@@ -26,6 +27,7 @@ import { initDrawer } from './ui/drawer.js';
 import { initDialogs } from './ui/npcDialogs.js';
 import { initPaneActions } from './ui/paneActions.js';
 import { initPause } from './ui/pause.js';
+import { initQuestUi } from './ui/questUi.js';
 import { initTitle, renderTitle, titlePreview } from './ui/title.js';
 
 function frame(dt) {
@@ -38,6 +40,7 @@ function frame(dt) {
   updateRings(fxDt);
   updateFx(fxDt);
   updateCombatFx(fxDt);
+  updateTelegraphs(fxDt);
   cloudTick();
   renderFrame();
 }
@@ -76,6 +79,7 @@ function boot() {
   initTitle();
   initPause(returnToTitle);
   initAccount();
+  initQuestUi();
   buildTitleBackdrop();
   camTarget.set(23 * TILE, 0, 23 * TILE);
   renderTitle();

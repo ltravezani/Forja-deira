@@ -24,6 +24,8 @@ import { genTower, TOWER_LAYOUTS } from '../world/towergen.js';
 import { genEden } from '../world/edengen.js';
 import { clearEden, spawnEden } from './eden.js';
 import { clearTower, spawnTowerEvents } from './tower.js';
+import { questEvent } from './quests.js';
+import { clearTelegraphs } from '../engine/telegraph.js';
 
 /** A cidade é a única zona segura. */
 export function inSafe() { return G.zone === 'town'; }
@@ -45,6 +47,7 @@ export function clearWorld() {
   clearEffects();
   clearFx();
   clearCombatFx();
+  clearTelegraphs();
   clearEden();
   clearTower();
   resetFloatText();
@@ -52,7 +55,7 @@ export function clearWorld() {
 function placePlayer(L) {
   const p = G.player;
   p.x = L.start.x * TILE; p.z = L.start.z * TILE;
-  p.path = null; p.target = null; p.dash = null; p.shove = null;
+  p.path = null; p.target = null; p.dash = null; p.shove = null; p.dodge = null;
   if (p.model) p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
   camTarget.set(p.x, 0, p.z);
   if (G.pet) { G.pet.x = p.x - 1.5; G.pet.z = p.z + 1; }
@@ -150,6 +153,7 @@ export function enterTower(floor) {
   setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
   log('Torre Infinita, andar ' + floor + ': ' + plan.name + ' (' + B.name + '). ' + plan.hint + ' Fique atento: emboscadas e invasões podem surgir a qualquer momento.', 'sys');
   toast('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name);
+  questEvent('tower', floor);
   persist();
 }
 /**

@@ -9,6 +9,7 @@ import { usePotion } from '../game/inventory.js';
 import { spacePickup } from '../game/loot.js';
 import { townPortal } from '../game/player.js';
 import { requestCast } from '../game/skills.js';
+import { tryDodge } from '../game/dodge.js';
 import { KEYS, mouse } from './inputState.js';
 import { clickWorld, pickMonster, screenToGround } from './picking.js';
 import { closeDrawer, openTab } from '../ui/drawer.js';
@@ -93,6 +94,7 @@ function onKeyDown(e) {
     if (!e.repeat || G.time - (G.lastSpace || 0) > CONFIG.loot.spaceRepeat) { G.lastSpace = G.time; spacePickup(); }
     return;
   }
+  if (k === 'shift') { if (!e.repeat) tryDodge(true); return; } // esquiva para o cursor (ou para as teclas de movimento)
   if (MOVE[k]) { KEYS[MOVE[k]] = true; return; }
   if (k === 'alt') { G.showAllLabels = true; e.preventDefault(); return; }
   // poções repetem ao segurar (a recarga de 0,5 s limita); painéis e portal não

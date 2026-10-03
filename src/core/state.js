@@ -2,6 +2,7 @@
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
 // reatribuídos, para que todos os módulos vejam a mesma referência.
+import { sanitizeQuests } from '../game/questLogic.js';
 
 export const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
@@ -99,5 +100,6 @@ export function sanitizeCharacter(ch) {
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
   ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
+  sanitizeQuests(ch); // missões (iniciais e diárias); saves antigos ganham o campo aqui
   return ch;
 }

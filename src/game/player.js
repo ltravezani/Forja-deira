@@ -14,6 +14,7 @@ import { autoPickup, pickup } from './loot.js';
 import { QUERY_PAD, queryMonsters } from './monsters.js';
 import { face, followPath, pathTo, playerSpeed, stepToward, turn } from './movement.js';
 import { flushSkillBuffer } from './skills.js';
+import { updateDodge } from './dodge.js';
 import { enterTown, hasTownServices, inSafe } from './zones.js';
 import { KEYS, mouse } from '../input/inputState.js';
 import { clickWorld } from '../input/picking.js';
@@ -130,6 +131,7 @@ export function newPlayer() {
 export function updatePlayer(dt) {
   const p = G.player;
   if (!p.alive) {
+    p.dodge = null;
     if (p.model && p.model.dead) animateModel(p.model, { t: G.time, dt, dead: true }); // queda do modelo animado
     return;
   }
@@ -143,7 +145,8 @@ export function updatePlayer(dt) {
   }
   if (p.shove) updateShove(p, dt);
   const locked = G.time < p.lockUntil;
-  if (p.dash) updateDash(p, dt);
+  if (p.dodge) updateDodge(p, dt);
+  else if (p.dash) updateDash(p, dt);
   else if (!locked) {
     p.castFace = null;
     flushSkillBuffer();
@@ -297,7 +300,7 @@ function updateVisual(p, dt) {
 function skillPose(p, dt) {
   const root = p.model.root;
   let y = 0, spin = 0, sc = 1;
-  const leanTo = p.dash ? 0.45 : p.hop ? -0.12 : 0;
+  const leanTo = p.dash ? 0.45 : p.dodge ? 0.6 : p.hop ? -0.12 : 0;
   p.lean += (leanTo - p.lean) * Math.min(1, dt * 18);
   if (p.hop) {
     const h = p.hop; h.t += dt;
@@ -320,7 +323,9 @@ function skillPose(p, dt) {
   root.rotation.y = p.rot + spin;
   const m = p.model;
   if (m.baseScale == null) m.baseScale = root.scale.x; // escala cartoon do modelo
-  root.scale.set(m.baseScale * sc, m.baseScale * sc * (2 - sc), m.baseScale * sc);
+  // esquiva: o herói se abaixa no meio do passo (não há clipe de rolamento nos modelos)
+  const crouch = p.dodge ? 1 - 0.22 * Math.sin(Math.min(1, p.dodge.t / p.dodge.dur) * Math.PI) : 1;
+  root.scale.set(m.baseScale * sc, m.baseScale * sc * (2 - sc) * crouch, m.baseScale * sc);
   return y;
 }
 
