@@ -3,7 +3,8 @@ import { G, UI } from '../core/state.js';
 import { $ } from '../core/util.js';
 import { sendPetToSell } from '../game/allies.js';
 import { townPortal } from '../game/player.js';
-import { paneInv } from './inventoryPane.js';
+import { InventoryUI } from './inventoryPane.js';
+import { closeItemPopups } from './itemTooltip.js';
 import { paneChar, paneLoot, paneOpts, paneSkills } from './panes.js';
 
 export function openTab(t) {
@@ -19,7 +20,7 @@ export function openTab(t) {
 function markMenu(t) {
   document.querySelectorAll('.menu [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
 }
-export function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; }
+export function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; closeItemPopups(); }
 export function refreshPaneSoon() { UI.paneDirty = true; }
 /** Redesenho periódico (painel marcado como sujo): pula quando o HTML não mudou. */
 export function renderPaneIfChanged() { renderPane(true); }
@@ -27,7 +28,16 @@ export function renderPane(onlyIfChanged) {
   UI.paneDirty = false;
   const pane = $('#pane');
   const st = pane.scrollTop;
-  const f = { char: paneChar, inv: paneInv, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
+  // inventário mais largo (personagem + mochila lado a lado no desktop)
+  $('#drawer').classList.toggle('inv-open', UI.tab === 'inv');
+  if (UI.tab === 'inv') {
+    // montado uma vez; cada atualização troca só os slots e células que mudaram
+    lastHtml = '';
+    InventoryUI.render(pane);
+    return;
+  }
+  closeItemPopups();
+  const f = { char: paneChar, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
   if (!f) return;
   const html = f();
   // nada mudou: não recria os ~60 elementos do painel (cada troca refaz layout, ícones e filtros)

@@ -253,18 +253,12 @@ input, select { font-family: inherit; }
 .warnbox { font-size: 13px; color: #ffc6a8; background: rgba(120,40,20,.25); border: 1px solid rgba(255,120,80,.3); padding: 8px 10px; border-radius: 3px; }
 .chainbox { font-size: 13px; color: #d9ccff; background: rgba(90,60,160,.18); border: 1px solid rgba(160,130,255,.3); padding: 8px 10px; border-radius: 3px; }
 
-.paper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.eq { aspect-ratio: 1; border: 1px solid var(--edge); background: #120e19; border-radius: 3px; position: relative; font-size: 11px; display: grid; place-items: center; text-align: center; padding: 3px; line-height: 1.1; overflow: hidden; }
-.eq em { position: absolute; top: 2px; left: 4px; font-style: normal; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.eq.sel, .cell.sel { outline: 2px solid var(--gold); }
-.bag { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
 .cell { aspect-ratio: 1; background: #120e19; border: 1px solid #3a2f48; border-radius: 3px; position: relative; overflow: hidden; }
 .cell { padding: 0; background: radial-gradient(circle at 50% 42%, var(--bg, #1a1424) 0%, #0d0a12 78%); }
 .cell .gl { position: absolute; inset: 0; border-radius: 3px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--bg) 100%, #fff 12%) 0%, var(--bg) 45%, #0b0810 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), inset 0 0 10px color-mix(in srgb, var(--rc) 30%, transparent); }
 .cell .gl::before { content: ''; position: absolute; inset: 0; border-radius: 3px; background: repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 6px); }
 .cell .gl img { position: absolute; inset: 12%; width: 76%; height: 76%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.7)) drop-shadow(0 0 3px color-mix(in srgb, var(--rc) 45%, transparent)); pointer-events: none; }
 .cell:hover .gl img { transform: scale(1.06); }
-.eq .sil { width: 55%; opacity: .22; pointer-events: none; }
 .cell .q { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-family: var(--f-num); }
 .cell .p { position: absolute; left: 2px; top: 0; font-size: 10px; font-family: var(--f-num); color: var(--gold); }
 .cell .n { position: absolute; right: 2px; top: 0; font-size: 9px; color: #b9a4ff; font-weight: 700; }
@@ -280,28 +274,18 @@ input, select { font-family: inherit; }
 @keyframes rfSweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
-.cell .cell .u { position: absolute; right: 2px; bottom: 0; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
+.cell .u { position: absolute; right: 3px; top: 1px; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }
 .cell.ghost { position: fixed; z-index: 9999; pointer-events: none; opacity: .9; box-shadow: 0 6px 18px rgba(0,0,0,.6); }
 #paper.droptgt, #bagGrid.droptgt { outline: 2px dashed var(--gold); outline-offset: 3px; }
 .cpbadge { font-family: var(--f-num); font-size: 14px; color: var(--gold); margin-left: 8px; padding: 1px 8px; border: 1px solid rgba(214,178,94,.4); border-radius: 3px; background: rgba(214,178,94,.08); }
 .cpv { color: var(--gold); }
-.detail .cpl { margin: 4px 0 6px; }
-.aeq { margin: 4px 0 2px; }
 .tip { margin: 2px 0 6px; font-size: 12px; }
 .btabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 6px; }
 .btab { font: inherit; font-size: 12px; padding: 2px 7px; background: #120e19; color: var(--muted); border: 1px solid #3a2f48; border-radius: 3px; cursor: pointer; }
 .btab span { font-family: var(--f-num); opacity: .7; }
 .btab.on { color: var(--gold); border-color: var(--gold); }
-.detail { margin-top: 12px; padding: 10px 12px; background: #120e19; border: 1px solid var(--edge); border-radius: 3px; min-height: 80px; }
-.detail .nm { font-weight: 700; font-size: 16px; }
-.detail .ln { font-size: 13px; margin: 2px 0; }
-.detail .exc { color: var(--r-excelente); }
-.detail .anc { color: var(--r-ancestral); }
-.detail .leg { color: var(--r-lendario); }
-.detail .req.bad { color: var(--danger); }
-.detail .seed { font-family: var(--f-num); font-size: 12px; color: var(--muted); }
 
 .skill { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
 .skill .t { font-weight: 700; }
@@ -342,6 +326,94 @@ input, select { font-family: inherit; }
 .li .ic img { position: absolute; inset: 10%; width: 80%; height: 80%; pointer-events: none; }
 .mono { font-family: var(--f-num); font-size: 12px; color: var(--muted); word-break: break-all; }
 input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); color: var(--text); padding: 6px 8px; border-radius: 3px; font-size: 14px; }
+
+/* ---------- Inventário: personagem + equipamento, mochila, detalhes do item ---------- */
+.drawer.inv-open { width: 100%; }
+@media (min-width: 761px) { .drawer.inv-open { width: min(96vw, 680px); } }
+@media (min-width: 1000px) { .drawer.inv-open { width: min(95vw, 1060px); } }
+.inv { --slot: clamp(46px, 12.5vw, 62px); --gap: clamp(5px, 1.2vw, 8px); }
+.inv-h { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
+.inv-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 1000px) { .inv { --slot: 70px; } .inv-cols { grid-template-columns: minmax(330px, 400px) minmax(0, 1fr); gap: 20px; align-items: start; } }
+.inv-char, .inv-bag { min-width: 0; }
+.paper { display: grid; grid-template-columns: var(--slot) minmax(0, 1fr) var(--slot); gap: var(--gap); padding: var(--gap); border: 1px solid rgba(184,146,74,.35); border-radius: 4px; background: rgba(18,14,25,.55); box-shadow: inset 0 0 24px rgba(0,0,0,.45); }
+.eqcol { display: grid; grid-template-rows: repeat(4, var(--slot)); gap: var(--gap); }
+.cell.eq { width: var(--slot); height: var(--slot); box-sizing: border-box; border-width: 1px; }
+.cell.eq.none { display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, #1a1424 0%, #0d0a12 80%); border: 1px solid #3a2f48; }
+.cell.eq.none .sil { width: 52%; opacity: .2; pointer-events: none; }
+.cell.eq.none em { position: absolute; left: 0; right: 0; bottom: 2px; font-style: normal; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; text-align: center; opacity: .8; }
+.cell.sel { outline: 2px solid var(--gold); outline-offset: 1px; box-shadow: 0 0 10px rgba(242,207,122,.45); z-index: 2; }
+.cell.rare { box-shadow: 0 0 6px color-mix(in srgb, var(--rc) 35%, transparent), inset 0 0 6px color-mix(in srgb, var(--rc) 25%, transparent); }
+.cell.rare.sel { box-shadow: 0 0 10px rgba(242,207,122,.5); }
+.pv { position: relative; min-height: 0; border-radius: 4px; overflow: hidden; border: 1px solid rgba(184,146,74,.22);
+  background: radial-gradient(ellipse 70% 60% at 50% 42%, #2a2140 0%, #16111f 55%, #0b0810 100%); }
+.pv canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; z-index: 1; }
+.pv canvas:active { cursor: grabbing; }
+.pv.off::after { content: 'Prévia 3D indisponível'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+.invstats { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(0, .9fr) minmax(0, .9fr); gap: 4px; margin-top: 8px; }
+.invstats span { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; background: rgba(18,14,25,.6); border: 1px solid rgba(94,74,46,.6); border-radius: 3px; min-width: 0; }
+.invstats small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.invstats b { font-family: var(--f-num); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.baghead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(184,146,74,.3); }
+.baghead > b { font-family: var(--f-display); font-weight: 400; font-size: 18px; color: var(--gold); letter-spacing: .06em; text-transform: uppercase; }
+.baghead .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.baghead .gold { margin-left: auto; color: var(--gold); font-family: var(--f-num); font-size: 15px; }
+.baghead .ups { flex-basis: 100%; font-size: 12px; color: #6fe07a; }
+.baghead .ups:empty { display: none; }
+.btabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 8px; }
+.btab { font: inherit; font-size: 12px; padding: 4px 9px; background: #120e19; color: var(--muted); border: 1px solid #3a2f48; border-radius: 3px; cursor: pointer; flex: 0 1 auto; white-space: nowrap; }
+.btab span { font-family: var(--f-num); opacity: .7; }
+.btab.on { color: var(--gold); border-color: var(--gold); background: rgba(214,178,94,.1); }
+.bag { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cellMin, 62px), 1fr)); gap: 5px; }
+@media (min-width: 761px) and (max-width: 999px) { .bag { --cellMin: 84px; } }
+@media (max-width: 760px) { .bag { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.bag .cell { min-width: 0; }
+.cell.empty { pointer-events: none; }
+.invtools { margin-top: 10px; }
+.invtools .btn { flex: 1 1 auto; }
+@media (max-width: 760px) {
+  .tabs { padding: 6px 6px 0; gap: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs button { padding: 6px 6px; font-size: 13px; white-space: nowrap; flex: none; }
+  .tabs .x { position: sticky; right: 0; background: var(--panel); padding: 6px 10px; box-shadow: -8px 0 10px var(--panel); }
+  .invstats b { font-size: 13px; }
+  .pane { padding: 10px 10px 20px; }
+  .pane h3 { font-size: 21px; }
+  .inv { --slot: clamp(44px, 12.5vw, 54px); }
+  .btab { font-size: 11.5px; padding: 4px 7px; }
+  .cell .c { font-size: 8.5px; }
+}
+@media (max-width: 420px) { .tabs button { padding: 6px 4px; font-size: 12px; } .invstats b { font-size: 12px; } }
+
+/* detalhes do item: tooltip ao lado (desktop) ou painel inferior (celular) */
+.itemtip { position: fixed; z-index: 35; width: min(320px, calc(100vw - 16px)); max-height: min(78vh, 560px); overflow-y: auto; box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(35,28,49,.97), rgba(20,15,28,.97)); border: 1px solid var(--edge-hi); border-radius: 5px; padding: 10px 12px 12px; box-shadow: 0 14px 40px rgba(0,0,0,.65); font-size: 13px; }
+.itemtip.sheet { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: 100%; max-height: 62vh; border-radius: 12px 12px 0 0; border-bottom: none; padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 14px; animation: sheetUp .18s ease-out; }
+@keyframes sheetUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.itemtip-bg { position: fixed; inset: 0; z-index: 34; background: rgba(5,3,8,.45); }
+.tip-hd { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid rgba(184,146,74,.3); }
+.tip-ic { position: relative; width: 52px; height: 52px; border: 1px solid; border-radius: 4px; overflow: hidden; }
+.itemtip.sheet .tip-ic { width: 60px; height: 60px; }
+.tip-ic .gl { position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--bg) 100%, #fff 12%) 0%, var(--bg) 50%, #0b0810 100%); }
+.tip-ic img { position: absolute; inset: 8%; width: 84%; height: 84%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.7)); }
+.tip-t .nm { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.tip-t .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tip-t .sub .lv { color: var(--gold); }
+.itemtip .x { align-self: start; background: none; border: none; font-size: 20px; line-height: 1; color: var(--muted); padding: 0 2px; }
+.tip-bd .sec { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.tip-bd .ln { margin: 2px 0; }
+.tip-bd .ln b { font-family: var(--f-num); }
+.tip-bd .exc { color: var(--r-excelente); } .tip-bd .anc { color: var(--r-ancestral); } .tip-bd .leg { color: var(--r-lendario); }
+.tip-bd .req { color: #d9d0bf; } .tip-bd .req.bad { color: var(--danger); }
+.tip-bd .desc { color: #d9d0bf; font-style: italic; border-bottom: none; }
+.tip-bd .seed { font-family: var(--f-num); font-size: 11px; color: var(--muted); }
+.tip-ft { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.itemtip.sheet .tip-ft .btn { flex: 1 1 30%; padding: 10px 8px; font-size: 14px; }
+/* menu de contexto */
+.ctxmenu { position: fixed; z-index: 36; min-width: 170px; max-width: calc(100vw - 16px); display: flex; flex-direction: column; gap: 4px; padding: 8px; box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(35,28,49,.98), rgba(20,15,28,.98)); border: 1px solid var(--edge-hi); border-radius: 4px; box-shadow: 0 12px 30px rgba(0,0,0,.6); }
+.ctxmenu .cm-t { font-size: 12px; font-weight: 700; padding: 0 2px 4px; border-bottom: 1px solid rgba(184,146,74,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctxmenu .btn { text-align: left; }
+@media (pointer: coarse) { .ctxmenu .btn { padding: 10px 12px; font-size: 14px; } }
 
 /* ---------- Modal (NPC, morte) ---------- */
 .modal { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,3,8,.55); padding: 16px; }
@@ -524,6 +596,9 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
     </div>
     <div class="pane" id="pane"></div>
   </aside>
+  <div class="itemtip-bg" id="itemTipBg" hidden></div>
+  <div class="itemtip" id="itemTip" role="dialog" aria-label="Detalhes do item" hidden></div>
+  <div class="ctxmenu" id="ctxMenu" role="menu" hidden></div>
 
   <div class="pause" id="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
     <div class="pause-card">
@@ -7727,7 +7802,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -10742,6 +10817,251 @@ function clearAllies(keepPet) {
 return { clearAllies, petSellable, sendPetToSell, spawnAlly, updateAllies };
 })();
 
+// ---- ui/charPreview.js ----
+const { CharPreview } = (() => {
+// ---------- prévia 3D do herói no inventário ----------
+// Renderer pequeno e próprio (fundo escuro opaco, para os brilhos aditivos
+// somarem sobre ele), criado uma vez. O modelo só é refeito quando classe, evolução ou
+// equipamento mudam; o desenho roda a ~30 fps e só com o inventário aberto.
+
+const PV = { host: null, canvas: null, r: null, scene: null, cam: null, model: null, key: '', yaw: 0.5, drag: null, raf: 0, last: 0, failed: false, w: 0, h: 0, center: null, size: null };
+
+function setup() {
+  try {
+    PV.r = new THREE.WebGLRenderer({ canvas: PV.canvas, antialias: true, powerPreference: 'low-power' });
+  } catch { PV.failed = true; PV.host.classList.add('off'); return; }
+  PV.r.outputColorSpace = THREE.SRGBColorSpace;
+  PV.r.toneMapping = THREE.ACESFilmicToneMapping;
+  PV.r.toneMappingExposure = 1.1;
+  const sc = (PV.scene = new THREE.Scene());
+  sc.background = backdrop();
+  sc.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a1e30, 1.15));
+  const key = new THREE.DirectionalLight(0xfff0d8, 2.1); // luz principal suave, de frente e do alto
+  key.position.set(2.5, 5, 6);
+  const rim = new THREE.DirectionalLight(0xb49aff, 1.3); // contraluz lilás que separa o herói do fundo
+  rim.position.set(-4, 3, -5);
+  sc.add(key, rim);
+  PV.cam = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+}
+/** Fundo: brilho roxo suave atrás do herói, escurecendo nas bordas (como o painel). */
+function backdrop() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(128, 104, 8, 128, 120, 170);
+  gr.addColorStop(0, '#2c2342'); gr.addColorStop(0.55, '#17121f'); gr.addColorStop(1, '#0b0810');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+/** Câmera ajustada ao tamanho do modelo (altura e asas abertas cabem no quadro). */
+function fitCamera() {
+  if (!PV.center) return;
+  const cam = PV.cam, t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+  const dH = (PV.size.y / 2) / t, dW = (PV.size.x / 2) / (t * cam.aspect);
+  const d = Math.max(dH, dW) * 1.04 + PV.size.z / 2;
+  cam.position.set(PV.center.x, PV.center.y + d * 0.12, PV.center.z + d);
+  cam.lookAt(PV.center.x, PV.center.y, PV.center.z);
+}
+/** Caixa só das partes sólidas (ignora halos, auras e faíscas aditivas, que são largos e achatados). */
+function measure(root) {
+  root.rotation.y = 0;
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3(), b = new THREE.Box3();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.visible || !o.geometry) return;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (m && (m.blending === THREE.AdditiveBlending || m.transparent && m.opacity < 0.5)) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    box.union(b);
+  });
+  if (box.isEmpty()) box.set(new THREE.Vector3(-0.6, 0, -0.4), new THREE.Vector3(0.6, 2, 0.4));
+  // asas giram junto: a largura vale para qualquer ângulo
+  const size = box.getSize(new THREE.Vector3());
+  size.x = Math.max(size.x, size.z);
+  PV.size = size; PV.center = box.getCenter(new THREE.Vector3());
+}
+function rebuild(ch) {
+  if (PV.model) { PV.scene.remove(PV.model.root); disposeModel(PV.model); PV.model = null; }
+  const m = buildCharacterModel(ch);
+  PV.scene.add(m.root);
+  PV.model = m;
+  animateModel(m, { t: performance.now() / 1000, dt: 0, moving: false });
+  measure(m.root);
+  fitCamera();
+}
+function resize() {
+  const w = PV.canvas.clientWidth, h = PV.canvas.clientHeight;
+  if (!w || !h || (w === PV.w && h === PV.h)) return;
+  PV.w = w; PV.h = h;
+  PV.r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  PV.r.setSize(w, h, false);
+  PV.cam.aspect = w / h;
+  PV.cam.updateProjectionMatrix();
+  fitCamera();
+}
+const visible = () => PV.canvas.isConnected && UI.tab === 'inv' && !$('#drawer').hidden && !document.hidden;
+function frame(now) {
+  PV.raf = 0;
+  if (!PV.model || !visible()) return; // volta a rodar no próximo sync() do inventário
+  PV.raf = requestAnimationFrame(frame);
+  if (now - PV.last < 32) return;
+  const dt = Math.min(0.1, (now - PV.last) / 1000);
+  PV.last = now;
+  resize();
+  animateModel(PV.model, { t: now / 1000, dt, moving: false });
+  PV.model.root.rotation.y = PV.yaw;
+  PV.r.render(PV.scene, PV.cam);
+}
+
+const CharPreview = {
+  html() { return '<div class="pv" id="charPv" title="Arraste para girar"><canvas aria-label="Prévia do personagem"></canvas></div>'; },
+  mount(host) {
+    PV.host = host;
+    PV.canvas = host.querySelector('canvas');
+    // arrastar gira o herói (mouse ou toque); não inicia o arrastar de itens
+    PV.canvas.addEventListener('pointerdown', (e) => {
+      PV.drag = { x: e.clientX, yaw: PV.yaw };
+      PV.canvas.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    });
+    PV.canvas.addEventListener('pointermove', (e) => { if (PV.drag) PV.yaw = PV.drag.yaw + (e.clientX - PV.drag.x) * 0.012; });
+    const end = () => { PV.drag = null; };
+    PV.canvas.addEventListener('pointerup', end);
+    PV.canvas.addEventListener('pointercancel', end);
+  },
+  /** Refaz o modelo só se a aparência mudou e garante o laço de desenho com o painel aberto. */
+  sync(ch) {
+    if (PV.failed || !PV.canvas) return;
+    if (!PV.r) { setup(); if (PV.failed) return; }
+    const key = ch.cls + '|' + ch.tier + '|' + gltfEnabled() + '|' + Object.keys(ch.equip).sort().map((k) => ch.equip[k] && ch.equip[k].uid + '+' + (ch.equip[k].plus || 0) + '+' + (ch.equip[k].stage || 0)).join(',');
+    if (key !== PV.key) { PV.key = key; rebuild(ch); }
+    if (!PV.raf && visible()) { PV.last = 0; PV.raf = requestAnimationFrame(frame); }
+  },
+};
+return { CharPreview };
+})();
+
+// ---- ui/icons.js ----
+const { glyph, iconHtml, iconURI, skillIconURI } = (() => {
+// ---------- ícones procedurais (SVG): habilidades e itens ----------
+
+// ícones de habilidade: fundo temático da classe + emblema
+
+const SKILL_ART = {
+  // Dark Knight: aço, sangue e brasas
+  twist: ['#6a1a14', '#1a0806', '<g fill="none" stroke="#ffb070" stroke-width="3" stroke-linecap="round" opacity=".85"><path d="M12 32 A20 20 0 0 1 44 14"/><path d="M52 32 A20 20 0 0 1 20 50"/></g><g transform="rotate(-35 32 32)"><path class="bl" d="M30 6 L34 6 L35 40 L29 40Z"/><rect class="au" x="22" y="39" width="20" height="4" rx="2"/><rect x="30" y="43" width="4" height="10" fill="#4a2a18"/></g>'],
+  stab: ['#5a1812', '#140605', '<g stroke="#ffd2a0" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M8 40 L22 30"/><path d="M6 48 L20 38"/><path d="M14 54 L26 44"/></g><g transform="rotate(45 32 32)"><path class="bl" d="M30 2 L34 2 L35.5 40 L28.5 40Z"/><rect class="au" x="21" y="39" width="22" height="4" rx="2"/><rect x="30" y="43" width="4" height="12" fill="#4a2a18"/></g><circle cx="52" cy="12" r="5" fill="#fff" opacity=".8"/>'],
+  swell: ['#3a4a18', '#0c1206', '<path class="au" d="M32 8 L52 16 L50 36 Q46 50 32 58 Q18 50 14 36 L12 16Z"/><path d="M32 12 L48 18 L46 35 Q43 46 32 53 Q21 46 18 35 L16 18Z" fill="#7a1a1a"/><path d="M32 22 L32 44 M21 33 L43 33" stroke="#ffe7a0" stroke-width="6" stroke-linecap="round"/>'],
+  rage: ['#7a1208', '#1a0302', '<path d="M10 58 Q14 40 22 44 Q18 28 30 22 Q28 34 36 36 Q34 20 46 12 Q44 30 54 40 Q56 52 50 58Z" fill="#ff6a1a" opacity=".85"/><path d="M18 58 Q22 46 28 48 Q28 38 36 34 Q36 44 44 46 Q48 52 44 58Z" fill="#ffd24a"/><g transform="rotate(-30 32 34)"><path class="bl" d="M30 8 L34 8 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/></g><g transform="rotate(30 32 34)"><path class="bl" d="M30 8 L34 8 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/></g>'],
+  destruct: ['#3a1030', '#0c0308', '<g stroke="#ff4a8a" stroke-width="2" fill="none" opacity=".9"><path d="M32 60 L26 48 L30 44 L22 34"/><path d="M32 60 L40 50 L36 44 L46 36"/><path d="M32 60 L32 46"/></g><ellipse cx="32" cy="58" rx="22" ry="5" fill="#ff4a8a" opacity=".35"/><path class="bl" d="M28 4 L36 4 L38 44 L26 44Z"/><path d="M32 6 L32 42" stroke="#fff8"/><rect class="au" x="16" y="42" width="32" height="5" rx="2"/>'],
+  // Dark Wizard: arcano, fogo e gelo
+  ball: ['#14306a', '#040a1c', '<circle cx="32" cy="32" r="22" fill="url(#glow)"/><circle cx="32" cy="32" r="12" fill="#bfe4ff"/><circle cx="28" cy="28" r="4" fill="#fff"/><g stroke="#8fd0ff" stroke-width="2" fill="none" opacity=".8"><path d="M8 32 Q20 20 32 32 Q44 44 56 32"/><path d="M32 8 Q44 20 32 32 Q20 44 32 56"/></g>'],
+  flame: ['#6a2a06', '#180702', '<path d="M32 58 Q12 54 14 36 Q16 26 24 20 Q22 30 28 32 Q24 16 36 6 Q36 20 44 26 Q52 34 50 44 Q48 56 32 58Z" fill="#ff5a14"/><path d="M32 56 Q20 52 22 42 Q24 34 30 30 Q30 38 34 40 Q34 30 40 26 Q44 36 44 44 Q42 54 32 56Z" fill="#ffb02a"/><path d="M32 54 Q26 50 28 44 Q30 40 32 38 Q34 44 38 46 Q38 52 32 54Z" fill="#fff2a0"/>'],
+  tele: ['#3a1464', '#0a0418', '<g fill="none" stroke-linecap="round"><path d="M32 32 m-4 0 a4 4 0 1 1 8 0 a8 8 0 1 1 -16 0 a12 12 0 1 1 24 0 a16 16 0 1 1 -32 0 a20 20 0 1 1 40 0" stroke="#c89aff" stroke-width="3"/></g><circle cx="32" cy="32" r="3" fill="#fff"/><g fill="#fff"><circle cx="12" cy="14" r="1.5"/><circle cx="52" cy="50" r="1.5"/><circle cx="50" cy="12" r="1"/></g>'],
+  meteor: ['#4a1a06', '#0e0402', '<path d="M6 6 L40 34 L30 44 Z" fill="#ff7a1a" opacity=".55"/><path d="M14 6 L42 32 L34 40 Z" fill="#ffd24a" opacity=".6"/><circle cx="42" cy="42" r="13" fill="#5a3a28" stroke="#1a0c06" stroke-width="2"/><path d="M34 38 Q38 34 42 38 M44 46 Q48 44 50 48 M38 48 L40 50" stroke="#ff8a3a" stroke-width="2" fill="none"/><circle cx="42" cy="42" r="15" fill="none" stroke="#ff6a1a" stroke-width="2" opacity=".7"/>'],
+  barrier: ['#0e3a5a', '#03101a', '<path d="M32 6 L54 19 L54 45 L32 58 L10 45 L10 19Z" fill="#5ac8ff" fill-opacity=".18" stroke="#8fe0ff" stroke-width="3"/><path d="M32 6 L32 58 M10 19 L54 45 M54 19 L10 45" stroke="#8fe0ff" stroke-width="1" opacity=".5"/><circle cx="32" cy="32" r="8" fill="#dff6ff"/>'],
+  nova: ['#12405a', '#030e16', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".7"/><g stroke="#e8faff" stroke-width="3" stroke-linecap="round"><path d="M32 6 L32 58"/><path d="M9.5 19 L54.5 45"/><path d="M54.5 19 L9.5 45"/></g><g stroke="#e8faff" stroke-width="2" fill="none" stroke-linecap="round"><path d="M26 10 L32 16 L38 10"/><path d="M26 54 L32 48 L38 54"/><path d="M12 26 L18 23 L15 16"/><path d="M52 38 L46 41 L49 48"/><path d="M52 26 L46 23 L49 16"/><path d="M12 38 L18 41 L15 48"/></g><circle cx="32" cy="32" r="4" fill="#fff"/>'],
+  hell: ['#5a0a04', '#120201', '<circle cx="32" cy="34" r="22" fill="none" stroke="#ff4a1a" stroke-width="3"/><circle cx="32" cy="34" r="16" fill="none" stroke="#ffb02a" stroke-width="1.5" stroke-dasharray="4 3"/><path d="M14 52 Q18 40 24 46 Q24 32 32 26 Q34 38 40 40 Q44 32 50 30 Q52 44 48 52Z" fill="#ff5a14"/><path d="M22 54 Q26 46 30 48 Q32 40 36 38 Q38 46 42 48 Q44 52 42 56Z" fill="#ffd24a"/><path d="M26 16 Q32 8 38 16 L36 22 L28 22Z" fill="#e8d8c0" stroke="#1a0602"/><circle cx="30" cy="17" r="1.5" fill="#1a0602"/><circle cx="34" cy="17" r="1.5" fill="#1a0602"/>'],
+  // Elfa: floresta, luz e flechas
+  triple: ['#1a4a1c', '#051206', '<g stroke="#e8d8b0" stroke-width="2.5" stroke-linecap="round"><path d="M10 54 L50 14"/><path d="M8 40 L44 8"/><path d="M24 56 L56 22"/></g><g class="bl"><path d="M50 14 L42 16 L48 22Z"/><path d="M44 8 L36 10 L42 16Z"/><path d="M56 22 L48 24 L54 30Z"/></g><g fill="#6ab04a"><path d="M10 54 L6 52 L8 58Z"/><path d="M8 40 L4 38 L6 44Z"/><path d="M24 56 L20 54 L22 60Z"/></g>'],
+  pierce: ['#16403a', '#04100e', '<g fill="none" stroke="#7affd8" stroke-width="2" opacity=".75"><ellipse cx="22" cy="32" rx="4" ry="12"/><ellipse cx="34" cy="32" rx="4" ry="12"/><ellipse cx="46" cy="32" rx="4" ry="12"/></g><path d="M4 32 L54 32" stroke="#e8d8b0" stroke-width="3"/><path class="bl" d="M60 32 L50 26 L50 38Z"/><path d="M4 32 L0 28 M4 32 L0 36" stroke="#6ab04a" stroke-width="3"/>'],
+  heal: ['#1a5a2a', '#041408', '<circle cx="32" cy="32" r="22" fill="url(#glow)" opacity=".6"/><path d="M32 10 Q52 18 50 38 Q40 52 32 56 Q18 44 16 30 Q18 16 32 10Z" fill="#6ad06a" stroke="#1a4a1a" stroke-width="2"/><path d="M32 14 L32 52" stroke="#1a4a1a" stroke-width="1.5"/><path d="M32 22 L32 42 M22 32 L42 32" stroke="#fff" stroke-width="6" stroke-linecap="round"/>'],
+  aura: ['#4a4a12', '#121204', '<g stroke="#ffe88a" stroke-width="2.5" stroke-linecap="round">' + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return '<path d="M' + (32 + Math.cos(a) * 15).toFixed(1) + ' ' + (32 + Math.sin(a) * 15).toFixed(1) + ' L' + (32 + Math.cos(a) * (i % 2 ? 24 : 28)).toFixed(1) + ' ' + (32 + Math.sin(a) * (i % 2 ? 24 : 28)).toFixed(1) + '"/>'; }).join('') + '</g><circle cx="32" cy="32" r="11" fill="#fff4b0"/><path d="M32 24 Q38 30 32 40 Q26 30 32 24Z" fill="#6ab04a"/>'],
+  spirit: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".5"/><path d="M32 58 L32 30" stroke="#6b4a2a" stroke-width="5"/><path d="M32 40 L22 30 M32 36 L42 26" stroke="#6b4a2a" stroke-width="3"/><circle cx="32" cy="20" r="14" fill="#3aa05a"/><circle cx="20" cy="28" r="9" fill="#4ab86a"/><circle cx="44" cy="26" r="9" fill="#4ab86a"/><g fill="#d8ffb0"><circle cx="14" cy="12" r="2"/><circle cx="50" cy="10" r="1.6"/><circle cx="54" cy="44" r="2"/><circle cx="10" cy="46" r="1.4"/></g>'],
+  rain: ['#20304a', '#060a12', '<path d="M4 10 Q32 0 60 10" stroke="#8aa8d0" stroke-width="2" fill="none" opacity=".6"/>' + [8, 20, 32, 44, 56].map((x, i) => '<g transform="translate(' + x + ' ' + (14 + (i % 2) * 10) + ')"><path d="M0 0 L0 24" stroke="#e8d8b0" stroke-width="2"/><path class="bl" d="M0 30 L-4 22 L4 22Z"/><path d="M0 0 L-3 -4 M0 0 L3 -4" stroke="#6ab04a" stroke-width="2"/></g>').join('')],
+  // Dark Elf: lâminas duplas, sangue e sombra
+  bladedance: ['#5a1030', '#14030c', '<g fill="none" stroke="#ff6a9a" stroke-width="3" stroke-linecap="round" opacity=".85"><path d="M10 30 A22 22 0 0 1 46 12"/><path d="M54 34 A22 22 0 0 1 18 52"/></g><g transform="rotate(-40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g>'],
+  bladefan: ['#4a0e3a', '#10030c', '<g transform="rotate(-50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(-25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(0 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><circle cx="32" cy="54" r="5" fill="#ff4a7a"/>'],
+  fury: ['#6a0a1a', '#180206', '<circle cx="32" cy="34" r="22" fill="url(#glow)" opacity=".6"/><path d="M14 56 Q18 40 26 44 Q22 28 32 18 Q34 30 40 32 Q40 22 48 14 Q50 34 52 44 Q52 54 46 58Z" fill="#ff2a4a" opacity=".85"/><path d="M22 56 Q26 46 30 48 Q30 40 36 36 Q38 46 44 48 Q46 54 42 58Z" fill="#ffb0c8"/><g fill="#fff"><path d="M24 30 L30 34 L24 36Z"/><path d="M40 30 L34 34 L40 36Z"/></g>'],
+  shadowstep: ['#2a0e4a', '#08030e', '<g fill="#8a4aff" opacity=".35"><path d="M8 50 L20 22 L26 22 L16 50Z"/><path d="M18 52 L30 24 L36 24 L26 52Z" opacity=".7"/></g><g transform="rotate(35 42 32)"><path class="bl" d="M40 4 L44 4 L45 38 L39 38Z"/><rect class="au" x="33" y="37" width="18" height="4" rx="2"/></g><g stroke="#d0a0ff" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M4 30 L18 30"/><path d="M6 40 L20 40"/></g>'],
+  bloodstorm: ['#5a0614', '#140104', '<g fill="none" stroke-linecap="round"><path d="M32 32 m-6 0 a6 6 0 1 1 12 0 a12 12 0 1 1 -24 0 a18 18 0 1 1 36 0 a22 22 0 1 1 -44 0" stroke="#ff2a4a" stroke-width="3.5"/></g><g transform="rotate(-60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g fill="#ff4a6a"><circle cx="12" cy="14" r="2"/><circle cx="52" cy="50" r="2.4"/><circle cx="50" cy="12" r="1.6"/></g>'],
+  eclipse: ['#2a0a3a', '#06020a', '<circle cx="32" cy="32" r="26" fill="url(#glow)" opacity=".55"/><circle cx="32" cy="32" r="15" fill="#0a0410"/><circle cx="32" cy="32" r="15" fill="none" stroke="#ff4a8a" stroke-width="2.5"/><g transform="rotate(0 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(45 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(90 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(135 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(180 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(225 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(270 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(315 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g>'],
+  // Necromancer: sangue, ossos e almas
+  drain: ['#4a0612', '#120104', '<path d="M32 8 Q48 30 46 42 Q44 56 32 56 Q20 56 18 42 Q16 30 32 8Z" fill="#c8102a" stroke="#ff5a6a" stroke-width="2"/><path d="M26 40 Q26 48 32 50" stroke="#ffb0b8" stroke-width="3" fill="none" stroke-linecap="round"/><g stroke="#b04aff" stroke-width="2" fill="none" opacity=".8"><path d="M6 20 Q14 28 10 38"/><path d="M58 20 Q50 28 54 38"/></g>'],
+  bonespear: ['#2a2a22', '#0a0a06', '<g transform="rotate(45 32 32)"><rect x="29.5" y="14" width="5" height="46" rx="2.5" fill="#e8e0c8" stroke="#3a3428"/><path d="M32 0 L39 16 L32 13 L25 16Z" fill="#f4eed8" stroke="#3a3428"/><g stroke="#a89c80" stroke-width="1.5"><path d="M29 26 L35 26"/><path d="M29 36 L35 36"/><path d="M29 46 L35 46"/></g></g><g fill="#9a4aff" opacity=".6"><circle cx="12" cy="52" r="4"/><circle cx="20" cy="46" r="2"/></g>'],
+  raise: ['#0e2a1c', '#030a06', '<circle cx="32" cy="30" r="22" fill="url(#glow)" opacity=".45"/><path d="M20 30 Q20 12 32 12 Q44 12 44 30 L44 36 L38 36 L38 42 L26 42 L26 36 L20 36Z" fill="#e8e0c8" stroke="#2a2418" stroke-width="1.5"/><circle cx="27" cy="28" r="4.5" fill="#0a1a10"/><circle cx="37" cy="28" r="4.5" fill="#0a1a10"/><circle cx="27" cy="28" r="2" fill="#7affb0"/><circle cx="37" cy="28" r="2" fill="#7affb0"/><path d="M30 42 L30 46 M34 42 L34 46" stroke="#2a2418" stroke-width="1.5"/><path d="M6 60 L14 50 L22 56 L32 48 L42 56 L50 50 L58 60Z" fill="#3a2a1c"/>'],
+  bloodpact: ['#3a0610', '#0e0104', '<circle cx="32" cy="32" r="20" fill="none" stroke="#ff2a3a" stroke-width="2"/><path d="M32 12 L37 26 L52 26 L40 35 L45 50 L32 41 L19 50 L24 35 L12 26 L27 26Z" fill="none" stroke="#ff5a6a" stroke-width="2"/><path d="M32 22 Q40 32 38 38 Q36 44 32 44 Q28 44 26 38 Q24 32 32 22Z" fill="#c8102a"/>'],
+  soulburst: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".6"/><g transform="rotate(0 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(72 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(144 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(216 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(288 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><circle cx="32" cy="32" r="6" fill="#e8fff0"/>'],
+  army: ['#3a0612', '#0a0104', '<path d="M2 62 L10 50 L20 56 L32 46 L44 56 L54 50 L62 62Z" fill="#2a1a14"/><g transform="translate(16 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(48 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(32 28) scale(1.2)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g>'],
+};
+const _skillIcon = {};
+function skillIconURI(id) {
+  if (_skillIcon[id]) return _skillIcon[id];
+  const a = SKILL_ART[id] || ['#333', '#111', '<circle cx="32" cy="32" r="12" fill="#aaa"/>'];
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>' +
+    '<radialGradient id="bg" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="' + shade(a[0], 0.28) + '"/><stop offset=".55" stop-color="' + a[0] + '"/><stop offset="1" stop-color="' + a[1] + '"/></radialGradient>' +
+    '<radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".4" stop-color="' + shade(a[0], 0.6) + '" stop-opacity=".6"/><stop offset="1" stop-color="' + a[0] + '" stop-opacity="0"/></radialGradient>' +
+    '<linearGradient id="bl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#b8c4d0"/><stop offset="1" stop-color="#4a5460"/></linearGradient>' +
+    '<linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e3a6"/><stop offset="1" stop-color="#8a6420"/></linearGradient></defs>' +
+    '<style>.bl{fill:url(#bl);stroke:#10141a;stroke-width:1}.au{fill:url(#au);stroke:#1a0f06;stroke-width:1}</style>' +
+    '<rect width="64" height="64" fill="url(#bg)"/>' +
+    '<path d="M0 0 L64 64 M64 0 L0 64" stroke="#fff" stroke-opacity=".03" stroke-width="10"/>' + a[2] +
+    '<rect x="1" y="1" width="62" height="62" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2"/>' +
+    '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>';
+  return (_skillIcon[id] = 'data:image/svg+xml,' + encodeURIComponent(svg));
+}
+// ---------- ícones de item (SVG procedural, fundo por tipo, cor por raridade) ----------
+const ICON_SHAPE = {
+  sword: '<path class="m" d="M29.5 6 L34.5 6 L35.5 40 L28.5 40 Z"/><path d="M32 8 L32 38" stroke="#fff6" stroke-width="1"/><rect class="g" x="19" y="39" width="26" height="5" rx="2"/><rect class="w" x="29.5" y="44" width="5" height="11" rx="1"/><circle class="g" cx="32" cy="58" r="3.5"/>',
+  staff: '<path d="M18 60 L41 17" stroke="#6b4a2a" stroke-width="5" stroke-linecap="round"/><path d="M18 60 L41 17" stroke="#0005" stroke-width="1.5"/><path class="g" d="M36 20 Q34 10 42 6 Q52 8 50 18 Q46 24 36 20Z"/><circle class="m" cx="43" cy="14" r="5.5"/><circle cx="41" cy="12" r="2" fill="#fffc"/>',
+  bow: '<path d="M22 5 Q56 32 22 59" stroke="#6b4a2a" stroke-width="5" fill="none" stroke-linecap="round"/><path class="ms" d="M22 5 Q56 32 22 59" stroke-width="2" fill="none"/><path d="M22 5 L22 59" stroke="#ddd" stroke-width="1"/><path d="M12 32 L52 32" stroke="#c9b28a" stroke-width="2"/><path class="m" d="M52 32 L45 28 L45 36Z"/><path d="M12 32 L8 28 M12 32 L8 36" stroke="#c9b28a" stroke-width="2"/>',
+  helm: '<path class="m" d="M13 38 Q12 12 32 9 Q52 12 51 38 L51 50 L41 50 L41 35 L23 35 L23 50 L13 50 Z"/><path d="M32 10 L32 35" stroke="#0006" stroke-width="2"/><rect x="23" y="30" width="18" height="4" fill="#0008"/><path class="g" d="M29 9 Q32 1 35 9Z"/>',
+  armor: '<path class="m" d="M18 12 L26 7 Q32 14 38 7 L46 12 L55 22 L47 29 L46 57 L18 57 L17 29 L9 22 Z"/><path d="M32 16 L32 56 M20 36 L44 36" stroke="#0006" stroke-width="1.5"/><circle class="g" cx="32" cy="26" r="4"/>',
+  gloves: '<path class="m" d="M20 58 L19 30 L21 14 Q24 10 26 14 L27 28 L28 10 Q31 6 33 10 L34 28 L36 12 Q39 9 41 13 L41 31 L45 22 Q49 20 49 25 L45 41 L43 58 Z"/><rect class="g" x="18" y="50" width="27" height="7" rx="2"/>',
+  boots: '<path class="m" d="M21 7 L37 7 L37 39 L51 45 Q57 48 55 57 L19 57 Z"/><rect class="g" x="20" y="8" width="17" height="5" rx="1"/><path d="M19 52 L55 52" stroke="#0007" stroke-width="2"/>',
+  ring: '<circle cx="32" cy="40" r="14" fill="none" class="ms" stroke-width="6"/><circle cx="32" cy="40" r="14" fill="none" stroke="#fff5" stroke-width="1.5"/><path class="g" d="M32 12 L41 21 L32 30 L23 21 Z"/><path d="M32 12 L32 30 M23 21 L41 21" stroke="#fff8" stroke-width="1"/>',
+  pendant: '<path d="M14 6 Q32 34 50 6" stroke="#c9b28a" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path class="m" d="M32 26 L45 40 L32 59 L19 40 Z"/><path d="M32 26 L32 59 M19 40 L45 40" stroke="#fff7" stroke-width="1"/><circle class="g" cx="32" cy="24" r="3"/>',
+  wings: '<path class="m" d="M31 32 Q15 4 3 12 Q10 19 7 27 Q14 29 11 37 Q19 37 19 46 Q27 40 31 38Z"/><path class="m" d="M33 32 Q49 4 61 12 Q54 19 57 27 Q50 29 53 37 Q45 37 45 46 Q37 40 33 38Z"/><path d="M29 30 Q18 16 8 14 M29 34 Q18 28 11 29 M29 37 Q22 36 15 38 M35 30 Q46 16 56 14 M35 34 Q46 28 53 29 M35 37 Q42 36 49 38" stroke="#0005" stroke-width="1.2" fill="none"/><circle class="g" cx="32" cy="35" r="3"/>',
+  // Asas Ascendidas (evoluídas no Ferreiro): maiores, borda dourada e joia
+  wings2: '<path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/><g transform="matrix(-1 0 0 1 64 0)"><path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path class="g" d="M32 26 L38 34 L32 44 L26 34 Z"/><path d="M32 28 L32 42" stroke="#fff9" stroke-width="1"/>',
+  jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+  // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
+  talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
+  potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
+};
+/** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
+const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
+const _iconCache = {};
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => Math.max(0, Math.min(255, Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)));
+  return '#' + ((ch(n >> 16) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, '0');
+}
+function iconKind(it) {
+  if (it.kind === 'jewel') return 'jewel';
+  if (it.kind === 'potion') return 'potion';
+  if (it.kind === 'talisman') return 'talisman';
+  if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
+  if (it.slot === 'wings' && it.stage) return 'wings2';
+  return it.slot;
+}
+function iconURI(kind, col) {
+  const key = kind + col;
+  if (_iconCache[key]) return _iconCache[key];
+  const hi = shade(col, 0.65), lo = shade(col, -0.55);
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>' +
+    '<linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + hi + '"/><stop offset=".5" stop-color="' + col + '"/><stop offset="1" stop-color="' + lo + '"/></linearGradient>' +
+    '<linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e3a6"/><stop offset="1" stop-color="#8a6420"/></linearGradient></defs>' +
+    '<style>.m{fill:url(#a);stroke:#0009;stroke-width:1.4}.ms{stroke:url(#a)}.g{fill:url(#b);stroke:#0008;stroke-width:1}.w{fill:#4a3322;stroke:#0008}</style>' +
+    ICON_SHAPE[kind] + '</svg>';
+  return (_iconCache[key] = 'data:image/svg+xml,' + encodeURIComponent(svg));
+}
+function glyph(it) {
+  const kind = iconKind(it);
+  const P = it.kind === 'potion' && R.POTIONS[it.id];
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
+  const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
+  return { kind, c, bg, src: iconURI(kind, c) };
+}
+function iconHtml(g) {
+  return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
+}
+return { glyph, iconHtml, iconURI, skillIconURI };
+})();
+
 // ---- engine/music.js ----
 const { MUSIC_LEVELS, MUSIC_THEMES, Music, musicLevel, scaleNote } = (() => {
 // ---------- música ambiente procedural (WebAudio, sem arquivos) ----------
@@ -12017,124 +12337,6 @@ function updateLowHp(hpFrac, alive) {
   if (e) e.classList.toggle('low', alive && hpFrac < CONFIG.feel.lowHpWarn);
 }
 return { hurtFeedback, updateLowHp };
-})();
-
-// ---- ui/icons.js ----
-const { glyph, iconHtml, iconURI, skillIconURI } = (() => {
-// ---------- ícones procedurais (SVG): habilidades e itens ----------
-
-// ícones de habilidade: fundo temático da classe + emblema
-
-const SKILL_ART = {
-  // Dark Knight: aço, sangue e brasas
-  twist: ['#6a1a14', '#1a0806', '<g fill="none" stroke="#ffb070" stroke-width="3" stroke-linecap="round" opacity=".85"><path d="M12 32 A20 20 0 0 1 44 14"/><path d="M52 32 A20 20 0 0 1 20 50"/></g><g transform="rotate(-35 32 32)"><path class="bl" d="M30 6 L34 6 L35 40 L29 40Z"/><rect class="au" x="22" y="39" width="20" height="4" rx="2"/><rect x="30" y="43" width="4" height="10" fill="#4a2a18"/></g>'],
-  stab: ['#5a1812', '#140605', '<g stroke="#ffd2a0" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M8 40 L22 30"/><path d="M6 48 L20 38"/><path d="M14 54 L26 44"/></g><g transform="rotate(45 32 32)"><path class="bl" d="M30 2 L34 2 L35.5 40 L28.5 40Z"/><rect class="au" x="21" y="39" width="22" height="4" rx="2"/><rect x="30" y="43" width="4" height="12" fill="#4a2a18"/></g><circle cx="52" cy="12" r="5" fill="#fff" opacity=".8"/>'],
-  swell: ['#3a4a18', '#0c1206', '<path class="au" d="M32 8 L52 16 L50 36 Q46 50 32 58 Q18 50 14 36 L12 16Z"/><path d="M32 12 L48 18 L46 35 Q43 46 32 53 Q21 46 18 35 L16 18Z" fill="#7a1a1a"/><path d="M32 22 L32 44 M21 33 L43 33" stroke="#ffe7a0" stroke-width="6" stroke-linecap="round"/>'],
-  rage: ['#7a1208', '#1a0302', '<path d="M10 58 Q14 40 22 44 Q18 28 30 22 Q28 34 36 36 Q34 20 46 12 Q44 30 54 40 Q56 52 50 58Z" fill="#ff6a1a" opacity=".85"/><path d="M18 58 Q22 46 28 48 Q28 38 36 34 Q36 44 44 46 Q48 52 44 58Z" fill="#ffd24a"/><g transform="rotate(-30 32 34)"><path class="bl" d="M30 8 L34 8 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/></g><g transform="rotate(30 32 34)"><path class="bl" d="M30 8 L34 8 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/></g>'],
-  destruct: ['#3a1030', '#0c0308', '<g stroke="#ff4a8a" stroke-width="2" fill="none" opacity=".9"><path d="M32 60 L26 48 L30 44 L22 34"/><path d="M32 60 L40 50 L36 44 L46 36"/><path d="M32 60 L32 46"/></g><ellipse cx="32" cy="58" rx="22" ry="5" fill="#ff4a8a" opacity=".35"/><path class="bl" d="M28 4 L36 4 L38 44 L26 44Z"/><path d="M32 6 L32 42" stroke="#fff8"/><rect class="au" x="16" y="42" width="32" height="5" rx="2"/>'],
-  // Dark Wizard: arcano, fogo e gelo
-  ball: ['#14306a', '#040a1c', '<circle cx="32" cy="32" r="22" fill="url(#glow)"/><circle cx="32" cy="32" r="12" fill="#bfe4ff"/><circle cx="28" cy="28" r="4" fill="#fff"/><g stroke="#8fd0ff" stroke-width="2" fill="none" opacity=".8"><path d="M8 32 Q20 20 32 32 Q44 44 56 32"/><path d="M32 8 Q44 20 32 32 Q20 44 32 56"/></g>'],
-  flame: ['#6a2a06', '#180702', '<path d="M32 58 Q12 54 14 36 Q16 26 24 20 Q22 30 28 32 Q24 16 36 6 Q36 20 44 26 Q52 34 50 44 Q48 56 32 58Z" fill="#ff5a14"/><path d="M32 56 Q20 52 22 42 Q24 34 30 30 Q30 38 34 40 Q34 30 40 26 Q44 36 44 44 Q42 54 32 56Z" fill="#ffb02a"/><path d="M32 54 Q26 50 28 44 Q30 40 32 38 Q34 44 38 46 Q38 52 32 54Z" fill="#fff2a0"/>'],
-  tele: ['#3a1464', '#0a0418', '<g fill="none" stroke-linecap="round"><path d="M32 32 m-4 0 a4 4 0 1 1 8 0 a8 8 0 1 1 -16 0 a12 12 0 1 1 24 0 a16 16 0 1 1 -32 0 a20 20 0 1 1 40 0" stroke="#c89aff" stroke-width="3"/></g><circle cx="32" cy="32" r="3" fill="#fff"/><g fill="#fff"><circle cx="12" cy="14" r="1.5"/><circle cx="52" cy="50" r="1.5"/><circle cx="50" cy="12" r="1"/></g>'],
-  meteor: ['#4a1a06', '#0e0402', '<path d="M6 6 L40 34 L30 44 Z" fill="#ff7a1a" opacity=".55"/><path d="M14 6 L42 32 L34 40 Z" fill="#ffd24a" opacity=".6"/><circle cx="42" cy="42" r="13" fill="#5a3a28" stroke="#1a0c06" stroke-width="2"/><path d="M34 38 Q38 34 42 38 M44 46 Q48 44 50 48 M38 48 L40 50" stroke="#ff8a3a" stroke-width="2" fill="none"/><circle cx="42" cy="42" r="15" fill="none" stroke="#ff6a1a" stroke-width="2" opacity=".7"/>'],
-  barrier: ['#0e3a5a', '#03101a', '<path d="M32 6 L54 19 L54 45 L32 58 L10 45 L10 19Z" fill="#5ac8ff" fill-opacity=".18" stroke="#8fe0ff" stroke-width="3"/><path d="M32 6 L32 58 M10 19 L54 45 M54 19 L10 45" stroke="#8fe0ff" stroke-width="1" opacity=".5"/><circle cx="32" cy="32" r="8" fill="#dff6ff"/>'],
-  nova: ['#12405a', '#030e16', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".7"/><g stroke="#e8faff" stroke-width="3" stroke-linecap="round"><path d="M32 6 L32 58"/><path d="M9.5 19 L54.5 45"/><path d="M54.5 19 L9.5 45"/></g><g stroke="#e8faff" stroke-width="2" fill="none" stroke-linecap="round"><path d="M26 10 L32 16 L38 10"/><path d="M26 54 L32 48 L38 54"/><path d="M12 26 L18 23 L15 16"/><path d="M52 38 L46 41 L49 48"/><path d="M52 26 L46 23 L49 16"/><path d="M12 38 L18 41 L15 48"/></g><circle cx="32" cy="32" r="4" fill="#fff"/>'],
-  hell: ['#5a0a04', '#120201', '<circle cx="32" cy="34" r="22" fill="none" stroke="#ff4a1a" stroke-width="3"/><circle cx="32" cy="34" r="16" fill="none" stroke="#ffb02a" stroke-width="1.5" stroke-dasharray="4 3"/><path d="M14 52 Q18 40 24 46 Q24 32 32 26 Q34 38 40 40 Q44 32 50 30 Q52 44 48 52Z" fill="#ff5a14"/><path d="M22 54 Q26 46 30 48 Q32 40 36 38 Q38 46 42 48 Q44 52 42 56Z" fill="#ffd24a"/><path d="M26 16 Q32 8 38 16 L36 22 L28 22Z" fill="#e8d8c0" stroke="#1a0602"/><circle cx="30" cy="17" r="1.5" fill="#1a0602"/><circle cx="34" cy="17" r="1.5" fill="#1a0602"/>'],
-  // Elfa: floresta, luz e flechas
-  triple: ['#1a4a1c', '#051206', '<g stroke="#e8d8b0" stroke-width="2.5" stroke-linecap="round"><path d="M10 54 L50 14"/><path d="M8 40 L44 8"/><path d="M24 56 L56 22"/></g><g class="bl"><path d="M50 14 L42 16 L48 22Z"/><path d="M44 8 L36 10 L42 16Z"/><path d="M56 22 L48 24 L54 30Z"/></g><g fill="#6ab04a"><path d="M10 54 L6 52 L8 58Z"/><path d="M8 40 L4 38 L6 44Z"/><path d="M24 56 L20 54 L22 60Z"/></g>'],
-  pierce: ['#16403a', '#04100e', '<g fill="none" stroke="#7affd8" stroke-width="2" opacity=".75"><ellipse cx="22" cy="32" rx="4" ry="12"/><ellipse cx="34" cy="32" rx="4" ry="12"/><ellipse cx="46" cy="32" rx="4" ry="12"/></g><path d="M4 32 L54 32" stroke="#e8d8b0" stroke-width="3"/><path class="bl" d="M60 32 L50 26 L50 38Z"/><path d="M4 32 L0 28 M4 32 L0 36" stroke="#6ab04a" stroke-width="3"/>'],
-  heal: ['#1a5a2a', '#041408', '<circle cx="32" cy="32" r="22" fill="url(#glow)" opacity=".6"/><path d="M32 10 Q52 18 50 38 Q40 52 32 56 Q18 44 16 30 Q18 16 32 10Z" fill="#6ad06a" stroke="#1a4a1a" stroke-width="2"/><path d="M32 14 L32 52" stroke="#1a4a1a" stroke-width="1.5"/><path d="M32 22 L32 42 M22 32 L42 32" stroke="#fff" stroke-width="6" stroke-linecap="round"/>'],
-  aura: ['#4a4a12', '#121204', '<g stroke="#ffe88a" stroke-width="2.5" stroke-linecap="round">' + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return '<path d="M' + (32 + Math.cos(a) * 15).toFixed(1) + ' ' + (32 + Math.sin(a) * 15).toFixed(1) + ' L' + (32 + Math.cos(a) * (i % 2 ? 24 : 28)).toFixed(1) + ' ' + (32 + Math.sin(a) * (i % 2 ? 24 : 28)).toFixed(1) + '"/>'; }).join('') + '</g><circle cx="32" cy="32" r="11" fill="#fff4b0"/><path d="M32 24 Q38 30 32 40 Q26 30 32 24Z" fill="#6ab04a"/>'],
-  spirit: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".5"/><path d="M32 58 L32 30" stroke="#6b4a2a" stroke-width="5"/><path d="M32 40 L22 30 M32 36 L42 26" stroke="#6b4a2a" stroke-width="3"/><circle cx="32" cy="20" r="14" fill="#3aa05a"/><circle cx="20" cy="28" r="9" fill="#4ab86a"/><circle cx="44" cy="26" r="9" fill="#4ab86a"/><g fill="#d8ffb0"><circle cx="14" cy="12" r="2"/><circle cx="50" cy="10" r="1.6"/><circle cx="54" cy="44" r="2"/><circle cx="10" cy="46" r="1.4"/></g>'],
-  rain: ['#20304a', '#060a12', '<path d="M4 10 Q32 0 60 10" stroke="#8aa8d0" stroke-width="2" fill="none" opacity=".6"/>' + [8, 20, 32, 44, 56].map((x, i) => '<g transform="translate(' + x + ' ' + (14 + (i % 2) * 10) + ')"><path d="M0 0 L0 24" stroke="#e8d8b0" stroke-width="2"/><path class="bl" d="M0 30 L-4 22 L4 22Z"/><path d="M0 0 L-3 -4 M0 0 L3 -4" stroke="#6ab04a" stroke-width="2"/></g>').join('')],
-  // Dark Elf: lâminas duplas, sangue e sombra
-  bladedance: ['#5a1030', '#14030c', '<g fill="none" stroke="#ff6a9a" stroke-width="3" stroke-linecap="round" opacity=".85"><path d="M10 30 A22 22 0 0 1 46 12"/><path d="M54 34 A22 22 0 0 1 18 52"/></g><g transform="rotate(-40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(40 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g>'],
-  bladefan: ['#4a0e3a', '#10030c', '<g transform="rotate(-50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(-25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(0 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(25 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><g transform="rotate(50 32 54)"><path d="M32 54 L32 22" stroke="#ff8ab0" stroke-width="1.5" opacity=".5"/><path class="bl" d="M32 8 L37 18 L32 26 L27 18Z"/></g><circle cx="32" cy="54" r="5" fill="#ff4a7a"/>'],
-  fury: ['#6a0a1a', '#180206', '<circle cx="32" cy="34" r="22" fill="url(#glow)" opacity=".6"/><path d="M14 56 Q18 40 26 44 Q22 28 32 18 Q34 30 40 32 Q40 22 48 14 Q50 34 52 44 Q52 54 46 58Z" fill="#ff2a4a" opacity=".85"/><path d="M22 56 Q26 46 30 48 Q30 40 36 36 Q38 46 44 48 Q46 54 42 58Z" fill="#ffb0c8"/><g fill="#fff"><path d="M24 30 L30 34 L24 36Z"/><path d="M40 30 L34 34 L40 36Z"/></g>'],
-  shadowstep: ['#2a0e4a', '#08030e', '<g fill="#8a4aff" opacity=".35"><path d="M8 50 L20 22 L26 22 L16 50Z"/><path d="M18 52 L30 24 L36 24 L26 52Z" opacity=".7"/></g><g transform="rotate(35 42 32)"><path class="bl" d="M40 4 L44 4 L45 38 L39 38Z"/><rect class="au" x="33" y="37" width="18" height="4" rx="2"/></g><g stroke="#d0a0ff" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M4 30 L18 30"/><path d="M6 40 L20 40"/></g>'],
-  bloodstorm: ['#5a0614', '#140104', '<g fill="none" stroke-linecap="round"><path d="M32 32 m-6 0 a6 6 0 1 1 12 0 a12 12 0 1 1 -24 0 a18 18 0 1 1 36 0 a22 22 0 1 1 -44 0" stroke="#ff2a4a" stroke-width="3.5"/></g><g transform="rotate(-60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g transform="rotate(60 32 32)"><path class="bl" d="M30 6 L34 6 L35 38 L29 38Z"/><rect class="au" x="23" y="37" width="18" height="4" rx="2"/><rect x="30" y="41" width="4" height="9" fill="#2a1420"/></g><g fill="#ff4a6a"><circle cx="12" cy="14" r="2"/><circle cx="52" cy="50" r="2.4"/><circle cx="50" cy="12" r="1.6"/></g>'],
-  eclipse: ['#2a0a3a', '#06020a', '<circle cx="32" cy="32" r="26" fill="url(#glow)" opacity=".55"/><circle cx="32" cy="32" r="15" fill="#0a0410"/><circle cx="32" cy="32" r="15" fill="none" stroke="#ff4a8a" stroke-width="2.5"/><g transform="rotate(0 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(45 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(90 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(135 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(180 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(225 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(270 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g><g transform="rotate(315 32 32)"><path class="bl" d="M31 2 L33 2 L34 14 L30 14Z"/></g>'],
-  // Necromancer: sangue, ossos e almas
-  drain: ['#4a0612', '#120104', '<path d="M32 8 Q48 30 46 42 Q44 56 32 56 Q20 56 18 42 Q16 30 32 8Z" fill="#c8102a" stroke="#ff5a6a" stroke-width="2"/><path d="M26 40 Q26 48 32 50" stroke="#ffb0b8" stroke-width="3" fill="none" stroke-linecap="round"/><g stroke="#b04aff" stroke-width="2" fill="none" opacity=".8"><path d="M6 20 Q14 28 10 38"/><path d="M58 20 Q50 28 54 38"/></g>'],
-  bonespear: ['#2a2a22', '#0a0a06', '<g transform="rotate(45 32 32)"><rect x="29.5" y="14" width="5" height="46" rx="2.5" fill="#e8e0c8" stroke="#3a3428"/><path d="M32 0 L39 16 L32 13 L25 16Z" fill="#f4eed8" stroke="#3a3428"/><g stroke="#a89c80" stroke-width="1.5"><path d="M29 26 L35 26"/><path d="M29 36 L35 36"/><path d="M29 46 L35 46"/></g></g><g fill="#9a4aff" opacity=".6"><circle cx="12" cy="52" r="4"/><circle cx="20" cy="46" r="2"/></g>'],
-  raise: ['#0e2a1c', '#030a06', '<circle cx="32" cy="30" r="22" fill="url(#glow)" opacity=".45"/><path d="M20 30 Q20 12 32 12 Q44 12 44 30 L44 36 L38 36 L38 42 L26 42 L26 36 L20 36Z" fill="#e8e0c8" stroke="#2a2418" stroke-width="1.5"/><circle cx="27" cy="28" r="4.5" fill="#0a1a10"/><circle cx="37" cy="28" r="4.5" fill="#0a1a10"/><circle cx="27" cy="28" r="2" fill="#7affb0"/><circle cx="37" cy="28" r="2" fill="#7affb0"/><path d="M30 42 L30 46 M34 42 L34 46" stroke="#2a2418" stroke-width="1.5"/><path d="M6 60 L14 50 L22 56 L32 48 L42 56 L50 50 L58 60Z" fill="#3a2a1c"/>'],
-  bloodpact: ['#3a0610', '#0e0104', '<circle cx="32" cy="32" r="20" fill="none" stroke="#ff2a3a" stroke-width="2"/><path d="M32 12 L37 26 L52 26 L40 35 L45 50 L32 41 L19 50 L24 35 L12 26 L27 26Z" fill="none" stroke="#ff5a6a" stroke-width="2"/><path d="M32 22 Q40 32 38 38 Q36 44 32 44 Q28 44 26 38 Q24 32 32 22Z" fill="#c8102a"/>'],
-  soulburst: ['#0e3a2a', '#020e08', '<circle cx="32" cy="32" r="24" fill="url(#glow)" opacity=".6"/><g transform="rotate(0 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(72 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(144 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(216 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><g transform="rotate(288 32 32)"><path d="M32 30 Q28 18 32 8 Q36 14 34 20 Q40 14 38 6" stroke="#b0ffd0" stroke-width="2.5" fill="none" stroke-linecap="round"/></g><circle cx="32" cy="32" r="6" fill="#e8fff0"/>'],
-  army: ['#3a0612', '#0a0104', '<path d="M2 62 L10 50 L20 56 L32 46 L44 56 L54 50 L62 62Z" fill="#2a1a14"/><g transform="translate(16 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(48 36) scale(0.9)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g><g transform="translate(32 28) scale(1.2)"><path d="M-8 0 Q-8 -14 0 -14 Q8 -14 8 0 L8 4 L4 4 L4 8 L-4 8 L-4 4 L-8 4Z" fill="#e8e0c8" stroke="#2a2418"/><circle cx="-3" cy="-3" r="2.2" fill="#ff3a5a"/><circle cx="3" cy="-3" r="2.2" fill="#ff3a5a"/></g>'],
-};
-const _skillIcon = {};
-function skillIconURI(id) {
-  if (_skillIcon[id]) return _skillIcon[id];
-  const a = SKILL_ART[id] || ['#333', '#111', '<circle cx="32" cy="32" r="12" fill="#aaa"/>'];
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>' +
-    '<radialGradient id="bg" cx=".5" cy=".42" r=".75"><stop offset="0" stop-color="' + shade(a[0], 0.28) + '"/><stop offset=".55" stop-color="' + a[0] + '"/><stop offset="1" stop-color="' + a[1] + '"/></radialGradient>' +
-    '<radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".4" stop-color="' + shade(a[0], 0.6) + '" stop-opacity=".6"/><stop offset="1" stop-color="' + a[0] + '" stop-opacity="0"/></radialGradient>' +
-    '<linearGradient id="bl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#b8c4d0"/><stop offset="1" stop-color="#4a5460"/></linearGradient>' +
-    '<linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e3a6"/><stop offset="1" stop-color="#8a6420"/></linearGradient></defs>' +
-    '<style>.bl{fill:url(#bl);stroke:#10141a;stroke-width:1}.au{fill:url(#au);stroke:#1a0f06;stroke-width:1}</style>' +
-    '<rect width="64" height="64" fill="url(#bg)"/>' +
-    '<path d="M0 0 L64 64 M64 0 L0 64" stroke="#fff" stroke-opacity=".03" stroke-width="10"/>' + a[2] +
-    '<rect x="1" y="1" width="62" height="62" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2"/>' +
-    '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>';
-  return (_skillIcon[id] = 'data:image/svg+xml,' + encodeURIComponent(svg));
-}
-// ---------- ícones de item (SVG procedural, fundo por tipo, cor por raridade) ----------
-const ICON_SHAPE = {
-  sword: '<path class="m" d="M29.5 6 L34.5 6 L35.5 40 L28.5 40 Z"/><path d="M32 8 L32 38" stroke="#fff6" stroke-width="1"/><rect class="g" x="19" y="39" width="26" height="5" rx="2"/><rect class="w" x="29.5" y="44" width="5" height="11" rx="1"/><circle class="g" cx="32" cy="58" r="3.5"/>',
-  staff: '<path d="M18 60 L41 17" stroke="#6b4a2a" stroke-width="5" stroke-linecap="round"/><path d="M18 60 L41 17" stroke="#0005" stroke-width="1.5"/><path class="g" d="M36 20 Q34 10 42 6 Q52 8 50 18 Q46 24 36 20Z"/><circle class="m" cx="43" cy="14" r="5.5"/><circle cx="41" cy="12" r="2" fill="#fffc"/>',
-  bow: '<path d="M22 5 Q56 32 22 59" stroke="#6b4a2a" stroke-width="5" fill="none" stroke-linecap="round"/><path class="ms" d="M22 5 Q56 32 22 59" stroke-width="2" fill="none"/><path d="M22 5 L22 59" stroke="#ddd" stroke-width="1"/><path d="M12 32 L52 32" stroke="#c9b28a" stroke-width="2"/><path class="m" d="M52 32 L45 28 L45 36Z"/><path d="M12 32 L8 28 M12 32 L8 36" stroke="#c9b28a" stroke-width="2"/>',
-  helm: '<path class="m" d="M13 38 Q12 12 32 9 Q52 12 51 38 L51 50 L41 50 L41 35 L23 35 L23 50 L13 50 Z"/><path d="M32 10 L32 35" stroke="#0006" stroke-width="2"/><rect x="23" y="30" width="18" height="4" fill="#0008"/><path class="g" d="M29 9 Q32 1 35 9Z"/>',
-  armor: '<path class="m" d="M18 12 L26 7 Q32 14 38 7 L46 12 L55 22 L47 29 L46 57 L18 57 L17 29 L9 22 Z"/><path d="M32 16 L32 56 M20 36 L44 36" stroke="#0006" stroke-width="1.5"/><circle class="g" cx="32" cy="26" r="4"/>',
-  gloves: '<path class="m" d="M20 58 L19 30 L21 14 Q24 10 26 14 L27 28 L28 10 Q31 6 33 10 L34 28 L36 12 Q39 9 41 13 L41 31 L45 22 Q49 20 49 25 L45 41 L43 58 Z"/><rect class="g" x="18" y="50" width="27" height="7" rx="2"/>',
-  boots: '<path class="m" d="M21 7 L37 7 L37 39 L51 45 Q57 48 55 57 L19 57 Z"/><rect class="g" x="20" y="8" width="17" height="5" rx="1"/><path d="M19 52 L55 52" stroke="#0007" stroke-width="2"/>',
-  ring: '<circle cx="32" cy="40" r="14" fill="none" class="ms" stroke-width="6"/><circle cx="32" cy="40" r="14" fill="none" stroke="#fff5" stroke-width="1.5"/><path class="g" d="M32 12 L41 21 L32 30 L23 21 Z"/><path d="M32 12 L32 30 M23 21 L41 21" stroke="#fff8" stroke-width="1"/>',
-  pendant: '<path d="M14 6 Q32 34 50 6" stroke="#c9b28a" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path class="m" d="M32 26 L45 40 L32 59 L19 40 Z"/><path d="M32 26 L32 59 M19 40 L45 40" stroke="#fff7" stroke-width="1"/><circle class="g" cx="32" cy="24" r="3"/>',
-  wings: '<path class="m" d="M31 32 Q15 4 3 12 Q10 19 7 27 Q14 29 11 37 Q19 37 19 46 Q27 40 31 38Z"/><path class="m" d="M33 32 Q49 4 61 12 Q54 19 57 27 Q50 29 53 37 Q45 37 45 46 Q37 40 33 38Z"/><path d="M29 30 Q18 16 8 14 M29 34 Q18 28 11 29 M29 37 Q22 36 15 38 M35 30 Q46 16 56 14 M35 34 Q46 28 53 29 M35 37 Q42 36 49 38" stroke="#0005" stroke-width="1.2" fill="none"/><circle class="g" cx="32" cy="35" r="3"/>',
-  // Asas Ascendidas (evoluídas no Ferreiro): maiores, borda dourada e joia
-  wings2: '<path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/><g transform="matrix(-1 0 0 1 64 0)"><path class="m" d="M30 30 Q16 2 1 6 Q7 12 3 18 Q10 20 4 27 Q12 29 7 36 Q15 37 11 45 Q20 44 18 53 Q26 45 30 40Z"/><path d="M28 27 Q16 10 5 8 M28 31 Q16 20 6 20 M28 34 Q17 29 8 30 M28 37 Q19 37 12 41 M29 39 Q23 43 19 49" stroke="#0006" stroke-width="1.1" fill="none"/><path d="M30 30 Q16 2 1 6" stroke="url(#b)" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path class="g" d="M32 26 L38 34 L32 44 L26 34 Z"/><path d="M32 28 L32 42" stroke="#fff9" stroke-width="1"/>',
-  jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
-  // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
-  talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
-  potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
-};
-/** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
-const _iconCache = {};
-function shade(hex, f) {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (v) => Math.max(0, Math.min(255, Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)));
-  return '#' + ((ch(n >> 16) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, '0');
-}
-function iconKind(it) {
-  if (it.kind === 'jewel') return 'jewel';
-  if (it.kind === 'potion') return 'potion';
-  if (it.kind === 'talisman') return 'talisman';
-  if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
-  if (it.slot === 'wings' && it.stage) return 'wings2';
-  return it.slot;
-}
-function iconURI(kind, col) {
-  const key = kind + col;
-  if (_iconCache[key]) return _iconCache[key];
-  const hi = shade(col, 0.65), lo = shade(col, -0.55);
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>' +
-    '<linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + hi + '"/><stop offset=".5" stop-color="' + col + '"/><stop offset="1" stop-color="' + lo + '"/></linearGradient>' +
-    '<linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6e3a6"/><stop offset="1" stop-color="#8a6420"/></linearGradient></defs>' +
-    '<style>.m{fill:url(#a);stroke:#0009;stroke-width:1.4}.ms{stroke:url(#a)}.g{fill:url(#b);stroke:#0008;stroke-width:1}.w{fill:#4a3322;stroke:#0008}</style>' +
-    ICON_SHAPE[kind] + '</svg>';
-  return (_iconCache[key] = 'data:image/svg+xml,' + encodeURIComponent(svg));
-}
-function glyph(it) {
-  const kind = iconKind(it);
-  const P = it.kind === 'potion' && R.POTIONS[it.id];
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
-  const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
-  return { kind, c, bg, src: iconURI(kind, c) };
-}
-function iconHtml(g) {
-  return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
-}
-return { glyph, iconHtml, iconURI, skillIconURI };
 })();
 
 // ---- ui/hud.js ----
@@ -17657,12 +17859,210 @@ function paneOpts() {
 return { paneChar, paneLoot, paneOpts, paneSkills, statLabel };
 })();
 
-// ---- ui/inventoryPane.js ----
-const { paneInv, selectedItem } = (() => {
-// ---------- painel Inventário: equipamento, mochila por categoria, detalhe do item ----------
+// ---- ui/itemTooltip.js ----
+const { ContextMenu, ItemTooltip, closeItemPopups, drinkable, itemInfoHtml, selectedItem } = (() => {
+// ---------- detalhes do item: tooltip (desktop), painel inferior (celular) e menu de contexto ----------
+// Os dois elementos (#itemTip e #ctxMenu) ficam fora do painel e são
+// reaproveitados; os botões usam os mesmos data-act do painel (paneActions.js).
 
-function cellHtml(it, attrs, sel, ctx) {
-  if (!it) return '<div class="cell"' + attrs + '></div>';
+function selectedItem() {
+  const s = UI.sel;
+  if (!s) return null;
+  if (s.where === 'eq') return G.ch.equip[s.slot] || null;
+  return G.ch.bag[s.idx] || null;
+}
+/** Celular: detalhes num painel inferior em vez de tooltip ao lado do item. */
+const sheetMode = () => window.matchMedia('(max-width: 760px)').matches;
+/** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
+const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !R.POTIONS[it.id].revive);
+
+function itemColor(it) { return it.rarity ? R.RARITY[it.rarity].color : glyph(it).c; }
+function itemSub(it) {
+  if (it.kind === 'jewel') return 'Joia · material de refino';
+  if (it.kind === 'talisman') return 'Talismã · material de refino';
+  if (it.kind === 'potion') return 'Consumível';
+  return R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · Tier ' + (it.tier + 1) + (it.plus ? ' · <b class="lv">+' + it.plus + '</b>' : '');
+}
+function itemDesc(it) {
+  if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'potion') {
+    const P = R.POTIONS[it.id];
+    if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.';
+    if (P.buff) return esc(P.desc) + ' Beber de novo renova o tempo.';
+    return 'Recupera ' + Math.round(P.pct * 100) + '% + ' + P.flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.';
+  }
+  return (it.cls ? 'Usável por ' + R.itemUsers(it).join(', ') : 'Usável por todas as classes') + '.';
+}
+/** Conteúdo dos detalhes: ícone grande, nome, raridade, atributos, requisitos, bônus, descrição e ações. */
+function itemInfoHtml(it, where) {
+  const g = glyph(it);
+  let h = '<div class="tip-hd"><span class="tip-ic" style="border-color:' + g.c + '">' + iconHtml(g) + '</span><div class="tip-t">' +
+    '<div class="nm" style="color:' + itemColor(it) + '">' + esc(R.itemName(it)) + '</div><div class="sub">' + itemSub(it) + (it.qty > 1 ? ' · Quantidade <b class="num">' + fmt(it.qty) + '</b>' : '') + '</div></div>' +
+    '<button class="x" data-act="tipclose" aria-label="Fechar detalhes">×</button></div><div class="tip-bd">';
+  if (it.slot) {
+    const lines = R.itemLines(it);
+    if (lines.length) h += '<div class="sec">' + lines.map(([k, v]) => '<div class="ln">' + k + ' <b class="num">' + v + '</b></div>').join('') + '</div>';
+    let a = '';
+    if (it.luck) a += '<div class="ln">Sorte (crítico +5%, +25% no Soul)</div>';
+    if (it.skill) a += '<div class="ln">Habilidade (+10% dano de habilidades)</div>';
+    if (it.addOpt) a += '<div class="ln">Opção adicional +' + it.addOpt + '</div>';
+    const exSet = it.slot === 'weapon' || it.slot === 'pendant' ? R.EXC_WEAPON : R.EXC_ARMOR;
+    R.excOpts(it).forEach((e) => (a += '<div class="ln exc">' + esc(exSet[e].t) + '</div>'));
+    if (it.anc) a += '<div class="ln anc">Ancestral: ' + statLabel(it.anc.stat) + ' +' + it.anc.value + '</div>';
+    if (it.legend) a += '<div class="ln leg">Lendário: ' + esc(R.LEGEND[it.legend].t) + '</div>';
+    if (a) h += '<div class="sec">' + a + '</div>';
+    const req = R.itemReq(it);
+    let r = '';
+    if (req) {
+      const have = req.stat === 'level' ? G.ch.level : G.ch.stats[req.stat];
+      r += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
+    }
+    if (it.cls && !classOk(it)) r += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
+    if (r) h += '<div class="sec">' + r + '</div>';
+    h += '<div class="sec ln cpl">CP do item <b class="num">' + fmt(R.itemCP(it)) + '</b>';
+    if (where === 'bag' && classOk(it)) {
+      const cur = G.ch.equip[it.slot], d = cpWith(it) - cpOf(G.ch);
+      if (!reqOk(it)) h += '<br><span class="dn">Requisito não atendido: ainda não soma CP</span>';
+      else h += '<br><span class="' + (d > 0 ? 'up' : d < 0 ? 'dn' : '') + '">' + (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= ') + fmt(d) + ' CP no personagem</span> <span class="note">' + (cur ? '(vs ' + esc(R.itemName(cur)) + ')' : '(slot vazio)') + '</span>';
+    }
+    h += '</div>';
+  }
+  h += '<div class="sec desc">' + itemDesc(it) + '</div>';
+  if (it.slot) h += '<div class="seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
+  h += '</div><div class="tip-ft">' + actionButtons(it, where, false) + '</div>';
+  return h;
+}
+/** Botões de ação do item (no painel de detalhes e no menu de contexto). */
+function actionButtons(it, where, menu) {
+  const b = (act, label, cls) => '<button class="btn sm' + (cls ? ' ' + cls : '') + '" data-act="' + act + '">' + label + '</button>';
+  let h = '';
+  if (it.slot) {
+    if (where === 'eq') h += b('unequip', 'Desequipar');
+    else if (classOk(it)) h += b('equip', 'Equipar', 'gold');
+  }
+  if (drinkable(it)) h += b('usepot', 'Usar', it.slot ? '' : 'gold');
+  if (menu) h += b('tipopen', 'Detalhes');
+  if (where === 'bag') {
+    if (hasTownServices()) h += b('sell', 'Vender ' + fmt(R.sellValue(it)) + ' Gold');
+    h += b('drop', 'Descartar');
+  }
+  return h;
+}
+
+/** Célula do item selecionado no painel (âncora do tooltip). */
+function anchorEl() {
+  const s = UI.sel;
+  if (!s) return null;
+  return s.where === 'eq' ? document.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : document.querySelector('#bagGrid [data-act="selbag"][data-i="' + s.idx + '"]');
+}
+
+// ---------- ItemTooltip ----------
+const ItemTooltip = {
+  html: '', timer: 0,
+  /** Abre os detalhes do item selecionado (no celular espera o tempo do toque duplo, para não cobrir o segundo toque). */
+  open(delayed) { UI.tipOpen = true; UI.tipAt = delayed && sheetMode() ? performance.now() + CONFIG.input.doubleClickMs : 0; },
+  close() { UI.tipOpen = false; this.sync(); },
+  isOpen() { return !$('#itemTip').hidden; },
+  /** Mostra/atualiza/esconde conforme a seleção; só redesenha quando o conteúdo muda. */
+  sync() {
+    const tip = $('#itemTip'), bg = $('#itemTipBg');
+    const it = UI.tab === 'inv' && !$('#drawer').hidden && UI.tipOpen ? selectedItem() : null;
+    clearTimeout(this.timer);
+    if (it && UI.tipAt && performance.now() < UI.tipAt) {
+      this.timer = setTimeout(() => this.sync(), UI.tipAt - performance.now() + 5);
+      return this.hide();
+    }
+    if (!it) return this.hide();
+    const h = itemInfoHtml(it, UI.sel.where);
+    if (h !== this.html) { tip.innerHTML = h; this.html = h; }
+    const sheet = sheetMode();
+    tip.classList.toggle('sheet', sheet);
+    bg.hidden = !sheet;
+    tip.hidden = false;
+    if (!sheet) this.place(tip);
+    else tip.style.left = tip.style.top = '';
+  },
+  hide() {
+    const tip = $('#itemTip');
+    if (!tip.hidden) { tip.hidden = true; $('#itemTipBg').hidden = true; }
+  },
+  /** Ao lado da célula (esquerda ou direita, onde couber), sem sair da tela. */
+  place(tip) {
+    const a = anchorEl();
+    if (!a) return;
+    const r = a.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    const w = tip.offsetWidth, h = tip.offsetHeight, m = 8;
+    let x = r.right + m;
+    if (x + w > W - m) x = r.left - m - w;
+    if (x < m) x = Math.max(m, Math.min(W - w - m, r.left));
+    const y = Math.max(m, Math.min(H - h - m, r.top));
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  },
+};
+
+// ---------- menu de contexto (botão direito no desktop, toque longo no celular) ----------
+const ContextMenu = {
+  /** src: {where:'bag', idx} ou {where:'eq', slot}; x/y: ponto do clique. */
+  open(src, x, y) {
+    const it = src.where === 'eq' ? G.ch.equip[src.slot] : G.ch.bag[src.idx];
+    if (!it) return false;
+    UI.sel = src.where === 'eq' ? { where: 'eq', slot: src.slot } : { where: 'bag', idx: src.idx };
+    UI.tipOpen = false;
+    ItemTooltip.hide();
+    const m = $('#ctxMenu');
+    m.innerHTML = '<div class="cm-t" style="color:' + itemColor(it) + '">' + esc(R.itemName(it)) + '</div>' + actionButtons(it, src.where, true);
+    m.hidden = false;
+    const W = window.innerWidth, H = window.innerHeight;
+    m.style.left = Math.max(8, Math.min(W - m.offsetWidth - 8, x)) + 'px';
+    m.style.top = Math.max(8, Math.min(H - m.offsetHeight - 8, y)) + 'px';
+    return true;
+  },
+  close() { const m = $('#ctxMenu'); if (m.hidden) return false; m.hidden = true; return true; },
+};
+/** Fecha menu/detalhes abertos; devolve true se havia algo aberto (Esc fecha eles antes do painel). */
+function closeItemPopups() {
+  const a = ContextMenu.close();
+  const b = ItemTooltip.isOpen();
+  if (b) ItemTooltip.close();
+  return a || b;
+}
+return { ContextMenu, ItemTooltip, closeItemPopups, drinkable, itemInfoHtml, selectedItem };
+})();
+
+// ---- ui/inventoryPane.js ----
+const { EquipmentSlot, InventoryFilter, InventoryItem, InventoryUI } = (() => {
+// ---------- painel Inventário: personagem com equipamento, mochila com filtros ----------
+// O esqueleto do painel é montado uma vez; cada atualização só troca as células
+// (slots e itens) cujo HTML mudou, e a prévia 3D só refaz o modelo quando o
+// equipamento muda. Seleção, tooltip e menu de contexto ficam em itemTooltip.js.
+
+/** Slots em volta do herói: coluna esquerda e direita (de cima para baixo). */
+const EQ_LEFT = ['helm', 'armor', 'gloves', 'boots'];
+const EQ_RIGHT = ['weapon', 'wings', 'pendant', 'ring'];
+
+// ---------- InventoryFilter ----------
+const InventoryFilter = {
+  LABELS: { all: 'Todos', equip: 'Equipamentos', mat: 'Materiais', cons: 'Consumíveis', other: 'Outros' },
+  /** Equipamentos: peças da sua classe · Materiais: joias e talismãs · Consumíveis: poções · Outros: o resto (peças de outras classes). */
+  cat(it) {
+    if (it.slot) return classOk(it) ? 'equip' : 'other';
+    if (it.kind === 'jewel' || it.kind === 'talisman') return 'mat';
+    if (it.kind === 'potion') return 'cons';
+    return 'other';
+  },
+  current() { return this.LABELS[UI.bagFilter] ? UI.bagFilter : 'all'; },
+  html(cnt, f) {
+    return Object.keys(this.LABELS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '" aria-pressed="' + (f === k) + '">' + this.LABELS[k] + ' <span>' + cnt[k] + '</span></button>').join('');
+  },
+};
+
+// ---------- InventoryItem / EquipmentSlot ----------
+/** Brilho discreto para Excelente ou melhor, joias e talismãs. */
+const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+/** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
+function InventoryItem(it, attrs, ctx) {
+  if (!it) return '<div class="cell empty"' + attrs + '></div>';
   const g = glyph(it);
   let bad = false, cp = '', up = '';
   if (it.slot) {
@@ -17679,105 +18079,148 @@ function cellHtml(it, attrs, sel, ctx) {
   }
   // refino +10 a +15: moldura brilhante na cor da faixa (a mesma do brilho 3D)
   const pl = it.plus || 0, rf = pl >= 10 ? '#' + refineColor(pl).toString(16).padStart(6, '0') : '';
-  return '<button class="cell' + (sel ? ' sel' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + '66;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
+  return '<button class="cell' + (isRare(it) ? ' rare' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + 'aa;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + it.qty + '</span>' : '') + cp + up + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + '</button>';
 }
-function itemDetail(it, where) {
-  if (!it) return '<div class="detail note">Selecione um item para ver detalhes.</div>';
-  const col = it.rarity ? R.RARITY[it.rarity].color : it.kind === 'jewel' ? R.JEWELS[it.id].color : glyph(it).c;
-  let h = '<div class="detail"><div class="nm" style="color:' + col + '">' + esc(R.itemName(it)) + (it.qty > 1 ? ' ×' + it.qty : '') + '</div>';
-  if (it.kind === 'jewel') h += '<div class="ln">' + esc(R.JEWELS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
-  else if (it.kind === 'potion' && R.POTIONS[it.id].revive) h += '<div class="ln">Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.</div>';
-  else if (it.kind === 'potion' && R.POTIONS[it.id].buff) h += '<div class="ln">' + esc(R.POTIONS[it.id].desc) + '</div><div class="ln note">Clique em Usar (ou clique duplo / botão direito no ícone). Beber de novo renova o tempo.</div>';
-  else if (it.kind === 'talisman') h += '<div class="ln">' + esc(R.TALISMANS[it.id].desc) + '</div><div class="ln note">Use no Ferreiro Hanzo.</div>';
-  else if (it.kind === 'potion') h += '<div class="ln">Recupera ' + Math.round(R.POTIONS[it.id].pct * 100) + '% + ' + R.POTIONS[it.id].flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.</div>';
-  else {
-    h += '<div class="ln note">' + R.SLOT_LABEL[it.slot] + (it.cls ? ' · ' + R.itemUsers(it).join(', ') : ' · todas as classes') + ' · tier ' + (it.tier + 1) + '</div>';
-    h += '<div class="ln cpl">CP do item: <b class="num">' + fmt(R.itemCP(it)) + '</b>';
-    if (where === 'bag' && classOk(it)) {
-      const cur = G.ch.equip[it.slot], d = cpWith(it) - cpOf(G.ch);
-      if (!reqOk(it)) h += ' · <span class="dn">requisito não atendido — não soma CP ainda</span>';
-      else h += ' · <span class="' + (d > 0 ? 'up' : d < 0 ? 'dn' : '') + '">' + (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= ') + fmt(d) + ' CP no personagem</span>' + (cur ? ' <span class="note">(vs ' + esc(R.itemName(cur)) + ' · ' + fmt(R.itemCP(cur)) + ')</span>' : ' <span class="note">(slot vazio)</span>');
+function EquipmentSlot(s, it, cls) {
+  if (it) return InventoryItem(it, ' data-act="seleq" data-slot="' + s + '"').replace('class="cell', 'class="cell eq');
+  return '<div class="cell eq none" data-slot="' + s + '"><img class="sil" src="' + iconURI(s === 'weapon' ? R.CLASSES[cls].weapon : s, '#6a6078') + '" alt=""><em>' + R.SLOT_LABEL[s] + '</em></div>';
+}
+
+/** Troca o conteúdo de um nó só quando o HTML mudou; devolve o nó atual. */
+function patch(el, html, prev) {
+  if (prev === html) return el;
+  const t = document.createElement('template');
+  t.innerHTML = html;
+  const n = t.content.firstChild;
+  el.replaceWith(n);
+  return n;
+}
+
+// ---------- EquipmentPanel ----------
+const EquipmentPanel = {
+  els: {}, html: {},
+  skeleton() {
+    const col = (list, side) => '<div class="eqcol ' + side + '">' + list.map((s) => '<div class="cell eq none" data-slot="' + s + '"></div>').join('') + '</div>';
+    return '<div class="paper" id="paper">' + col(EQ_LEFT, 'l') + CharPreview.html() + col(EQ_RIGHT, 'r') + '</div>' +
+      '<div class="invstats" id="invStats"></div>';
+  },
+  mount(root) {
+    this.els = {}; this.html = {};
+    root.querySelectorAll('#paper .eqcol > [data-slot]').forEach((el) => { this.els[el.dataset.slot] = el; });
+    this.stats = root.querySelector('#invStats');
+    this.statsHtml = '';
+  },
+  update(ch) {
+    for (const s of R.SLOTS) {
+      const h = EquipmentSlot(s, ch.equip[s], ch.cls);
+      this.els[s] = patch(this.els[s], h, this.html[s]);
+      this.html[s] = h;
     }
-    h += '</div>';
-    R.itemLines(it).forEach(([k, v]) => (h += '<div class="ln">' + k + ': <b class="num">' + v + '</b></div>'));
-    if (it.luck) h += '<div class="ln">Sorte (crítico +5%, +25% no Soul)</div>';
-    if (it.skill) h += '<div class="ln">Habilidade (+10% dano de habilidades)</div>';
-    if (it.addOpt) h += '<div class="ln">Opção adicional +' + it.addOpt + '</div>';
-    const exSet = it.slot === 'weapon' || it.slot === 'pendant' ? R.EXC_WEAPON : R.EXC_ARMOR;
-    R.excOpts(it).forEach((e) => (h += '<div class="ln exc">' + esc(exSet[e].t) + '</div>'));
-    if (it.anc) h += '<div class="ln anc">Ancestral: ' + statLabel(it.anc.stat) + ' +' + it.anc.value + '</div>';
-    if (it.legend) h += '<div class="ln leg">Lendário: ' + esc(R.LEGEND[it.legend].t) + '</div>';
-    const req = R.itemReq(it);
-    if (req) {
-      const have = req.stat === 'level' ? G.ch.level : G.ch.stats[req.stat];
-      h += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
+    const st = G.st;
+    const sh = '<span><small>CP</small><b class="cpv">' + fmt(cpOf(ch)) + '</b></span>' +
+      '<span><small>' + (ch.cls === 'dw' || R.CLASSES[ch.cls].magic ? 'Dano mágico' : 'Dano') + '</small><b>' + fmt(st.minDmg) + '~' + fmt(st.maxDmg) + '</b></span>' +
+      '<span><small>Defesa</small><b>' + fmt(st.def) + '</b></span>' +
+      '<span><small>HP</small><b>' + fmt(st.maxHp) + '</b></span>';
+    if (sh !== this.statsHtml) { this.stats.innerHTML = sh; this.statsHtml = sh; }
+  },
+};
+
+// ---------- InventoryGrid ----------
+const InventoryGrid = {
+  el: null, cells: [], html: [],
+  mount(root) { this.el = root.querySelector('#bagGrid'); this.cells = []; this.html = []; },
+  update(list) {
+    const { el, cells, html } = this;
+    for (let k = 0; k < list.length; k++) {
+      if (!cells[k]) {
+        el.insertAdjacentHTML('beforeend', list[k]);
+        cells[k] = el.lastElementChild; html[k] = list[k];
+      } else {
+        cells[k] = patch(cells[k], list[k], html[k]);
+        html[k] = list[k];
+      }
     }
-    if (it.cls && !classOk(it)) h += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
-    h += '<div class="ln seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
-  }
-  h += '<div class="row" style="margin-top:8px">';
-  if (it.slot) {
-    if (where === 'eq') h += '<button class="btn sm" data-act="unequip">Desequipar</button>';
-    else if (classOk(it)) h += '<button class="btn sm gold" data-act="equip">Equipar</button>';
-  }
-  if (it.kind === 'potion' && !R.POTIONS[it.id].revive) h += '<button class="btn sm" data-act="usepot">Usar</button>';
-  if (where === 'bag') {
-    if (hasTownServices()) h += '<button class="btn sm" data-act="sell">Vender ' + fmt(Math.floor(R.itemValue(it) * 0.5)) + ' Gold</button>';
-    h += '<button class="btn sm" data-act="drop">Descartar</button>';
-  }
-  h += '</div></div>';
-  return h;
-}
-function selectedItem() {
-  const s = UI.sel;
-  if (!s) return null;
-  if (s.where === 'eq') return G.ch.equip[s.slot] || null;
-  return G.ch.bag[s.idx] || null;
-}
-function paneInv() {
-  const ch = G.ch;
-  const base = cpOf(ch);
-  let h = '<h3>Inventário <span class="cpbadge" title="Combat Points: poder total do personagem">CP ' + fmt(base) + '</span></h3>';
-  h += '<div class="row aeq"><button class="btn sm' + (autoEquipOn() ? ' gold' : '') + '" data-act="aeqtoggle" title="Equipa automaticamente a melhor peça ao coletar ou subir de nível">Auto-equipar: ' + (autoEquipOn() ? 'ligado' : 'desligado') + '</button><button class="btn sm" data-act="aeqnow">Equipar melhores agora</button></div>';
-  h += '<p class="note tip">Clique duplo ou botão direito equipa/desequipa · arraste da mochila para o equipamento (ou de volta).</p>';
-  h += '<h4>Equipado</h4><div class="paper" id="paper">';
-  R.SLOTS.forEach((s) => {
-    const it = ch.equip[s];
-    const sel = UI.sel && UI.sel.where === 'eq' && UI.sel.slot === s;
-    if (it) h += cellHtml(it, ' data-act="seleq" data-slot="' + s + '"', sel).replace('class="cell', 'class="cell eq');
-    else h += '<div class="eq" data-slot="' + s + '"><em>' + R.SLOT_LABEL[s] + '</em><img class="sil" src="' + iconURI(s === 'weapon' ? R.CLASSES[ch.cls].weapon : s, '#6a6078') + '" alt=""></div>';
-  });
-  const cats = { all: 'Todos', mine: 'Minha classe', other: 'Outras', mat: 'Materiais' };
-  const cnt = { all: ch.bag.length, mine: 0, other: 0, mat: 0 };
-  ch.bag.forEach((it) => cnt[bagCat(it)]++);
-  const f = UI.bagFilter || 'all';
-  // CP com cada peça da mochila, calculado uma vez por desenho (setas ▲▼ e contagem de melhorias)
-  const cpMap = new Map();
-  ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
-  let ups = 0;
-  cpMap.forEach((v) => { if (v > base) ups++; });
-  h += '</div><h4>Mochila · ' + ch.bag.length + '/' + BAG_SIZE + ' · <span id="invGold">' + fmt(ch.gold) + '</span> Gold' + (ups ? ' · <span class="up">' + ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲</span>' : '') + '</h4>';
-  h += '<div class="btabs">' + Object.keys(cats).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '">' + cats[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
-  h += '<div class="bag" id="bagGrid">';
-  const ctx = { base, cp: cpMap };
-  if (f === 'all') {
-    for (let i = 0; i < BAG_SIZE; i++) h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx);
-  } else {
-    const idx = [];
-    ch.bag.forEach((it, i) => { if (bagCat(it) === f) idx.push(i); });
-    idx.sort((x, y) => (R.itemCP(ch.bag[y]) - R.itemCP(ch.bag[x])));
-    idx.forEach((i) => (h += cellHtml(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', UI.sel && UI.sel.where === 'bag' && UI.sel.idx === i, ctx)));
-    for (let k = idx.length; k < Math.max(8, Math.ceil(idx.length / 8) * 8); k++) h += '<div class="cell"></div>';
-  }
-  h += '</div>';
-  h += itemDetail(selectedItem(), UI.sel && UI.sel.where);
-  const petN = ch.bag.filter(petSellable).length;
-  h += '<div class="row" style="margin-top:10px"><button class="btn sm" data-act="petsell" title="Leva todo equipamento, exceto Lendários; joias e poções ficam na mochila">Enviar pet para vender (P) · ' + petN + ' ite' + (petN === 1 ? 'm' : 'ns') + '</button><button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar por CP</button></div>';
-  return h;
-}
-return { paneInv, selectedItem };
+    while (cells.length > list.length) { cells.pop().remove(); html.pop(); }
+  },
+};
+
+// ---------- InventoryUI ----------
+const InventoryUI = {
+  root: null,
+  skeleton() {
+    return '<div class="inv" id="invRoot">' +
+      '<h3 class="inv-h">Inventário <span class="cpbadge" id="invCP" title="Combat Points: poder total do personagem"></span></h3>' +
+      '<div class="inv-cols"><section class="inv-char" aria-label="Personagem e equipamento">' + EquipmentPanel.skeleton() + '</section>' +
+      '<section class="inv-bag" aria-label="Mochila">' +
+      '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> Gold</span><span class="ups" id="bagUps"></span></div>' +
+      '<div class="btabs" id="bagFilters" role="group" aria-label="Filtrar mochila"></div>' +
+      '<div class="bag" id="bagGrid"></div>' +
+      '<div class="row invtools" id="invTools"></div>' +
+      '<p class="note tip">Toque/clique seleciona · duplo equipa ou usa · botão direito ou toque longo abre o menu · arraste para equipar ou guardar.</p>' +
+      '</section></div></div>';
+  },
+  mount(pane) {
+    if (!this.root) {
+      const t = document.createElement('template');
+      t.innerHTML = this.skeleton();
+      this.root = t.content.firstChild;
+      EquipmentPanel.mount(this.root);
+      InventoryGrid.mount(this.root);
+      CharPreview.mount(this.root.querySelector('#charPv'));
+      this.$ = (id) => this.root.querySelector('#' + id);
+      this.prev = {};
+    }
+    if (this.root.parentNode !== pane) { pane.textContent = ''; pane.appendChild(this.root); }
+  },
+  set(id, html) { if (this.prev[id] !== html) { this.prev[id] = html; this.$(id).innerHTML = html; } },
+  render(pane) {
+    this.mount(pane);
+    const ch = G.ch, base = cpOf(ch);
+    this.set('invCP', 'CP ' + fmt(base));
+    EquipmentPanel.update(ch);
+    const f = InventoryFilter.current();
+    const cnt = { all: ch.bag.length, equip: 0, mat: 0, cons: 0, other: 0 };
+    ch.bag.forEach((it) => cnt[InventoryFilter.cat(it)]++);
+    // CP com cada peça da mochila, calculado uma vez por atualização (setas ▲▼ e contagem de melhorias)
+    const cpMap = new Map();
+    ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
+    let ups = 0;
+    cpMap.forEach((v) => { if (v > base) ups++; });
+    this.set('bagCount', ch.bag.length + ' / ' + BAG_SIZE);
+    this.set('invGold', fmt(ch.gold));
+    this.set('bagUps', ups ? ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲' : '');
+    this.set('bagFilters', InventoryFilter.html(cnt, f));
+    const ctx = { base, cp: cpMap }, list = [];
+    const cell = (i) => InventoryItem(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', ctx);
+    if (f === 'all') for (let i = 0; i < BAG_SIZE; i++) list.push(cell(i));
+    else {
+      const idx = [];
+      ch.bag.forEach((it, i) => { if (InventoryFilter.cat(it) === f) idx.push(i); });
+      idx.sort((x, y) => R.itemCP(ch.bag[y]) - R.itemCP(ch.bag[x]));
+      idx.forEach((i) => list.push(cell(i)));
+      for (let k = idx.length; k < Math.max(8, Math.ceil(idx.length / 8) * 8); k++) list.push('<div class="cell empty"></div>');
+    }
+    InventoryGrid.update(list);
+    const petN = ch.bag.filter(petSellable).length;
+    this.set('invTools', '<button class="btn sm' + (autoEquipOn() ? ' gold' : '') + '" data-act="aeqtoggle" title="Equipa automaticamente a melhor peça ao coletar ou subir de nível">Auto-equipar: ' + (autoEquipOn() ? 'ligado' : 'desligado') + '</button>' +
+      '<button class="btn sm" data-act="aeqnow">Equipar melhores</button>' +
+      '<button class="btn sm" data-act="sortbag" title="Agrupa por categoria e ordena por CP">Organizar</button>' +
+      '<button class="btn sm" data-act="petsell" title="Leva todo equipamento, exceto Lendários; joias e poções ficam na mochila">Pet vender (P) · ' + petN + '</button>');
+    this.markSelection();
+    CharPreview.sync(ch);
+    ItemTooltip.sync();
+  },
+  /** Destaque do item selecionado (classe aplicada sem redesenhar a célula). */
+  markSelection() {
+    const s = UI.sel;
+    const want = !s ? null : s.where === 'eq' ? this.root.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : this.root.querySelector('#bagGrid [data-i="' + s.idx + '"]');
+    this.root.querySelectorAll('.cell.sel').forEach((n) => { if (n !== want) n.classList.remove('sel'); });
+    if (want) want.classList.add('sel');
+  },
+};
+return { EquipmentSlot, InventoryFilter, InventoryItem, InventoryUI };
 })();
 
 // ---- ui/drawer.js ----
@@ -17797,7 +18240,7 @@ function openTab(t) {
 function markMenu(t) {
   document.querySelectorAll('.menu [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
 }
-function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; }
+function closeDrawer() { $('#drawer').hidden = true; UI.tab = null; markMenu(null); lastHtml = ''; closeItemPopups(); }
 function refreshPaneSoon() { UI.paneDirty = true; }
 /** Redesenho periódico (painel marcado como sujo): pula quando o HTML não mudou. */
 function renderPaneIfChanged() { renderPane(true); }
@@ -17805,7 +18248,16 @@ function renderPane(onlyIfChanged) {
   UI.paneDirty = false;
   const pane = $('#pane');
   const st = pane.scrollTop;
-  const f = { char: paneChar, inv: paneInv, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
+  // inventário mais largo (personagem + mochila lado a lado no desktop)
+  $('#drawer').classList.toggle('inv-open', UI.tab === 'inv');
+  if (UI.tab === 'inv') {
+    // montado uma vez; cada atualização troca só os slots e células que mudaram
+    lastHtml = '';
+    InventoryUI.render(pane);
+    return;
+  }
+  closeItemPopups();
+  const f = { char: paneChar, skills: paneSkills, loot: paneLoot, opts: paneOpts }[UI.tab];
   if (!f) return;
   const html = f();
   // nada mudou: não recria os ~60 elementos do painel (cada troca refaz layout, ícones e filtros)
@@ -19204,6 +19656,7 @@ function onWheel(e) {
 
 function onEscape() {
   if (!$('#modal').hidden) closeModal();
+  else if (closeItemPopups()) { /* Esc fecha primeiro o menu ou os detalhes do item */ }
   else if (!$('#drawer').hidden) closeDrawer();
   else togglePause();
 }
@@ -19261,7 +19714,10 @@ return { initInput };
 const { Drag, initDragDrop } = (() => {
 // ---------- arrastar e soltar itens entre mochila e equipamento ----------
 
-const Drag = { on: false, src: null, x0: 0, y0: 0, ghost: null, eatClick: false };
+const Drag = { on: false, src: null, x0: 0, y0: 0, ghost: null, eatClick: false, eatUntil: 0, lp: 0 };
+/** Toque prolongado (sem arrastar) abre o menu de contexto do item. */
+const LONG_PRESS_MS = 520;
+function cancelLongPress() { clearTimeout(Drag.lp); Drag.lp = 0; }
 function dropTarget(x, y, src) {
   src = src || Drag.src;
   const el = document.elementFromPoint(x, y);
@@ -19278,12 +19734,24 @@ function initDragDrop() {
     if (!c) return;
     Drag.src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
     Drag.x0 = e.clientX; Drag.y0 = e.clientY; Drag.el = c;
+    cancelLongPress();
+    if (e.pointerType !== 'mouse') {
+      const src = Drag.src, x = e.clientX, y = e.clientY;
+      Drag.lp = setTimeout(() => {
+        Drag.lp = 0;
+        if (Drag.on || Drag.src !== src) return;
+        Drag.src = null;
+        if (ContextMenu.open(src, x, y)) { Drag.eatUntil = performance.now() + 900; renderPane(); }
+      }, LONG_PRESS_MS);
+    }
   });
   window.addEventListener('pointermove', (e) => {
     if (!Drag.src) return;
     if (!Drag.on) {
       if (Math.hypot(e.clientX - Drag.x0, e.clientY - Drag.y0) < CONFIG.input.dragThreshold) return;
+      cancelLongPress();
       Drag.on = true;
+      UI.tipOpen = false;
       const g = Drag.el.cloneNode(true);
       g.className += ' ghost';
       const r = Drag.el.getBoundingClientRect();
@@ -19297,8 +19765,10 @@ function initDragDrop() {
     const t = dropTarget(e.clientX, e.clientY);
     if (t) t.classList.add('droptgt');
   });
+  window.addEventListener('pointercancel', () => { cancelLongPress(); });
   window.addEventListener('pointerup', (e) => {
     UI.ptr = false;
+    cancelLongPress();
     if (!Drag.src) return;
     const src = Drag.src, was = Drag.on;
     Drag.src = null;
@@ -19654,12 +20124,18 @@ return { initAccount, openAccount, refreshAccountUi, showConflictDialog };
 const { initPaneActions } = (() => {
 // ---------- ações dos painéis (cliques delegados por data-act) ----------
 
-/** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
-const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !R.POTIONS[it.id].revive);
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
+  // o toque longo já abriu o menu de contexto: ignora o clique que vem junto
+  if (performance.now() < Drag.eatUntil) { Drag.eatUntil = 0; return; }
   const b = e.target.closest('[data-act]');
-  if (!b || b.disabled) return;
+  ContextMenu.close();
+  if (!b) {
+    // clique no vazio do inventário: tira a seleção (e fecha os detalhes)
+    if (UI.tab === 'inv' && UI.sel && e.currentTarget.id === 'pane' && !e.target.closest('#charPv,.cell.none')) { UI.sel = null; renderPane(); }
+    return;
+  }
+  if (b.disabled) return;
   const a = b.dataset.act, ch = G.ch;
   const it = selectedItem();
   switch (a) {
@@ -19667,24 +20143,28 @@ function paneAction(e) {
     case 'auto': R.autoDistribute(ch, ch.points); recalc(); if (autoEquipOn()) G.autoEqT = 0.3; break;
     case 'seleq': {
       const now = performance.now(), k = 'e' + b.dataset.slot;
-      if (UI.lastCell && UI.lastCell.k === k && now - UI.lastCell.t < CONFIG.input.doubleClickMs) { UI.lastCell = null; if (unequipSlot(b.dataset.slot)) UI.sel = null; break; }
+      if (UI.lastCell && UI.lastCell.k === k && now - UI.lastCell.t < CONFIG.input.doubleClickMs) { UI.lastCell = null; UI.tipOpen = false; if (unequipSlot(b.dataset.slot)) UI.sel = null; break; }
       UI.lastCell = { k, t: now };
       UI.sel = { where: 'eq', slot: b.dataset.slot };
+      ItemTooltip.open(true);
       break;
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.tipOpen = false; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
       // clique duplo numa poção: bebe direto do inventário
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
+      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; UI.tipOpen = false; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
       UI.lastCell = { k: 'b' + i, t: now };
       UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
+      if (UI.sel) ItemTooltip.open(true);
       break;
     }
     case 'bagf': UI.bagFilter = b.dataset.k; UI.sel = null; break;
     case 'aeqtoggle': S.settings.autoEquip = !autoEquipOn(); if (autoEquipOn()) autoEquip(true); persist(); break;
     case 'aeqnow': autoEquip(true); break;
     case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
+    case 'tipclose': UI.tipOpen = false; break;
+    case 'tipopen': ItemTooltip.open(false); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': if (it) usePotion(it.id); if (!selectedItem()) UI.sel = null; break;
     case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
@@ -19719,19 +20199,22 @@ function paneAction(e) {
 /** Cliques, botão direito e opções dentro do painel lateral. */
 function initPaneActions() {
   $('#pane').addEventListener('click', paneAction);
-  // Botão direito equipa/desequipa; arrastar move entre mochila e equipamento.
+  // detalhes do item e menu de contexto ficam fora do painel, com os mesmos botões
+  $('#itemTip').addEventListener('click', paneAction);
+  $('#ctxMenu').addEventListener('click', paneAction);
+  $('#itemTipBg').addEventListener('click', () => { UI.tipOpen = false; ItemTooltip.sync(); });
+  // botão direito (ou toque longo, em dragdrop.js) abre o menu de contexto do item
   $('#pane').addEventListener('contextmenu', (e) => {
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
     e.preventDefault();
-    if (c.dataset.act === 'selbag') {
-      const i = +c.dataset.i, it = G.ch.bag[i];
-      if (it && it.slot) { UI.sel = { where: 'bag', idx: i }; equipFromBag(i); }
-      else if (drinkable(it)) { usePotion(it.id); persist(); hudTick(); }
-    }
-    else if (unequipSlot(c.dataset.slot)) UI.sel = null;
-    renderPane();
+    if (performance.now() < Drag.eatUntil) return; // o toque longo já abriu o menu
+    const src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
+    if (ContextMenu.open(src, e.clientX, e.clientY)) renderPane();
   });
+  window.addEventListener('resize', () => { ContextMenu.close(); ItemTooltip.sync(); });
+  // clique fora fecha o menu de contexto
+  window.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctxMenu')) ContextMenu.close(); }, true);
 
   $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }

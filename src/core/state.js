@@ -64,7 +64,7 @@ export function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false };
+export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**

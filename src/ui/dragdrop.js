@@ -4,8 +4,12 @@ import { G, UI } from '../core/state.js';
 import { $ } from '../core/util.js';
 import { equipFromBag, unequipSlot } from '../game/inventory.js';
 import { renderPane } from './drawer.js';
+import { ContextMenu } from './itemTooltip.js';
 
-export const Drag = { on: false, src: null, x0: 0, y0: 0, ghost: null, eatClick: false };
+export const Drag = { on: false, src: null, x0: 0, y0: 0, ghost: null, eatClick: false, eatUntil: 0, lp: 0 };
+/** Toque prolongado (sem arrastar) abre o menu de contexto do item. */
+const LONG_PRESS_MS = 520;
+function cancelLongPress() { clearTimeout(Drag.lp); Drag.lp = 0; }
 function dropTarget(x, y, src) {
   src = src || Drag.src;
   const el = document.elementFromPoint(x, y);
@@ -22,12 +26,24 @@ export function initDragDrop() {
     if (!c) return;
     Drag.src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
     Drag.x0 = e.clientX; Drag.y0 = e.clientY; Drag.el = c;
+    cancelLongPress();
+    if (e.pointerType !== 'mouse') {
+      const src = Drag.src, x = e.clientX, y = e.clientY;
+      Drag.lp = setTimeout(() => {
+        Drag.lp = 0;
+        if (Drag.on || Drag.src !== src) return;
+        Drag.src = null;
+        if (ContextMenu.open(src, x, y)) { Drag.eatUntil = performance.now() + 900; renderPane(); }
+      }, LONG_PRESS_MS);
+    }
   });
   window.addEventListener('pointermove', (e) => {
     if (!Drag.src) return;
     if (!Drag.on) {
       if (Math.hypot(e.clientX - Drag.x0, e.clientY - Drag.y0) < CONFIG.input.dragThreshold) return;
+      cancelLongPress();
       Drag.on = true;
+      UI.tipOpen = false;
       const g = Drag.el.cloneNode(true);
       g.className += ' ghost';
       const r = Drag.el.getBoundingClientRect();
@@ -41,8 +57,10 @@ export function initDragDrop() {
     const t = dropTarget(e.clientX, e.clientY);
     if (t) t.classList.add('droptgt');
   });
+  window.addEventListener('pointercancel', () => { cancelLongPress(); });
   window.addEventListener('pointerup', (e) => {
     UI.ptr = false;
+    cancelLongPress();
     if (!Drag.src) return;
     const src = Drag.src, was = Drag.on;
     Drag.src = null;
