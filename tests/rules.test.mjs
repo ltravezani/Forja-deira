@@ -190,3 +190,16 @@ test('custo da fusão Chaos: +10 = 1 joia … +15 = 6 joias', () => {
   assert.equal(R.upgradeCost(it(7), 'soul'), 1);
   assert.equal(R.upgradeCost(it(12), 'life'), 1);
 });
+
+test('reset dá 300 pontos por reset e zera a árvore de maestria', () => {
+  const ch = R.newCharacter('Teste', 'dk');
+  ch.level = 400; ch.gold = 1e9;
+  ch.tree = { [R.treeNodeId('dk', 0, 0)]: 3 };
+  assert.equal(R.applyReset(ch).ok, true);
+  assert.equal(ch.points, 300);
+  assert.deepEqual(ch.tree, {});
+  assert.equal(R.treeSpent(ch), 0);
+  ch.level = 410; ch.gold = 1e9;
+  R.applyReset(ch);
+  assert.equal(ch.points, 2 * 300 + 10 * R.RATES.resetBonusPerLevel);
+});

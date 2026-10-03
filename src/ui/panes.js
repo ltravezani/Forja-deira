@@ -38,7 +38,7 @@ export function paneChar() {
   h += '<h4>Evolução de classe</h4>';
   h += '<p>' + C.tiers.map((t, i) => (i === ch.tier ? '<b style="color:var(--gold)">' + t + '</b>' : t)).join(' → ') + '</p>';
   h += ev.next ? '<p class="note">Próxima: ' + esc(ev.name) + ' — requer nível ' + ev.next.level + ', ' + ev.next.bosses + ' chefes' + (ev.next.resets ? ', ' + ev.next.resets + ' reset' : '') + '. ' + (ev.ok ? '<b style="color:var(--ok)">Pronto: fale com o Mestre Orvan.</b>' : 'Falta: ' + esc(ev.reasons.join(', ')) + '.') + '</p>' : '<p class="note">Evolução máxima alcançada.</p>';
-  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
+  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos e árvore de maestria voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
   return h;
 }
 

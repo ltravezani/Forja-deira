@@ -23,7 +23,7 @@
     exp: 1500,
     maxLevel: 1000,
     resetLevel: 400,            // nível mínimo para reset
-    resetPoints: 2200,          // pontos livres concedidos por reset acumulado
+    resetPoints: 300,           // pontos livres concedidos por reset acumulado
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
     chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
@@ -956,6 +956,7 @@
     ch.level = 1; ch.exp = 0;
     ch.stats = Object.assign({}, CLASSES[ch.cls].base);
     ch.points = ch.resets * RATES.resetPoints + extra;
+    ch.tree = {}; // a árvore de maestria é zerada; os pontos voltam para redistribuir
     return { ok: true, points: ch.points };
   }
   function canEvolve(ch) {
