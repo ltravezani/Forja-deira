@@ -18,14 +18,15 @@ import { updateWorld } from './game/world.js';
 import { enterDungeon, enterEden, enterTower, enterTown, inSafe } from './game/zones.js';
 import { edenState } from './game/eden.js';
 import { towerState } from './game/tower.js';
-import { skillIconURI } from './ui/icons.js';
+import { glyph, skillIconURI } from './ui/icons.js';
+import { drawWeaponIcons } from './art/weaponIcons.js';
 import { closeModal, openNpc } from './ui/npcDialogs.js';
 import { findPath, lineClear } from './world/grid.js';
 import { getLevelMeshes } from './world/level.js';
 
 export function installDebugHook(loopStats) {
   window.__FORJA_DEBUG = {
-    G, R, MON, CONFIG, skillIconURI, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
+    G, R, MON, CONFIG, skillIconURI, glyph, drawWeaponIcons, buildModel, animateModel, camTarget, updateWorld, pathTo, findPath, inSafe, followPath,
     renderer, scene, camera, CAM, levelMeshes: getLevelMeshes, getSave: () => S, enterDungeon, enterTower, enterTown,
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,

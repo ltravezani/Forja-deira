@@ -1,4 +1,5 @@
 // ---------- ícones procedurais (SVG): habilidades e itens ----------
+import { weaponIconURI } from '../art/weaponIcons.js';
 import { R } from '../core/util.js';
 
 // ícones de habilidade: fundo temático da classe + emblema
@@ -107,8 +108,10 @@ export function glyph(it) {
   const P = it.kind === 'potion' && R.POTIONS[it.id];
   const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
   const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
-  return { kind, c, bg, src: iconURI(kind, c) };
+  // armas: ícone 3D (KayKit Fantasy Weapons Bits); sem ele, o desenho SVG
+  const d3 = weaponIconURI(it);
+  return { kind, c, bg, src: d3 || iconURI(kind, c), d3: !!d3 };
 }
 export function iconHtml(g) {
-  return '<span class="gl" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
+  return '<span class="gl' + (g.d3 ? ' d3' : '') + '" style="--bg:' + g.bg + ';--rc:' + g.c + '"><img src="' + g.src + '" alt="" draggable="false"></span>';
 }
