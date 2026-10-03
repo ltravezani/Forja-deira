@@ -17,10 +17,9 @@ export function cpOf(ch) { return R.combatPower(R.deriveStats(ch, [])); }
 export function fmtCP(v) { return v >= 1e6 ? (v / 1e6).toFixed(1).replace('.0', '') + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v); }
 /** Pode ser usado por esta classe (independe de requisito de atributo). */
 export function classOk(it) { return R.canUse(G.ch.cls, it); }
+/** Requisito cumprido (mesma regra do cálculo de atributos: todos os itens e buffs, sem o bônus do próprio item). */
 export function reqOk(it) {
-  const req = R.itemReq(it);
-  if (!req) return true;
-  return req.stat === 'level' ? G.ch.level >= req.value : G.st.total[req.stat] >= req.value;
+  return R.itemActive(G.ch, it, G.buffs.map((b) => b.stats));
 }
 /** CP que o personagem teria com `it` no lugar do item atual do mesmo slot. */
 export function cpWith(it) {
@@ -42,8 +41,7 @@ export function equipFromBag(idx, quiet) {
   ch.equip[it.slot] = it;
   if (!quiet) {
     UI.sel = { where: 'eq', slot: it.slot };
-    const req = R.itemReq(it);
-    if (req && (req.stat === 'level' ? ch.level < req.value : ch.stats[req.stat] < req.value)) log('Requisito não atendido: o item fica equipado mas inativo.', 'warn');
+    if (!reqOk(it)) log('Requisito não atendido: o item fica equipado mas inativo.', 'warn');
     const before = G.cp;
     recalc(); buildPlayerModel();
     const d = G.cp - before;

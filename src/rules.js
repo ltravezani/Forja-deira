@@ -806,20 +806,50 @@
     return CLASSES[ch.cls].tiers[ch.tier];
   }
 
+  const REQ_STATS = ['str', 'agi', 'vit', 'ene'];
+  /**
+   * Itens equipados com requisito cumprido. Primeiro soma os atributos de todos
+   * os itens, do passivo da classe e dos buffs; depois testa cada requisito sem o
+   * bônus do próprio item (um item não se libera sozinho). Repete enquanto algum
+   * item cair, porque o bônus de um item inativo não conta. A ordem dos slots não
+   * importa. `swap`: item da mochila testado no lugar do equipado do mesmo slot.
+   * Devolve Map item → itemStats(item) só dos ativos.
+   */
+  function activeItems(ch, buffs, swap) {
+    const items = [];
+    for (const s of SLOTS) { const it = swap && swap.slot === s ? swap : ch.equip[s]; if (it) items.push(it); }
+    const base = {};
+    const addBase = (src) => { if (src) for (const k of REQ_STATS) if (src[k]) base[k] = (base[k] || 0) + src[k]; };
+    addBase(CLASSES[ch.cls].passive);
+    (buffs || []).forEach(addBase);
+    const act = new Map(items.map((it) => [it, itemStats(it)]));
+    for (let pass = 0; pass <= items.length; pass++) {
+      const sum = Object.assign({}, base);
+      act.forEach((st) => { for (const k of REQ_STATS) if (st[k]) sum[k] = (sum[k] || 0) + st[k]; });
+      let changed = false;
+      for (const [it, st] of [...act]) {
+        const req = itemReq(it);
+        if (!req) continue;
+        const ok = req.stat === 'level' ? ch.level >= req.value : (ch.stats[req.stat] || 0) + (sum[req.stat] || 0) - (st[req.stat] || 0) >= req.value;
+        if (!ok) { act.delete(it); changed = true; }
+      }
+      if (!changed) break;
+    }
+    return act;
+  }
+  /** O item (equipado ou, da mochila, se fosse equipado) teria o requisito cumprido? */
+  function itemActive(ch, it, buffs) {
+    if (!it || !it.slot || !itemReq(it)) return true;
+    return activeItems(ch, buffs, ch.equip[it.slot] === it ? null : it).has(it);
+  }
+
   /** Soma bônus de árvore + itens + buffs e aplica as relações da classe. */
   function deriveStats(ch, buffs) {
     const C = CLASSES[ch.cls];
     const b = {};
     const add = (k, v) => (b[k] = (b[k] || 0) + v);
-    // itens
-    for (const s of SLOTS) {
-      const it = ch.equip[s];
-      if (!it) continue;
-      const req = itemReq(it);
-      if (req && (req.stat === 'level' ? ch.level < req.value : ch.stats[req.stat] + (b[req.stat] || 0) < req.value)) continue;
-      const st = itemStats(it);
-      for (const k in st) add(k, st[k]);
-    }
+    // itens (só os com requisito cumprido; ver activeItems)
+    activeItems(ch, buffs).forEach((st) => { for (const k in st) add(k, st[k]); });
     // passivo da classe
     if (C.passive) for (const k in C.passive) add(k, C.passive[k]);
     // árvore
@@ -878,7 +908,7 @@
     }
     out.minDmg += out.dmgLvl; out.maxDmg += out.dmgLvl;
     if (out.maxDmg < out.minDmg) out.maxDmg = out.minDmg;
-    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60) / (1 + (b.atkRatePct || 0) / 100), 0.18, 1.2);
+    out.attackInterval = clamp(0.95 / (1 + out.atkSpeed / 60) / (1 + ((b.atkRatePct || 0) + (b.atkSpeedPct || 0)) / 100), 0.18, 1.2);
     out.mfTable = rarityTable(out.mf, 'normal');
     return out;
   }
@@ -992,7 +1022,7 @@
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
-    newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
+    newCharacter, className, activeItems, itemActive, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, canEvolve, autoDistribute, today,
   };
 });

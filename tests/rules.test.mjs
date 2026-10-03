@@ -203,3 +203,45 @@ test('reset dá 300 pontos por reset e zera a árvore de maestria', () => {
   R.applyReset(ch);
   assert.equal(ch.points, 2 * 300 + 10 * R.RATES.resetBonusPerLevel);
 });
+
+test('nós de velocidade de ataque da árvore (atkSpeedPct) reduzem o intervalo', () => {
+  const ch = R.newCharacter('V', 'dk');
+  ch.level = 100;
+  const base = R.deriveStats(ch, []).attackInterval;
+  ch.tree[R.treeNodeId('dk', 2, 0)] = 5; // Técnica · Ritmo (+2% por rank)
+  const fast = R.deriveStats(ch, []).attackInterval;
+  assert.ok(fast < base, 'Ritmo 5 deveria acelerar: ' + base + ' → ' + fast);
+  assert.ok(Math.abs(base / fast - 1.1) < 0.01);
+});
+
+test('requisito de equipamento não depende da ordem dos slots e conta buffs', () => {
+  const ch = R.newCharacter('Q', 'dk');
+  ch.level = 200;
+  const weapon = { slot: 'weapon', cls: 'dk', tier: 2, plus: 0, rarity: 'comum' };
+  const req = R.itemReq(weapon);
+  ch.stats.str = req.value - 55;
+  ch.equip.weapon = weapon;
+  assert.equal(R.itemActive(ch, weapon, []), false);
+  // anel (vem depois da arma na ordem dos slots) com +55 de Força libera a arma
+  const ring = { slot: 'ring', tier: 0, plus: 0, rarity: 'ancestral', anc: { stat: 'str', value: 55 } };
+  ch.equip.ring = ring;
+  assert.equal(R.itemActive(ch, weapon, []), true);
+  assert.ok(R.deriveStats(ch, []).maxDmg > R.deriveStats(Object.assign({}, ch, { equip: { ring } }), []).maxDmg);
+  // buff de Força também conta
+  delete ch.equip.ring;
+  assert.equal(R.itemActive(ch, weapon, [{ str: 60 }]), true);
+  // item da mochila testado no lugar do equipado
+  const bagWeapon = Object.assign({}, weapon);
+  ch.equip.ring = ring;
+  assert.equal(R.itemActive(ch, bagWeapon, []), true);
+});
+
+test('item não se libera com o próprio bônus de atributo', () => {
+  const ch = R.newCharacter('S', 'dk');
+  ch.level = 200;
+  const boots = { slot: 'boots', cls: 'dk', tier: 2, plus: 0, rarity: 'ancestral', anc: { stat: 'str', value: 500 } };
+  ch.stats.str = 10;
+  ch.equip.boots = boots;
+  assert.equal(R.itemActive(ch, boots, []), false);
+  assert.equal(R.deriveStats(ch, []).total.str, 10);
+});

@@ -59,8 +59,9 @@ export function itemInfoHtml(it, where) {
     const req = R.itemReq(it);
     let r = '';
     if (req) {
-      const have = req.stat === 'level' ? G.ch.level : G.ch.stats[req.stat];
-      r += '<div class="ln req' + (have < req.value ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (have < req.value ? ' (você tem ' + have + ')' : '') + '</div>';
+      // mesma regra do cálculo de atributos (todos os itens e buffs contam, menos o próprio item)
+      const bad = !reqOk(it), have = req.stat === 'level' ? G.ch.level : G.st.total[req.stat];
+      r += '<div class="ln req' + (bad ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (bad ? ' (você tem ' + have + ')' : '') + '</div>';
     }
     if (it.cls && !classOk(it)) r += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
     if (r) h += '<div class="sec">' + r + '</div>';
