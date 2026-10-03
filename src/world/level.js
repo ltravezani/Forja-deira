@@ -48,6 +48,21 @@ function placeKit(name, list, fn, opt) {
   if (k.roof) mk(k.roof, roofMat(), true);
 }
 
+/** Igual a placeKit, mas sorteia (por hash da posição) entre variantes do KayKit: vs = [[modelo, escala, tinta?], ...]. */
+function placeNature(vs, list, fn, opt) {
+  const groups = vs.map(() => []);
+  list.forEach((p) => groups[Math.floor(hash2(p.x, p.z, 9) * vs.length) % vs.length].push(p));
+  vs.forEach(([n, s, tint], i) => placeKit('kk:' + n + ':' + s + (tint ? ':' + tint.toString(16) : ''), groups[i], fn, opt));
+}
+const NAT = {
+  pine: [['Tree_4_A', 1.05], ['Tree_4_B', 0.85], ['Tree_4_C', 0.6]],
+  oak: [['Tree_1_A', 1.25], ['Tree_1_B', 1.1], ['Tree_1_C', 0.8], ['Tree_2_C', 0.85], ['Tree_3_B', 1.2]],
+  dead: [['Tree_Bare_1_B', 1.3], ['Tree_Bare_1_C', 0.95], ['Tree_Bare_2_B', 0.95]],
+  bush: [['Bush_1_E', 0.9], ['Bush_1_F', 0.8], ['Bush_2_E', 0.75], ['Bush_4_E', 0.75]],
+  rock: [['Rock_3_G', 0.8], ['Rock_3_J', 0.8], ['Rock_3_K', 0.65], ['Rock_2_E', 0.45]],
+};
+const USE_NATURE = typeof location === 'undefined' || !/[?&]semkk/.test(location.search);
+
 // =============================================================================
 // Chão e paredes: malhas únicas com UV em coordenadas de mundo (sem emendas),
 // oclusão ambiente por vértice e mistura de duas texturas por manchas.
@@ -491,9 +506,16 @@ function buildProps(L, B, rnd) {
     placeKit('fountain', P('fountain'), (p) => ({ x: p.x * T, z: p.z * T }));
     placeKit('house', P('house'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.r ? Math.PI / 2 : 0 }));
     // chaminés soltam fumaça (faíscas) — anotadas como fogo sem sprite
+    if (USE_NATURE) {
+      placeNature(NAT.pine, by(P('tree'), (p) => p.v > 0.65), (p) => ({ x: p.x * T, z: p.z * T, s: 0.8 + p.v * 0.5, ry: p.v * 6 }));
+      placeNature(NAT.oak, by(P('tree'), (p) => p.v > 0.2 && p.v <= 0.65), (p) => ({ x: p.x * T, z: p.z * T, s: 0.8 + p.v * 0.5, ry: p.v * 6 }));
+      placeNature(NAT.dead, by(P('tree'), (p) => p.v <= 0.2), (p) => ({ x: p.x * T, z: p.z * T, s: 0.9 + p.v, ry: p.v * 9 }));
+      placeNature(NAT.bush, P('bush'), (p) => ({ x: p.x * T, z: p.z * T, s: 0.7 + p.v * 0.6, ry: p.v * 6 }));
+    } else {
     placeKit('pine', by(P('tree'), (p) => p.v > 0.35), (p) => ({ x: p.x * T, z: p.z * T, s: 0.8 + p.v * 0.5, ry: p.v * 6 }));
     placeKit('deadTree', by(P('tree'), (p) => p.v <= 0.35), (p) => ({ x: p.x * T, z: p.z * T, s: 0.9 + p.v, ry: p.v * 9 }));
     placeKit('bush', P('bush'), (p) => ({ x: p.x * T, z: p.z * T, s: 0.7 + p.v * 0.6, ry: p.v * 6 }));
+    }
     placeKit('lamp', P('lamp'), (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.atan2(23 - p.z, 23 - p.x) }));
     P('lamp').forEach((p) => { const a = Math.atan2(23 - p.z, 23 - p.x); const lx = p.x * T + Math.cos(a) * 0.62, lz = p.z * T + Math.sin(a) * 0.62; torches.push({ x: lx, y: 2.3, z: lz, lamp: true }); addFire(lx, 2.8, lz, 1.6, 0xffc070); cones.push({ x: lx, y: 2.75, z: lz, r: 1.5, h: -2.75, color: 0xffc070 }); });
     placeKit('stall', P('stall'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 2 }));
@@ -576,11 +598,19 @@ function buildProps(L, B, rnd) {
     for (const r of L.runes) if (r.s > 5) torches.push({ x: r.x * T, y: 1.5, z: r.z * T, cold: true });
   }
   if (deco === 'forest') {
+    if (USE_NATURE) {
+      placeNature(NAT.pine, by(tall, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
+      placeNature(NAT.oak, by(tall, (p) => p.v >= 0.3 && p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.75 + p.v * 0.4, ry: p.v * 9 }));
+      placeNature(NAT.dead, by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
+      placeNature(NAT.bush, by(low, (p) => p.v < 0.4), (p) => ({ ...pos(p, 0.8), s: 0.7 + p.v, ry: p.v * 9 }));
+      placeNature(NAT.rock, by(low, (p) => p.v >= 0.4 && p.v < 0.6), (p) => ({ ...pos(p, 0.8), s: 0.6 + p.v * 0.5, ry: p.v * 9 }));
+    } else {
     placeKit('pine', by(tall, (p) => p.v < 0.3), (p) => ({ ...pos(p, 0.6), s: 0.85 + p.v * 0.5, ry: p.v * 9 }));
     placeKit('oak', by(tall, (p) => p.v >= 0.3 && p.v < 0.6), (p) => ({ ...pos(p, 0.6), s: 0.75 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('deadTree', by(tall, (p) => p.v >= 0.6), (p) => ({ ...pos(p, 0.6), s: 0.9 + p.v * 0.4, ry: p.v * 9 }));
     placeKit('bush', by(low, (p) => p.v < 0.4), (p) => ({ ...pos(p, 0.8), s: 0.7 + p.v, ry: p.v * 9 }));
     placeKit('rock', by(low, (p) => p.v >= 0.4 && p.v < 0.6), (p) => ({ ...pos(p, 0.8), s: 0.6 + p.v * 0.5, ry: p.v * 9 }));
+    }
     placeKit('log', by(low, (p) => p.v >= 0.6 && p.v < 0.75), (p) => ({ ...pos(p, 0.4), ry: p.v * 9, s: 0.9 }));
     placeKit('mushroom', by(low, (p) => p.v >= 0.75).concat(decal), (p) => ({ ...pos(p, 1), ry: p.v * 9, s: 0.7 + p.v * 0.6 }));
     placeKit('bones', by(decal, (p) => p.v > 0.6), (p) => ({ ...pos(p, 1.4), ry: p.v * 9 }), { noShadow: true });

@@ -7,6 +7,7 @@ import { cutaway } from '../art/cutaway.js';
 import { stylize, toonMaterial } from '../art/stylize.js';
 import { texGrime, texShingles } from '../art/textures.js';
 import { V3 } from '../core/util.js';
+import { natureGeo } from '../art/nature.js';
 
 const _km = new THREE.Matrix4(), _kq = new THREE.Quaternion(), _ke = new THREE.Euler(), _kp = new V3(), _ks = new V3();
 /** Grava a transformação (posição, rotação Euler XYZ, escala) na instância `i` de um InstancedMesh. */
@@ -106,6 +107,7 @@ const KITS = {};
 /** Constrói (uma vez) o adereço `name`: { geo (corpo), glow (partes que brilham), roof? } */
 export function kit(name) {
   if (KITS[name]) return KITS[name];
+  if (name.startsWith('kk:')) return (KITS[name] = natureKit(name));
   const P = [], Gl = [];
   // paleta cartoon: tons mais claros e saturados (o contorno e as faixas de luz dão o peso)
   const WOOD = 0x8a5a34, DWOOD = 0x5a3a22, IRON = 0x4e4e5a, STONE = 0xa09888, DSTONE = 0x706a60, BONE = 0xeadcc0;
@@ -857,6 +859,22 @@ export function kit(name) {
   for (const g of [k.geo, k.glow, k.roof]) if (g) g.userData.shared = true; // cache: nunca liberar com o nível
   KITS[name] = k;
   return k;
+}
+/**
+ * Adereço do KayKit Forest Nature Pack: 'kk:<modelo>[:escala[:tinta hex]]'.
+ * UV em coordenadas do objeto (o desgaste do kitMat varia pela peça) e vento
+ * pela altura, como as árvores feitas em código.
+ */
+function natureKit(name) {
+  const [, n, s, tint] = name.split(':');
+  const geo = natureGeo(n, tint ? parseInt(tint, 16) : null, s ? +s : 1);
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  let h = 0;
+  for (let i = 0; i < pos.count; i++) { h = Math.max(h, pos.getY(i)); uv.setXY(i, (pos.getX(i) + pos.getZ(i)) * 0.35, pos.getY(i) * 0.35); }
+  const w = n.startsWith('Tree_Bare') ? [h * 0.4, h, 0.08] : n.startsWith('Tree') ? [h * 0.35, h, 0.2] : n.startsWith('Bush') ? [h * 0.2, h, 0.07] : n.startsWith('Grass') ? [0.02, h, 0.08] : null;
+  if (w) windAttr(geo, w);
+  geo.userData.shared = true;
+  return { geo, glow: null, roof: null };
 }
 /** Material dos adereços: cor por vértice × textura de desgaste. */
 let _kitMat = null, _kitGlow = null, _roofMat = null;
