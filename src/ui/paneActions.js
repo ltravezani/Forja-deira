@@ -73,7 +73,8 @@ function paneAction(e) {
       const i = selBagIdx();
       if (i < 0 || !it) { UI.sel = null; break; }
       if (it.locked) { log('Item trancado: destranque antes de ' + (a === 'sell' ? 'vender' : 'descartar') + '.', 'warn'); break; }
-      if (needsConfirm(it) && !(conf && conf.it === it && conf.act === a)) { UI.itemConfirm = { it, act: a }; ItemTooltip.open(false); break; }
+      // o segundo clique precisa ser deliberado (um clique duplo acidental não confirma)
+      if (needsConfirm(it) && !(conf && conf.it === it && conf.act === a && performance.now() - conf.t > 250)) { UI.itemConfirm = { it, act: a, t: performance.now() }; ItemTooltip.open(false); break; }
       ch.bag.splice(i, 1); UI.sel = null;
       if (a === 'sell') { const v = R.sellValue(it); ch.gold += v; Sfx.coin(); log('Vendeu ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + ' por ' + fmt(v) + ' Gold.', 'loot'); }
       else log('Descartou ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + '.', 'sys');
