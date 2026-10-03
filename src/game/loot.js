@@ -63,6 +63,18 @@ export function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+  if (G.loot.length > CONFIG.loot.maxGround) trimLoot(G.loot.length - CONFIG.loot.maxGround);
+}
+/** Remove `n` objetos do chão: primeiro os de menor raridade, entre eles os mais antigos. */
+function trimLoot(n) {
+  const order = G.loot.slice().sort((a, b) => (a.ord || 0) - (b.ord || 0) || a.born - b.born);
+  for (let k = 0; k < n && k < order.length; k++) removeLoot(order[k]);
+}
+function removeLoot(l) {
+  removeLootVisual(l);
+  const i = G.loot.indexOf(l);
+  if (i >= 0) G.loot.splice(i, 1);
+  if (G.player && G.player.target && G.player.target.l === l) G.player.target = null;
 }
 /**
  * Espalha no chão um drop do Éden (R.rollEdenDrop): Gold, itens Ancestrais e
@@ -134,8 +146,14 @@ export function pickup(l) {
   if (l.type !== 'gold') refreshPaneSoon();
   return true;
 }
-/** Arco ao cair + rotação e pulsar do feixe de raridade. */
+let expireT = 0;
+/** Arco ao cair + rotação e pulsar do feixe de raridade. Equipamentos Comuns/Mágicos somem depois de alguns minutos. */
 export function updateLootVisuals(dt) {
+  if ((expireT -= dt) <= 0) {
+    expireT = 1;
+    const ttl = CONFIG.loot.expireLow;
+    for (let i = G.loot.length - 1; i >= 0; i--) { const l = G.loot[i]; if (l.type === 'item' && l.ord <= 1 && G.time - l.born > ttl) removeLoot(l); }
+  }
   for (const l of G.loot) {
     const k = Math.min(1, (G.time - l.born) / 0.45);
     const x = l.fromX + (l.x - l.fromX) * k, z = l.fromZ + (l.z - l.fromZ) * k;

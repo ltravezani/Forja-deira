@@ -71,6 +71,8 @@ export const CONFIG = {
     pickupReach: 1.5,       // m: ao clicar num item
     autoLootRadius: 6,      // m: com "Pegar drops automaticamente" ligado (inclui itens)
     autoPetSellMin: 5,      // itens vendáveis na mochila para o pet partir sozinho (ou mochila quase cheia)
+    maxGround: 150,         // objetos no chão; acima disso somem os mais antigos de menor raridade
+    expireLow: 180,         // s até um equipamento Comum/Mágico no chão sumir
   },
   auto: {
     skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
