@@ -9,7 +9,7 @@ import { floatText } from '../engine/overlay.js';
 import { hemi, heroLight, scene, shake, sun, world } from '../engine/renderer.js';
 import { EDEN_MINI, EDEN_MON } from './data.js';
 import { dropEdenRoll } from './loot.js';
-import { spawnMonster } from './monsters.js';
+import { riseMonster, spawnMonster } from './monsters.js';
 import { makePortal } from './npcs.js';
 import { recalc } from './player.js';
 import { enterTown } from './zones.js';
@@ -160,6 +160,7 @@ function triggerAmbush(a) {
     if (!q) continue;
     const m = spawnMonster(pick(kinds), q.x, q.z, lvl + Math.floor(rand() * 2), { pack, elite: i === 0 });
     m.aggro = true;
+    riseMonster(m);
     a.mons.push(m);
     emit(q.x, 0.5, q.z, { n: 16, color: 0x9aff6a, speed: 3, up: 2, life: 0.6, size: 1 });
   }
