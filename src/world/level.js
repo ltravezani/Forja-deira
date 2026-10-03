@@ -28,6 +28,8 @@ function addLevel(o) { world.add(o); levelMeshes.push(o); return o; }
 /** Desenha uma lista de adereços `name` com instancing. fn(p) → {x,y,z,ry,s,sy} */
 function placeKit(name, list, fn, opt) {
   if (!list.length) return;
+  const sw = kdCur && kdCur.swap && kdCur.swap[name];
+  if (sw) return placeVariants(sw, list, fn, opt);
   const k = kit(name);
   const mk = (geo, mat, shadow) => {
     const m = new THREE.InstancedMesh(geo, mat, list.length);
@@ -46,6 +48,78 @@ function placeKit(name, list, fn, opt) {
   if (cs) list.forEach((p, i) => { const o = fn(p, i), s = o.s || 1; cones.push({ x: o.x, y: (o.y || 0) + cs[0] * s, z: o.z, r: cs[1] * s, h: cs[2] * s, color: cs[3] }); });
   if (k.glow) { const g = mk(k.glow, kitGlowMat(), false); g.renderOrder = 3; }
   if (k.roof) mk(k.roof, roofMat(), true);
+}
+/** Sorteia (por hash da posição) entre variantes do KayKit: vs = [[modelo, peso, escala?, tinta?], ...]. */
+function placeVariants(vs, list, fn, opt) {
+  const tot = vs.reduce((a, v) => a + v[1], 0), groups = vs.map(() => []);
+  list.forEach((p, i) => {
+    const o = fn(p, i);
+    let r = hash2(Math.round(o.x * 7), Math.round(o.z * 7), 9) * tot, k = 0;
+    while (k < vs.length - 1 && r >= vs[k][1]) r -= vs[k++][1];
+    groups[k].push(o);
+  });
+  vs.forEach(([n, , s, tint], i) => placeKit('kd:' + n + ':' + (s || 1) + (tint ? ':' + tint.toString(16) : ''), groups[i], (o) => o, opt));
+}
+
+// =============================================================================
+// KayKit Dungeon Pack: fachadas de tijolo nas paredes que a câmera vê, piso em
+// lajes e mobília no lugar dos adereços feitos em código (?semkd desliga).
+// =============================================================================
+const KD_WALL_STONE = [['wall', 10], ['wall_cracked', 1.2], ['wall_window_closed', 0.8], ['wall_archedwindow_gated', 0.6], ['wall_shelves', 0.5]];
+const KD_PROPS = {
+  pillar: [['pillar', 3], ['pillar_decorated', 1]],
+  barrel: [['barrel_small', 3], ['barrel_large', 1, 0.75], ['keg', 0.6, 0.6]],
+  crate: [['box_small', 3], ['box_large', 1, 0.8], ['crates_stacked', 1, 0.6], ['chest', 0.5, 0.75]],
+  candles: [['candle_triple', 1, 1.3]],
+  sconce: [['torch_mounted', 1]],
+  rubble: [['rubble_half', 1, 0.35]],
+};
+const KD = {
+  castle: { wall: KD_WALL_STONE, half: [['wall_half', 1]], floor: [['floor_tile_small', 14], ['floor_tile_small_broken_A', 0.5], ['floor_tile_small_broken_B', 0.5], ['floor_tile_small_decorated', 0.25]], swap: KD_PROPS, wallTint: 0xc07a70, floorTint: 0xc8908a },
+  ruins: { wall: [['wall', 6], ['wall_cracked', 2], ['wall_broken', 1], ['wall_window_open', 0.8], ['wall_arched', 0.6]], half: [['wall_half', 1]], floor: [['floor_tile_small', 10], ['floor_tile_small_weeds_A', 1.5], ['floor_tile_small_weeds_B', 1.5], ['floor_tile_small_broken_A', 0.4]], swap: KD_PROPS, wallTint: 0xe0a070, floorTint: 0xb89070 },
+  tw_granite: { wall: [['wall', 10], ['wall_pillar', 1.5], ['wall_window_closed', 0.8], ['wall_archedwindow_gated', 0.8]], half: [['wall_half', 1]], floor: [['floor_tile_small', 12], ['floor_tile_small_decorated', 0.6], ['floor_tile_small_broken_A', 0.6]], swap: KD_PROPS, wallTint: 0x9aa0d0, floorTint: 0x8a92b0 },
+  tw_arcane: { wall: [['wall_shelves', 4], ['wall', 4], ['wall_archedwindow_gated', 1]], half: [['wall_half', 1]], floor: [['floor_wood_small_dark', 6], ['floor_tile_small', 2]], swap: KD_PROPS, wallTint: 0xc8b8ff, floorTint: 0xb0a0d0 },
+};
+const USE_KD = typeof location === 'undefined' || !/[?&]semkd/.test(location.search);
+let kdCur = null;
+/**
+ * Fachadas: em cada face de parede voltada para a câmera (+x/+z) com chão na
+ * frente, um painel do pacote encostado (sai 5 cm do bloco). Faces vizinhas na
+ * mesma reta viram uma peça de 4 m (parede inteira, janela, estante...); as
+ * sobras levam meia parede. A altura acompanha o bloco.
+ */
+function kdWalls(L, walls, K) {
+  const T = TILE, at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
+  const byXZ = new Map(walls.map((w) => [w.x + ',' + w.z, w]));
+  const full = [], half = [], used = new Set();
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1]]) {
+    const lx = Math.abs(dz), lz = Math.abs(dx); // eixo ao longo da face
+    for (const w of walls) {
+      const key = w.x + ',' + w.z + ',' + dx;
+      if (used.has(key) || at(w.x + dx, w.z + dz) !== 1) continue;
+      used.add(key);
+      const ry = Math.atan2(dx, dz), out = 0.05 - 0.5;
+      const fx = w.x * T + dx * (T / 2 + out), fz = w.z * T + dz * (T / 2 + out);
+      const n = byXZ.get((w.x + lx) + ',' + (w.z + lz));
+      if (n && !used.has(n.x + ',' + n.z + ',' + dx) && at(n.x + dx, n.z + dz) === 1) {
+        used.add(n.x + ',' + n.z + ',' + dx);
+        full.push({ x: fx + lx * T / 2, z: fz + lz * T / 2, ry, sy: (Math.min(w.h, n.h) - 0.04) / 4, s: 1 });
+      } else {
+        // meia parede: origem numa ponta (x 0..2) → recua 1 m ao longo da face
+        const c = Math.cos(ry), sn = Math.sin(ry);
+        half.push({ x: fx - c * 1, z: fz + sn * 1, ry, sy: (w.h - 0.04) / 4, s: 1 });
+      }
+    }
+  }
+  placeVariants(tintVs(K.wall, K.wallTint), full, (o) => o);
+  placeVariants(tintVs(K.half, K.wallTint), half, (o) => o);
+}
+const tintVs = (vs, tint) => (tint ? vs.map(([n, w, s]) => [n, w, s || 1, tint]) : vs);
+/** Piso em lajes: uma peça de 2×2 m por tile andável, girada ao acaso de 90°. */
+function kdFloor(L, K) {
+  const T = TILE, list = [];
+  for (let z = 0; z < L.H; z++) for (let x = 0; x < L.W; x++) if (L.grid[z * L.W + x] === 1) list.push({ x: x * T, y: -0.03, z: z * T, ry: Math.floor(hash2(x, z, 5) * 4) * Math.PI / 2 });
+  placeVariants(tintVs(K.floor, K.floorTint), list, (o) => o, { noShadow: true });
 }
 
 // =============================================================================
@@ -342,7 +416,10 @@ export function buildLevel(L) {
     eden: { h: 4.4, var: 1.0, rough: 0.6, lip: 0.24 },
   }[L.biome];
   if (wopt.capCol == null) wopt.capCol = T.capCol;
+  kdCur = USE_KD ? KD[L.biome] || null : null;
+  if (kdCur) wopt.lip = 0;
   const walls = buildWalls(L, T, wopt);
+  if (kdCur) { kdWalls(L, walls, kdCur); kdFloor(L, kdCur); }
   if (!town) decorateMaze(L, walls, R.mulberry32(L.seed * 19 + 5));
   const at = (x, z) => (x < 0 || z < 0 || x >= L.W || z >= L.H ? 0 : L.grid[z * L.W + x]);
   const rnd = R.mulberry32(L.seed * 13 + 1);
