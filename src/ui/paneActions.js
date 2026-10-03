@@ -2,7 +2,7 @@
 import { applyCharSetting, gltfEnabled } from '../art/gltfModels.js';
 import { forgetCloudLocal } from '../core/cloud.js';
 import { applyFeelSettings, CONFIG } from '../core/config.js';
-import { G, persist, S, SAVE_KEY, UI } from '../core/state.js';
+import { G, persist, S, SAVE_KEY, SaveGuard, UI } from '../core/state.js';
 import { $, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
@@ -104,7 +104,7 @@ function paneAction(e) {
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
-    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } forgetCloudLocal(); location.reload(); return;
+    case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } SaveGuard.wiping = true; try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } forgetCloudLocal(); location.reload(); return;
   }
   persist();
   renderPane();

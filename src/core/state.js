@@ -58,7 +58,15 @@ function migrateGold(s) {
 }
 /** Ganchos do save: a nuvem se registra aqui para saber quando algo foi salvo. */
 export const SaveHooks = { afterPersist: null };
+/**
+ * Trava de gravação. wiping: "Apagar dados locais" em andamento (a página vai
+ * recarregar; nada pode regravar o save). readOnly: outra aba do jogo está
+ * aberta e é ela quem grava (ui/tabLock.js).
+ */
+export const SaveGuard = { wiping: false, readOnly: false };
+export const saveBlocked = () => SaveGuard.wiping || SaveGuard.readOnly;
 export function persist() {
+  if (saveBlocked()) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
   if (SaveHooks.afterPersist) SaveHooks.afterPersist();
 }
@@ -99,5 +107,34 @@ export function sanitizeCharacter(ch) {
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
   ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
+  // evolução: inteiro dentro das formas da classe
+  ch.tier = Math.min(R.CLASSES[ch.cls].tiers.length - 1, Math.floor(ch.tier));
+  sanitizeTree(ch, R);
+  ch.bag = ch.bag.filter((it) => !it.slot || R.SLOTS.includes(it.slot));
+  ch.bag.forEach((it) => sanitizeItem(it, R));
+  for (const k of Object.keys(ch.equip)) { if (k !== ch.equip[k].slot || !R.SLOTS.includes(k)) { ch.bag.push(ch.equip[k]); delete ch.equip[k]; } else sanitizeItem(ch.equip[k], R); }
   return ch;
+}
+const int = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
+/** Árvore: só nós da classe, ranks inteiros 0..5 e soma dentro dos pontos disponíveis. */
+function sanitizeTree(ch, R) {
+  const ids = [];
+  R.TREES[ch.cls].forEach((br, bi) => br.nodes.forEach((n, ni) => ids.push(R.treeNodeId(ch.cls, bi, ni))));
+  const tree = {};
+  let left = R.treePoints(Object.assign({}, ch, { tree: {} }));
+  for (const id of ids) {
+    const r = Math.min(int(ch.tree[id], 0, 5, 0), left);
+    if (r > 0) { tree[id] = r; left -= r; }
+  }
+  ch.tree = tree;
+}
+/** Item: refino, quantidade, raridade e tier válidos (NaN, texto ou fora da faixa voltam ao padrão). */
+function sanitizeItem(it, R) {
+  if (it.slot) {
+    if (!R.RARITY[it.rarity]) it.rarity = 'comum';
+    it.tier = int(it.tier, 0, R.DROP_LEVEL.length - 1, 0);
+    it.plus = int(it.plus, 0, 15, 0);
+    it.addOpt = int(it.addOpt, 0, 28, 0);
+  } else it.qty = int(it.qty, 1, 1e9, 1);
+  if (it.locked !== true) delete it.locked;
 }

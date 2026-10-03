@@ -32,8 +32,10 @@ export function decideSync({ local, cloud, sync, userId }) {
   if (linked && sync.rev === cloud.rev) return 'upload';
   // a nuvem avançou (outro aparelho) e aqui nada mudou: baixar não perde nada
   if (linked && cloud.rev > sync.rev && !sync.dirty) return 'download';
-  // um dos lados não tem personagens: fica o que tem (só opções se perderiam)
-  if (!hasChars(local)) return 'download';
+  // um dos lados não tem personagens: fica o que tem (só opções se perderiam).
+  // Exceção: aqui os personagens foram apagados de propósito (save local mudou e
+  // está vazio) enquanto a nuvem avançava: o jogador escolhe, nada volta sozinho.
+  if (!hasChars(local)) return linked && sync.dirty ? 'conflict' : 'download';
   if (!hasChars(cloud.data)) return 'upload';
   return 'conflict';
 }

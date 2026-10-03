@@ -6,7 +6,7 @@ import { applyCharSetting, loadGltfModels } from './art/gltfModels.js';
 import { applyFeelSettings } from './core/config.js';
 import { loopStats, reportError, startLoop } from './core/loop.js';
 import { Cloud, cloudTick, initCloud } from './core/cloud.js';
-import { G, loadSave, S, UI } from './core/state.js';
+import { G, loadSave, persist, S, UI } from './core/state.js';
 import { TILE } from './core/util.js';
 import { installDebugHook } from './debug.js';
 import { Sfx } from './engine/audio.js';
@@ -26,6 +26,7 @@ import { initDrawer } from './ui/drawer.js';
 import { initDialogs } from './ui/npcDialogs.js';
 import { initPaneActions } from './ui/paneActions.js';
 import { initPause } from './ui/pause.js';
+import { initTabLock } from './ui/tabLock.js';
 import { initTitle, renderTitle, titlePreview } from './ui/title.js';
 
 function frame(dt) {
@@ -83,6 +84,12 @@ function boot() {
   installDebugHook(loopStats);
   startLoop(frame, reportError);
   window.__FORJA_BOOTED = true;
+  initTabLock();
+  // grava ao fechar ou esconder a aba, com ou sem nuvem (o autosave é só a cada 15 s);
+  // registrado antes da nuvem, que logo depois tenta o último envio
+  const saveOnHide = () => { if (G.mode === 'play' && G.ch) persist(); };
+  window.addEventListener('pagehide', saveOnHide);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveOnHide(); });
   // save na nuvem: nunca atrasa nem impede o jogo (sem chave ou sem internet, segue só local)
   initCloud({ onChange: refreshAccountUi, onConflict: showConflictDialog, onApplied: onSaveReplaced })
     .then((link) => {

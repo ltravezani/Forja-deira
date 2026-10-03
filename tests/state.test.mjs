@@ -77,3 +77,29 @@ test('automação: saves antigos começam desligados e opções inválidas são 
   assert.deepEqual(back.autoSkills, ['ball']);
   assert.equal(back.autoLoot, true);
 });
+
+test('sanitizeCharacter limita tier, árvore e campos dos itens de saves corrompidos', async () => {
+  const { sanitizeCharacter } = await load('core/state.js');
+  const n0 = R.treeNodeId('dk', 0, 0), n1 = R.treeNodeId('dk', 1, 0);
+  const ch = sanitizeCharacter({
+    name: 'Z', cls: 'dk', level: 100, tier: 3.7,
+    tree: { [n0]: 9, [n1]: 'x', 'nc.0.0': 2 },
+    bag: [{ slot: 'armor', cls: 'dk', tier: 'a', plus: NaN, rarity: 'mítico' }, { kind: 'jewel', id: 'bless', qty: NaN }],
+    equip: { weapon: { slot: 'weapon', cls: 'dk', tier: 1, plus: 99, rarity: 'magico', locked: 'sim' } },
+  });
+  assert.equal(ch.tier, 2);
+  assert.deepEqual(Object.keys(ch.tree), [n0]);
+  assert.equal(ch.tree[n0], 5);
+  assert.ok(R.treeSpent(ch) <= R.treePoints(ch));
+  assert.equal(ch.bag[0].tier, 0);
+  assert.equal(ch.bag[0].plus, 0);
+  assert.equal(ch.bag[0].rarity, 'comum');
+  assert.equal(ch.bag[1].qty, 1);
+  assert.equal(ch.equip.weapon.plus, 15);
+  assert.equal(ch.equip.weapon.locked, undefined);
+  const st = R.deriveStats(ch, []);
+  for (const k of ['maxHp', 'minDmg', 'maxDmg', 'attackInterval']) assert.ok(Number.isFinite(st[k]), k);
+  // árvore acima dos pontos disponíveis é cortada
+  const poor = sanitizeCharacter({ name: 'P', cls: 'dk', level: 20, tree: { [n0]: 5, [n1]: 5 } });
+  assert.equal(R.treeSpent(poor), R.treePoints(poor));
+});
