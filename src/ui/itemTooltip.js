@@ -13,8 +13,27 @@ export function selectedItem() {
   const s = UI.sel;
   if (!s) return null;
   if (s.where === 'eq') return G.ch.equip[s.slot] || null;
-  return G.ch.bag[s.idx] || null;
+  const i = selBagIdx();
+  return i >= 0 ? G.ch.bag[i] : null;
 }
+/** Seleção de um item da mochila: guarda o próprio item, não só a posição. */
+export function bagSel(i) { const it = G.ch.bag[i]; return it ? { where: 'bag', idx: i, it } : null; }
+/**
+ * Posição atual do item selecionado na mochila, ou -1 se ele já saiu (a mochila
+ * muda sozinha: venda do pet, última poção, coleta). Atualiza UI.sel.idx.
+ */
+export function selBagIdx() {
+  const s = UI.sel;
+  if (!s || s.where !== 'bag' || !G.ch) return -1;
+  const bag = G.ch.bag;
+  if (!s.it) return bag[s.idx] ? s.idx : -1;
+  const i = bag.indexOf(s.it);
+  if (i >= 0) s.idx = i;
+  return i;
+}
+/** Venda/descarte de item valioso pede um segundo clique: Excelente ou melhor, joias e talismãs. */
+export const needsConfirm = (it) => !!it && (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+const confirming = (it, act) => !!(UI.itemConfirm && UI.itemConfirm.it === it && UI.itemConfirm.act === act);
 /** Celular: detalhes num painel inferior em vez de tooltip ao lado do item. */
 const sheetMode = () => window.matchMedia('(max-width: 760px)').matches;
 /** Poções que podem ser bebidas pelo inventário (a da Ressurreição só na tela de queda). */
@@ -88,9 +107,11 @@ function actionButtons(it, where, menu) {
   }
   if (drinkable(it)) h += b('usepot', 'Usar', it.slot ? '' : 'gold');
   if (menu) h += b('tipopen', 'Detalhes');
-  if (where === 'bag') {
-    if (hasTownServices()) h += b('sell', 'Vender ' + fmt(R.sellValue(it)) + ' Gold');
-    h += b('drop', 'Descartar');
+  h += b('lock', it.locked ? 'Destrancar' : 'Trancar');
+  // item trancado nunca é vendido nem descartado (nem pelo pet)
+  if (where === 'bag' && !it.locked) {
+    if (hasTownServices()) h += confirming(it, 'sell') ? b('sell', 'Confirmar venda · ' + fmt(R.sellValue(it)) + ' Gold', 'gold') : b('sell', 'Vender ' + fmt(R.sellValue(it)) + ' Gold');
+    h += confirming(it, 'drop') ? b('drop', 'Confirmar descarte', 'gold') : b('drop', 'Descartar');
   }
   return h;
 }
@@ -99,7 +120,7 @@ function actionButtons(it, where, menu) {
 function anchorEl() {
   const s = UI.sel;
   if (!s) return null;
-  return s.where === 'eq' ? document.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : document.querySelector('#bagGrid [data-act="selbag"][data-i="' + s.idx + '"]');
+  return s.where === 'eq' ? document.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : document.querySelector('#bagGrid [data-act="selbag"][data-i="' + selBagIdx() + '"]');
 }
 
 // ---------- ItemTooltip ----------
@@ -148,11 +169,12 @@ export const ItemTooltip = {
 
 // ---------- menu de contexto (botão direito no desktop, toque longo no celular) ----------
 export const ContextMenu = {
-  /** src: {where:'bag', idx} ou {where:'eq', slot}; x/y: ponto do clique. */
+  /** src: {where:'bag', idx, it} ou {where:'eq', slot}; x/y: ponto do clique. */
   open(src, x, y) {
-    const it = src.where === 'eq' ? G.ch.equip[src.slot] : G.ch.bag[src.idx];
+    const it = src.where === 'eq' ? G.ch.equip[src.slot] : src.it ? (G.ch.bag.includes(src.it) ? src.it : null) : G.ch.bag[src.idx];
     if (!it) return false;
-    UI.sel = src.where === 'eq' ? { where: 'eq', slot: src.slot } : { where: 'bag', idx: src.idx };
+    UI.sel = src.where === 'eq' ? { where: 'eq', slot: src.slot } : { where: 'bag', idx: G.ch.bag.indexOf(it), it };
+    UI.itemConfirm = null;
     UI.tipOpen = false;
     ItemTooltip.hide();
     const m = $('#ctxMenu');

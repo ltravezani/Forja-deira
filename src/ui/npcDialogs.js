@@ -22,7 +22,12 @@ const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.
 const sellListed = (it) => !it.slot;
 /** Joias pedem confirmação antes de vender. */
 const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman';
+/** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
+const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
+/** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
+let merchItems = [], smithItems = [];
 function sellSection(ch) {
+  merchItems = ch.bag.slice();
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
   const cnt = { all: 0, jewel: 0, potion: 0 };
   ch.bag.forEach((it) => { if (!sellListed(it)) return; cnt.all++; const c = sellCat(it); if (c in cnt) cnt[c]++; });
@@ -38,7 +43,8 @@ function sellSection(ch) {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
     const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : 'Poção') + ' · você tem ' + q;
     let a;
-    if (cf && cf.it === it) {
+    if (it.locked) a = '<button class="btn sm" disabled>Trancado</button>';
+    else if (cf && cf.it === it) {
       a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
     } else {
       a = q > 1
@@ -49,9 +55,10 @@ function sellSection(ch) {
   });
   return h + '</div>';
 }
-function sellFromBag(ch, i, n, confirmed) {
-  const it = ch.bag[i];
-  if (!it || !sellListed(it)) return;
+function sellFromBag(ch, li, n, confirmed) {
+  // confere o item da lista na mochila agora (o pet ou uma poção podem ter mudado as posições)
+  const it = merchItems[li], i = it ? ch.bag.indexOf(it) : -1;
+  if (i < 0 || !sellListed(it) || it.locked) { UI.merchConfirm = null; return; }
   const q = it.qty || 1;
   n = Math.max(1, Math.min(n || 1, q));
   if (sellNeedsConfirm(it) && !confirmed) { UI.merchConfirm = { it, n }; return; }
@@ -86,9 +93,13 @@ function wingUpSection(sel, cnt, useT, tal) {
   h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
   return h;
 }
+/** Equipamentos que o Ferreiro aceita: os equipados e os da mochila. */
+const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
+/** O item escolhido no Ferreiro ainda é do herói (equipado ou na mochila)? */
+const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 export function openNpc(id) {
-  if (G.openNpcId !== id || $('#modal').hidden) UI.merchConfirm = null;
+  if (G.openNpcId !== id || $('#modal').hidden) { UI.merchConfirm = null; UI.npcConfirm = null; }
   G.openNpcId = id;
   const ch = G.ch;
   let h = npcHead(id);
@@ -119,7 +130,8 @@ export function openNpc(id) {
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
       '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
   } else if (id === 'smith') {
-    const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
+    const items = smithList(ch);
+    smithItems = items;
     const sel = items.find((x) => x === UI.smithSel) || items[0];
     UI.smithSel = sel;
     const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
@@ -145,22 +157,28 @@ export function openNpc(id) {
       if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
     } else h += '<p class="note">Você não tem equipamentos.</p>';
   } else if (id === 'merchant') {
-    const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1);
+    const junk = ch.bag.filter(junkSellable);
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
     const RZ = R.POTIONS.rez;
     h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Gold · você tem ' + potionCount('rez') + '</span></div>';
-    h += '</div><div class="row" style="margin-top:12px"><button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button></div>';
+    h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
+      ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' Gold</button><button class="btn" data-npc="npcno">Cancelar</button>'
+      : '<button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' Gold</button>') + '</div>';
     h += sellSection(ch);
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
     h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP, nova habilidade e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
     h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' Gold. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% MF permanente e +10 pontos de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
-      (rs.ok ? '<button class="btn gold" data-npc="reset">Fazer reset</button>' : '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>');
+      (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
+        : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' Gold</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
+        : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
     const spent = R.treeSpent(ch);
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4><button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 Gold</button>';
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
+      ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 Gold</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
+      : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 Gold</button>');
   }
   h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
   modal(h);
@@ -169,17 +187,30 @@ function npcAction(e) {
   const b = e.target.closest('[data-npc]');
   if (!b || b.disabled) return;
   const a = b.dataset.npc, ch = G.ch;
+  // confirmação em dois cliques (reset, redistribuir, vender em lote): só o clique seguinte confirma
+  const confirmed = b.dataset.ok === '1' && UI.npcConfirm === a;
+  UI.npcConfirm = null;
   switch (a) {
+    case 'npcno': break;
     case 'close': closeModal(); return;
-    case 'go': closeModal(); enterDungeon(b.dataset.b, +b.dataset.f); return;
+    case 'go': {
+      // só andares já liberados (o botão pode estar velho)
+      const k = b.dataset.b;
+      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0) return;
+      closeModal(); enterDungeon(k, Math.max(1, Math.min(Math.floor(+b.dataset.f) || 1, ch.unlockedFloors[k] || 1)));
+      return;
+    }
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
-    case 'smithsel': { const items = R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot)); UI.smithSel = items[+b.dataset.i]; break; }
+    case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
-      const need = it ? R.upgradeCost(it, j) : 1;
-      if (!it || !stack) break;
+      // valida tudo ANTES de cobrar: o item ainda é do herói (o pet pode tê-lo vendido) e a fusão tem chance
+      if (!owned(ch, it)) { log('Este item não está mais com você.', 'warn'); UI.smithSel = null; break; }
+      if (!R.JEWELS[j] || R.upgradeChance(it, j) <= 0) break;
+      const need = R.upgradeCost(it, j);
+      if (!stack) break;
       if (stack.qty < need) { log('São necessárias ' + need + ' ' + R.JEWELS[j].name + ' para esta fusão (você tem ' + stack.qty + ').', 'warn'); break; }
       if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('Fusão Chaos exige ' + fmt(R.RATES.chaosFeeGold) + ' Gold.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
       stack.qty -= need; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
@@ -194,7 +225,8 @@ function npcAction(e) {
     }
     case 'wingup': {
       const it = UI.smithSel, W = R.WING_UP;
-      if (!it || R.wingUpgradeChance(it) <= 0) break;
+      if (!owned(ch, it)) { log('Esta asa não está mais com você.', 'warn'); UI.smithSel = null; break; }
+      if (it.slot !== 'wings' || it.stage || R.wingUpgradeChance(it) <= 0) break;
       const stacks = Object.keys(W.jewels).map((j) => ch.bag.find((x) => x.kind === 'jewel' && x.id === j));
       if (stacks.some((x, i) => !x || x.qty < W.jewels[Object.keys(W.jewels)[i]])) { log('Faltam Jewels para evoluir a asa.', 'warn'); break; }
       Object.keys(W.jewels).forEach((j, i) => { const x = stacks[i]; x.qty -= W.jewels[j]; if (!x.qty) ch.bag.splice(ch.bag.indexOf(x), 1); });
@@ -213,7 +245,18 @@ function npcAction(e) {
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
     case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
     case 'sellno': UI.merchConfirm = null; break;
-    case 'selljunk': { const junk = ch.bag.filter((x) => x.slot && R.RARITY[x.rarity].order <= 1); junk.forEach((x) => { ch.gold += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); }); Sfx.coin(); break; }
+    case 'selljunk': {
+      const junk = ch.bag.filter(junkSellable);
+      if (!junk.length) break;
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      let total = 0;
+      junk.forEach((x) => { total += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); });
+      ch.gold += total;
+      if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
+      log('Vendeu ' + junk.length + ' Comuns/Mágicos por ' + fmt(total) + ' Gold.', 'loot');
+      Sfx.coin();
+      break;
+    }
     case 'evolve': {
       const ev = R.canEvolve(ch);
       if (!ev.ok) break;
@@ -225,6 +268,8 @@ function npcAction(e) {
       break;
     }
     case 'reset': {
+      if (!R.canReset(ch).ok) break;
+      if (!confirmed) { UI.npcConfirm = a; break; }
       const r = R.applyReset(ch);
       if (!r.ok) break;
       for (const s of R.SLOTS) if (ch.equip[s]) { /* itens ficam equipados, inativos até cumprir requisito */ }
@@ -235,7 +280,14 @@ function npcAction(e) {
       log('Reset ' + ch.resets + ' concluído. Distribua ' + fmt(ch.points) + ' pontos (C).', 'sys');
       break;
     }
-    case 'treereset': if (ch.gold < 100000) { log('Gold insuficiente.', 'warn'); break; } ch.gold -= 100000; ch.tree = {}; recalc(); break;
+    case 'treereset': {
+      if (!R.treeSpent(ch)) break;
+      if (ch.gold < 100000) { log('Gold insuficiente.', 'warn'); break; }
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      ch.gold -= 100000; ch.tree = {}; recalc();
+      log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
+      break;
+    }
   }
   persist();
   const dlg = $('#dialog'), list = dlg.querySelector('.selllist');

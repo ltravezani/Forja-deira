@@ -4,7 +4,7 @@ import { G, UI } from '../core/state.js';
 import { $ } from '../core/util.js';
 import { equipFromBag, unequipSlot } from '../game/inventory.js';
 import { renderPane } from './drawer.js';
-import { ContextMenu } from './itemTooltip.js';
+import { bagSel, ContextMenu } from './itemTooltip.js';
 
 export const Drag = { on: false, src: null, x0: 0, y0: 0, ghost: null, eatClick: false, eatUntil: 0, lp: 0 };
 /** Toque prolongado (sem arrastar) abre o menu de contexto do item. */
@@ -24,7 +24,9 @@ export function initDragDrop() {
     if (e.button !== 0) return;
     const c = e.target.closest('[data-act="selbag"],[data-act="seleq"]');
     if (!c) return;
-    Drag.src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
+    // guarda o próprio item: a posição na mochila pode mudar durante o arrasto (venda do pet, poções)
+    Drag.src = c.dataset.act === 'selbag' ? bagSel(+c.dataset.i) : { where: 'eq', slot: c.dataset.slot };
+    if (!Drag.src) return;
     Drag.x0 = e.clientX; Drag.y0 = e.clientY; Drag.el = c;
     cancelLongPress();
     if (e.pointerType !== 'mouse') {
@@ -72,7 +74,7 @@ export function initDragDrop() {
     Drag.eatClick = true; setTimeout(() => (Drag.eatClick = false), 0);
     const t = dropTarget(e.clientX, e.clientY, src);
     if (t) {
-      if (src.where === 'bag') { if (G.ch.bag[src.idx] && G.ch.bag[src.idx].slot) { UI.sel = { where: 'bag', idx: src.idx }; equipFromBag(src.idx); } }
+      if (src.where === 'bag') { const i = G.ch.bag.indexOf(src.it); if (i >= 0 && src.it.slot) { UI.sel = bagSel(i); equipFromBag(i); } }
       else if (unequipSlot(src.slot)) UI.sel = null;
     }
     renderPane();

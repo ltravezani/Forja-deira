@@ -1,7 +1,7 @@
 // ---------- aliados (pet e invocações) ----------
 import { gltfRise } from '../art/gltfModels.js';
 import { animateModel, buildBeast, buildHumanoid, disposeModel } from '../art/models.js';
-import { G } from '../core/state.js';
+import { G, UI } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
@@ -34,8 +34,8 @@ export function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-/** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
-export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
+/** Itens que o pet leva para vender: todo equipamento, menos Lendários, asas e itens trancados (joias e poções ficam). */
+export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && it.slot !== 'wings' && !it.locked;
 /** Manda o pet vender na cidade tudo que `petSellable` aceita (ou o filtro dado, na venda automática). */
 export function sendPetToSell(filter) {
   const pet = G.pet;
@@ -45,8 +45,13 @@ export function sendPetToSell(filter) {
   if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
+  // o Gold entra na hora (sair ou fechar a página não perde nada); a volta do pet é só visual
+  G.ch.gold += total;
   pet.away = G.time + 18;
   pet.gold = total;
+  // item selecionado foi junto: tira a seleção (e os detalhes) em vez de apontar para outro item
+  if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !G.ch.bag.includes(UI.sel.it)) { UI.sel = null; UI.tipOpen = false; }
+  if (UI.itemConfirm && !G.ch.bag.includes(UI.itemConfirm.it)) UI.itemConfirm = null;
   pet.model.root.visible = false;
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
   log('Pet partiu para a cidade com ' + sell.length + ' itens' + (typeof filter === 'function' ? ' (venda automática)' : '') + '. Volta em 18s.', 'sys');
@@ -61,7 +66,6 @@ export function updateAllies(dt) {
     if (a.kind === 'pet' && a.away) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
-      G.ch.gold += a.gold;
       log('Pet voltou com ' + fmt(a.gold) + ' Gold.', 'loot');
       emit(a.x, 0.5, a.z, { n: 20, color: 0xffd24a, speed: 3, up: 2, life: 0.7, size: 0.9 });
       Sfx.coin();

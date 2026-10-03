@@ -3,19 +3,21 @@ import { applyCharSetting, gltfEnabled } from '../art/gltfModels.js';
 import { forgetCloudLocal } from '../core/cloud.js';
 import { applyFeelSettings, CONFIG } from '../core/config.js';
 import { G, persist, S, SAVE_KEY, UI } from '../core/state.js';
-import { $, R } from '../core/util.js';
+import { $, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
 import { toggleAutoSkill } from '../game/automation.js';
+import { skillUnlocked } from '../game/skills.js';
 import { autoEquip, autoEquipOn, bagCat, equipFromBag, unequipSlot, usePotion } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { returnToTitle } from '../game/session.js';
 import { Drag } from './dragdrop.js';
 import { renderPane } from './drawer.js';
 import { buildSlots, hudTick } from './hud.js';
-import { ContextMenu, drinkable, ItemTooltip, selectedItem } from './itemTooltip.js';
+import { bagSel, ContextMenu, drinkable, ItemTooltip, needsConfirm, selBagIdx, selectedItem } from './itemTooltip.js';
+import { log } from './log.js';
 
 function paneAction(e) {
   if (Drag.eatClick) { Drag.eatClick = false; return; }
@@ -31,8 +33,11 @@ function paneAction(e) {
   if (b.disabled) return;
   const a = b.dataset.act, ch = G.ch;
   const it = selectedItem();
+  // o pedido de confirmação (vender/descartar) vale só para o clique seguinte no mesmo item
+  const conf = UI.itemConfirm;
+  UI.itemConfirm = null;
   switch (a) {
-    case 'stat': { const n = Math.min(+b.dataset.n, ch.points); ch.stats[b.dataset.k] += n; ch.points -= n; recalc(); if (autoEquipOn()) G.autoEqT = 0.3; break; }
+    case 'stat': { const n = Math.min(Math.floor(+b.dataset.n) || 0, ch.points); if (n <= 0 || !(b.dataset.k in ch.stats)) break; ch.stats[b.dataset.k] += n; ch.points -= n; recalc(); if (autoEquipOn()) G.autoEqT = 0.3; break; }
     case 'auto': R.autoDistribute(ch, ch.points); recalc(); if (autoEquipOn()) G.autoEqT = 0.3; break;
     case 'seleq': {
       const now = performance.now(), k = 'e' + b.dataset.slot;
@@ -44,32 +49,50 @@ function paneAction(e) {
     }
     case 'selbag': {
       const i = +b.dataset.i, now = performance.now();
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.tipOpen = false; UI.sel = { where: 'bag', idx: i }; equipFromBag(i); break; }
+      // o clique duplo só vale se a célula ainda guarda o mesmo item (a mochila pode mudar entre os cliques)
+      const dbl = UI.lastCell && UI.lastCell.k === 'b' + i && UI.lastCell.it === ch.bag[i] && now - UI.lastCell.t < CONFIG.input.doubleClickMs;
+      if (dbl && ch.bag[i] && ch.bag[i].slot) { UI.lastCell = null; UI.tipOpen = false; UI.sel = bagSel(i); equipFromBag(i); break; }
       // clique duplo numa poção: bebe direto do inventário
-      if (UI.lastCell && UI.lastCell.k === 'b' + i && now - UI.lastCell.t < CONFIG.input.doubleClickMs && drinkable(ch.bag[i])) { UI.lastCell = null; UI.tipOpen = false; usePotion(ch.bag[i].id); UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null; break; }
-      UI.lastCell = { k: 'b' + i, t: now };
-      UI.sel = ch.bag[i] ? { where: 'bag', idx: i } : null;
+      if (dbl && drinkable(ch.bag[i])) { UI.lastCell = null; UI.tipOpen = false; const pot = ch.bag[i]; usePotion(pot.id); UI.sel = ch.bag.includes(pot) ? bagSel(ch.bag.indexOf(pot)) : null; break; }
+      UI.lastCell = { k: 'b' + i, t: now, it: ch.bag[i] };
+      UI.sel = bagSel(i);
       if (UI.sel) ItemTooltip.open(true);
       break;
     }
     case 'bagf': UI.bagFilter = b.dataset.k; UI.sel = null; break;
     case 'aeqtoggle': S.settings.autoEquip = !autoEquipOn(); if (autoEquipOn()) autoEquip(true); persist(); break;
     case 'aeqnow': autoEquip(true); break;
-    case 'equip': if (it && it.slot && UI.sel.where === 'bag') equipFromBag(UI.sel.idx); break;
+    case 'equip': { const i = selBagIdx(); if (it && it.slot && i >= 0) equipFromBag(i); break; }
     case 'tipclose': UI.tipOpen = false; break;
     case 'tipopen': ItemTooltip.open(false); break;
     case 'unequip': if (UI.sel && UI.sel.where === 'eq' && unequipSlot(UI.sel.slot)) UI.sel = null; break;
     case 'usepot': if (it) usePotion(it.id); if (!selectedItem()) UI.sel = null; break;
-    case 'sell': ch.gold += R.sellValue(it); ch.bag.splice(UI.sel.idx, 1); UI.sel = null; Sfx.coin(); break;
-    case 'drop': ch.bag.splice(UI.sel.idx, 1); UI.sel = null; break;
+    case 'lock': if (it) { it.locked = !it.locked; log((it.locked ? 'Trancado: ' : 'Destrancado: ') + R.itemName(it) + '.', 'sys'); } break;
+    case 'sell': case 'drop': {
+      // confere o item na hora (a posição na mochila pode ter mudado) e nunca mexe em item trancado
+      const i = selBagIdx();
+      if (i < 0 || !it) { UI.sel = null; break; }
+      if (it.locked) { log('Item trancado: destranque antes de ' + (a === 'sell' ? 'vender' : 'descartar') + '.', 'warn'); break; }
+      if (needsConfirm(it) && !(conf && conf.it === it && conf.act === a)) { UI.itemConfirm = { it, act: a }; ItemTooltip.open(false); break; }
+      ch.bag.splice(i, 1); UI.sel = null;
+      if (a === 'sell') { const v = R.sellValue(it); ch.gold += v; Sfx.coin(); log('Vendeu ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + ' por ' + fmt(v) + ' Gold.', 'loot'); }
+      else log('Descartou ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + '.', 'sys');
+      break;
+    }
     case 'petsell': sendPetToSell(); break;
     case 'sortbag': { const co = { mine: 0, other: 1, mat: 2 }; ch.bag.sort((x, y) => co[bagCat(x)] - co[bagCat(y)] || R.itemCP(y) - R.itemCP(x) || (x.kind || '').localeCompare(y.kind || '')); UI.sel = null; break; }
-    case 'bar': if (ch.skillBar.length < 6) ch.skillBar.push(b.dataset.id); buildSlots(); break;
-    case 'unbar': ch.skillBar.splice(ch.skillBar.indexOf(b.dataset.id), 1); buildSlots(); break;
+    case 'bar': { const id = b.dataset.id; if (ch.skillBar.length < 6 && !ch.skillBar.includes(id) && skillUnlocked(id)) ch.skillBar.push(id); buildSlots(); break; }
+    case 'unbar': { const i = ch.skillBar.indexOf(b.dataset.id); if (i >= 0) ch.skillBar.splice(i, 1); buildSlots(); break; }
     case 'autoskill': toggleAutoSkill(b.dataset.id); break;
     case 'autoLoot': ch.autoLoot = b.dataset.v === '1'; break;
     case 'autoPetSell': ch.autoPetSell = b.dataset.v === '1'; break;
-    case 'node': ch.tree[b.dataset.id] = (ch.tree[b.dataset.id] || 0) + 1; recalc(); break;
+    case 'node': {
+      // revalida: nó da classe, ponto livre e limite de 5 ranks
+      const id = b.dataset.id, r = ch.tree[id] || 0;
+      const valid = R.TREES[ch.cls].some((br, bi) => br.nodes.some((n, ni) => R.treeNodeId(ch.cls, bi, ni) === id));
+      if (valid && r < 5 && R.treePoints(ch) - R.treeSpent(ch) > 0) { ch.tree[id] = r + 1; recalc(); }
+      break;
+    }
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
@@ -102,7 +125,8 @@ export function initPaneActions() {
     if (!c) return;
     e.preventDefault();
     if (performance.now() < Drag.eatUntil) return; // o toque longo já abriu o menu
-    const src = c.dataset.act === 'selbag' ? { where: 'bag', idx: +c.dataset.i } : { where: 'eq', slot: c.dataset.slot };
+    const src = c.dataset.act === 'selbag' ? bagSel(+c.dataset.i) : { where: 'eq', slot: c.dataset.slot };
+    if (!src) return;
     if (ContextMenu.open(src, e.clientX, e.clientY)) renderPane();
   });
   window.addEventListener('resize', () => { ContextMenu.close(); ItemTooltip.sync(); });
