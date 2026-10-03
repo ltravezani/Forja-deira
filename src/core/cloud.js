@@ -188,6 +188,7 @@ function fetchCloud() {
 }
 /** Grava o save local na nuvem sobre a revisão `baseRev` (0 = a conta ainda não tem save). false = alguém gravou antes. */
 async function upload(baseRev, keepalive) {
+  if (saveBlocked()) return false; // apagando dados ou outra aba é a dona do save
   const g = gen, id = uid();
   const data = JSON.parse(JSON.stringify(S));
   let rows;
@@ -204,6 +205,7 @@ async function upload(baseRev, keepalive) {
   return true;
 }
 function applyCloud(cloud) {
+  if (saveBlocked()) return;
   loadSave(cloud.data);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
   sync = { userId: uid(), rev: cloud.rev, dirty: false };
