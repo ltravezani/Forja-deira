@@ -1,5 +1,5 @@
 // ---------- monstros ----------
-import { deathTime } from '../art/gltfModels.js';
+import { deathTime, gltfRise } from '../art/gltfModels.js';
 import { animateModel, attachBossSigil, buildModel, disposeModel, flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
@@ -73,7 +73,7 @@ export function spawnMonster(kind, x, z, level, opt) {
     id: G.nextMonId++, kind, T, name: (affix ? affix.name + ' ' : '') + T.name, level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
     x, z, homeX: x, homeZ: z, rot: model.root.rotation.y, model, speed: T.speed * (affix && affix.speed ? affix.speed : 1),
     range: T.range, atkT: T.atkT, atkCd: rand(), atkWind: 0, attackAnim: 0, aggro: false, pack: opt.pack || 0,
-    elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0,
+    elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0, riseUntil: 0,
     radius: (T.boss ? BOSS_RADIUS : T.mini ? MINI_RADIUS : 0.55) * (affix && affix.scale ? affix.scale : 1),
     // raio usado contra paredes: o chefe é largo e não pode atravessar blocos
     moveR: T.boss ? 1.1 : T.mini ? 0.8 : 0.35 * (affix && affix.scale ? affix.scale : 1), losT: 0, los: false, path: null, repath: rand() * 0.6,
@@ -105,6 +105,8 @@ export function updateMonsters(dt) {
     m.losT -= dt;
     if (m.losT <= 0) { m.losT = CONFIG.monsters.losInterval + rand() * 0.1; m.los = d < 18 && lineClear(G.L, m.x, m.z, p.x, p.z, 0); }
     const slow = m.slowUntil > G.time ? 0.5 : 1;
+    // surgindo do chão: só anima (não persegue nem ataca)
+    if (m.riseUntil > G.time) { updateVisual(m, dt, slow); continue; }
     const enrage = (m.boss || m.mini) && m.hp < m.maxHp * 0.25 ? 1.3 : 1;
     m.moving = false;
     m.atkCd -= dt * enrage;
@@ -209,6 +211,7 @@ function updateBoss(m, d, dt, enrage, p) {
       if (!walkable(G.L, sx, sz)) continue;
       const s = spawnMonster(B.monsters[k % 3], sx, sz, m.level - 4, { pack: m.pack });
       s.aggro = true;
+      riseMonster(s);
       emit(sx, 0.5, sz, { n: 20, color: 0xb070ff, speed: 3, life: 0.6, size: 1 });
     }
     log(m.T.name + ' convoca reforços!', 'warn');
@@ -243,6 +246,9 @@ function updateVisual(m, dt, slow) {
   root.visible = vis;
   if (vis) animateModel(m.model, { t: G.time + m.id, dt, moving: m.moving, v: dt > 0 ? Math.hypot(mdx, mdz) / dt : 0, attack: m.attackAnim, speed: 9 * slow });
 }
+
+/** Monstro que acaba de aparecer no meio da luta surge do chão (só os animados; os outros já atacam). */
+export function riseMonster(m) { m.riseUntil = G.time + gltfRise(m.model); }
 
 /** Remove todos os monstros (troca de zona), liberando modelos e barras de vida. */
 export function clearMonsters() {

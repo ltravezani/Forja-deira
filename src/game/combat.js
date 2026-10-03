@@ -1,4 +1,5 @@
 // ---------- combate ----------
+import { gltfHit } from '../art/gltfModels.js';
 import { flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G, persist } from '../core/state.js';
@@ -38,6 +39,7 @@ export function hitMonster(m, mult, skillId, opts) {
   m.hp -= r.dmg;
   if (r.type !== 'normal') hitStop(CONFIG.feel.hitStop * 0.5);
   m.hitFlash = 0.12;
+  gltfHit(m.model);
   m.lastHit = G.time;
   aggroPack(m);
   const h = m.model.height;
@@ -83,6 +85,7 @@ export function hurtPlayer(raw, src) {
   G.hp -= d;
   G.lastHurt = G.time;
   flashModel(p.model, 0xff2a1a, 0.6);
+  gltfHit(p.model);
   p.hurtFlash = 0.1;
   floatText(p.x, 2.6, p.z, '-' + fmt(d), 'hurt');
   hurtFeedback(d / G.st.maxHp);

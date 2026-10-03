@@ -1,4 +1,5 @@
 // ---------- aliados (pet e invocações) ----------
+import { gltfRise } from '../art/gltfModels.js';
 import { animateModel, buildBeast, buildHumanoid, disposeModel } from '../art/models.js';
 import { G } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
@@ -26,7 +27,9 @@ export function spawnAlly(kind, x, z, dur) {
   if (kind === 'spirit') model.mats.forEach((m) => { m.userData.baseEmissive = new THREE.Color(0x2aa05a); m.userData.baseEI = 0.5; m.emissive.copy(m.userData.baseEmissive); m.emissiveIntensity = 0.5; m.transparent = true; m.opacity = 0.85; });
   model.root.position.set(x, gy(x, z), z);
   world.add(model.root);
-  const a = { kind, x, z, rot: 0, model, target: null, atkCd: 0, attackAnim: 0, until: dur ? G.time + dur : Infinity, away: 0, moving: false, gold: 0 };
+  const a = { kind, x, z, rot: 0, model, target: null, atkCd: 0, attackAnim: 0, until: dur ? G.time + dur : Infinity, away: 0, moving: false, gold: 0, riseUntil: 0 };
+  // mortos-vivos do Necromancer saem da terra antes de lutar
+  if (U) a.riseUntil = G.time + gltfRise(model);
   G.allies.push(a);
   if (kind === 'pet') G.pet = a;
   return a;
@@ -71,7 +74,9 @@ export function updateAllies(dt) {
     }
     a.moving = false;
     a.atkCd -= dt;
-    if (a.target) {
+    if (a.riseUntil > G.time) {
+      // ainda surgindo do chão: não anda nem golpeia
+    } else if (a.target) {
       const d = Math.hypot(a.target.x - a.x, a.target.z - a.z);
       if (d > 1.6 + a.target.radius) stepToward(a, a.target.x, a.target.z, 7.5, dt, 0.3);
       else if (a.atkCd <= 0) {

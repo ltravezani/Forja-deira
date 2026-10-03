@@ -1,9 +1,9 @@
 // =============================================================================
 // Personagens com esqueleto (glTF): modelos low-poly animados (KayKit, CC0) que
 // o tools/build.py embute em base64 no HTML. Todos compartilham o mesmo rig, então
-// um único arquivo de clipes (anims) anima qualquer personagem. Cada instância é
-// um clone com materiais toon próprios (piscam ao levar dano e recebem as cores do
-// equipamento), arma presa ao osso da mão e um AnimationMixer.
+// um único conjunto de clipes (anims e anims_extra) anima qualquer personagem. Cada
+// instância é um clone com materiais toon próprios (piscam ao levar dano e recebem
+// as cores do equipamento), arma presa ao osso da mão e um AnimationMixer.
 //
 // Se os modelos não carregarem (ou o jogador escolher personagens simples), os
 // construtores de art/models.js continuam usando o modelo procedural.
@@ -15,30 +15,33 @@ import { stylize } from './stylize.js';
 
 /** Personagem de cada chave `gltf` usada em data.js, player.js e townlife.js. */
 const CHAR = { knight: 'Knight', mage: 'Mage', rogue: 'Rogue_Hooded', rogueFem: 'Rogue', barbarian: 'Barbarian', skeleton: 'Skeleton_Warrior', skeletonRogue: 'Skeleton_Rogue' };
-/** Arma na mão direita: nó do próprio personagem ou arquivo avulso (props). */
+/**
+ * Arma na mão direita: arquivo avulso (props) ou nó do AdvWeapons. A segunda arma do
+ * visual `offhand` (Dark Elf e Necromancer) é a mesma peça na mão esquerda.
+ */
 const WEAPON = {
-  knight: { sword: '1H_Sword', club: '1H_Sword', staff: '2H_Sword', rod: 'Mage:2H_Staff' },
-  mage: { staff: '2H_Staff', sword: '1H_Wand', rod: '2H_Staff' },
-  rogue: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
-  rogueFem: { bow: '2H_Crossbow', sword: 'Knife', blade: 'Knight:1H_Sword' },
-  barbarian: { club: '1H_Axe', sword: '1H_Axe' },
+  knight: { sword: 'sword_1handed', club: 'sword_1handed', staff: 'sword_2handed', rod: 'staff' },
+  mage: { staff: 'staff', sword: 'wand', rod: 'staff' },
+  rogue: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
+  rogueFem: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
+  barbarian: { club: 'axe_1handed', sword: 'axe_1handed' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
 };
-const SHIELD = { knight: 'Badge_Shield', skeleton: 'Skeleton_Shield_Small_A' };
+const SHIELD = { knight: 'shield_badge_color', skeleton: 'Skeleton_Shield_Small_A' };
 /**
- * Segunda arma na mão esquerda (visual `offhand`: Dark Elf e Necromancer). "Modelo:Nó"
- * pega a peça de outro personagem (todos têm o mesmo encaixe de mão); sem entrada aqui,
- * a arma da mão direita é copiada para a esquerda.
+ * Pose das armas do AdvWeapons no encaixe de cada mão (a mesma com que vinham presas
+ * aos heróis no pacote 1.0): [x, y, z, giro em Y]. Os encaixes das duas mãos são
+ * espelhados, por isso a direita gira meia volta.
  */
-const OFFHAND = {
-  knight: { sword: '1H_Sword_Offhand' },
-  rogue: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
-  rogueFem: { sword: 'Knife_Offhand', blade: 'Knight:1H_Sword_Offhand' },
-  barbarian: { club: '1H_Axe_Offhand', sword: '1H_Axe_Offhand' },
+const GRIP = {
+  r: [0, 0.033, 0, Math.PI], l: [0, 0.017, 0, 0],
+  staff: { r: [0, 0, 0, Math.PI] }, wand: { r: [0, 0, 0, Math.PI] }, dagger: { r: [0, 0, 0, Math.PI], l: [0, 0, 0, 0] },
+  crossbow_2handed: { r: [-0.105, -0.01, 0, Math.PI / 2] }, shield_badge_color: { l: [0, 0.017, 0.156, 0] },
 };
-/** Clipes: locomoção, golpes (alternados), disparo, magia e queda. */
-const CLIP = { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', chop: '1H_Melee_Attack_Chop', slice: '1H_Melee_Attack_Slice_Diagonal', shoot: '2H_Ranged_Shoot', spell: 'Spellcast_Shoot', cast: 'Spellcast_Raise', death: 'Death_A' };
+/** Clipes: locomoção, golpes (alternados), disparo, magia, queda, reação a dano e surgir do chão. */
+const CLIP = { idle: 'Idle', walk: 'Walking_A', run: 'Running_A', chop: '1H_Melee_Attack_Chop', slice: '1H_Melee_Attack_Slice_Diagonal', shoot: '2H_Ranged_Shoot', spell: 'Spellcast_Shoot', cast: 'Spellcast_Raise', death: 'Death_A', hit: 'Hit_A', rise: 'Spawn_Ground' };
+const ONCE = ['death', 'chop', 'slice', 'shoot', 'spell', 'cast', 'hit', 'rise'];
 /** Altura do modelo procedural (unidades do corpo); o glTF é escalado para ela, um pouco menor (cabeça e ombros largos pesam mais na tela). */
 const BODY_H = 2.45, FIT = 0.9;
 
@@ -65,14 +68,14 @@ export function loadGltfModels() {
     for (const [name, g] of list) {
       // geometrias e texturas são dos modelos-base: os clones nunca as liberam
       g.scene.traverse((o) => { if (o.geometry) o.geometry.userData.shared = true; });
-      if (name === 'anims') for (const c of g.animations) LIB.clips[c.name] = c;
+      if (name === 'anims' || name === 'anims_extra') for (const c of g.animations) LIB.clips[c.name] = c;
       else if (chars.includes(name)) LIB.chars[name] = g.scene;
       else LIB.props[name] = g.scene;
     }
     // altura de referência: corpo do cavaleiro sem acessórios (todos usam o mesmo rig)
     const box = new THREE.Box3();
     LIB.chars.Knight.updateMatrixWorld(true);
-    LIB.chars.Knight.traverse((o) => { if (o.isSkinnedMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+    LIB.chars.Knight.traverse((o) => { if (o.isSkinnedMesh && !/Helmet|Cape/.test(o.name)) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
     LIB.H = box.max.y - box.min.y || 1;
     LIB.ready = true;
     LIB.loadMs = performance.now() - t0;
@@ -136,7 +139,7 @@ const DESAT_MAP = `#ifdef USE_MAP
 function roleOf(name, key) {
   if (/Eyes/.test(name)) return 'eyes';
   if (/Cape|Cloak/.test(name)) return 'cape';
-  if (/Head|Jaw/.test(name)) return 'skin';
+  if (/Head|Jaw|Mask/.test(name)) return 'skin';
   if (key === 'barbarian' && /Arm/.test(name)) return 'skin';
   if (/Helmet|Hat|Hood/.test(name)) return 'hat';
   return 'body';
@@ -206,7 +209,6 @@ export function buildGltfHumanoid(o, cartoon) {
   const showHat = key === 'knight' ? o.head === 'helm' : key === 'mage' ? o.head === 'hood' : key === 'barbarian' ? !!o.horns : !o.crown;
   const showCape = skel || !!(o.cape || o.bulky || o.crown || o.robe);
   const wantW = WEAPON[key] && WEAPON[key][o.weapon], wantS = o.shield && SHIELD[key];
-  const wantO = o.offhand && OFFHAND[key] ? OFFHAND[key][o.weapon] : null;
   const drop = [];
   let weapon = null, offhand = null;
   scene.traverse((c) => {
@@ -217,7 +219,6 @@ export function buildGltfHumanoid(o, cartoon) {
       const role = roleOf(c.name, key);
       if (c.name === wantW) { c.material = M.weapon; weapon = c; }
       else if (c.name === wantS) c.material = M.weapon;
-      else if (c.name === wantO) { c.material = M.weapon; offhand = c; }
       else if (role === 'hat' && showHat) c.material = M.hat;
       else if (role === 'cape' && showCape) c.material = M.cape;
       else drop.push(c);
@@ -225,30 +226,38 @@ export function buildGltfHumanoid(o, cartoon) {
     }
     const role = roleOf(c.name, key);
     if (role === 'eyes') { c.material = eyes; c.castShadow = false; }
-    else if (role === 'cape' && !showCape) drop.push(c);
+    else if ((role === 'cape' && !showCape) || (role === 'hat' && !showHat)) drop.push(c);
     else c.material = M[role];
   });
   for (const c of drop) c.parent.remove(c);
   shareSkeleton(scene);
-  // armas avulsas (pacote de esqueletos) vão para os encaixes das mãos
+  // armas avulsas vão para os encaixes das mãos, cada uma com a própria textura de paleta
   const hand = (side) => find(scene, 'handslot' + side);
+  const wmats = new Map();
+  const wmat = (wmap) => {
+    if (!wmats.has(wmap)) wmats.set(wmap, wmap === map ? M.weapon : ownMat(wmap, M.weapon.color, o.weaponGlow || 0, o.weaponGlow ? 0.45 : 0, mats));
+    return wmats.get(wmap);
+  };
   const prop = (name, side) => {
-    // "Modelo:Nó" = peça emprestada de outro personagem (mantém a pose relativa ao encaixe)
-    const [from, node] = name.indexOf(':') > 0 ? name.split(':') : [null, name];
-    const P = from ? LIB.chars[from] && find(LIB.chars[from], node) : LIB.props[name];
-    if (!P) return null;
-    const g = P.clone();
-    g.traverse((c) => { if (c.isMesh) { c.material = M.weapon; c.castShadow = true; } });
+    const adv = !LIB.props[name] && LIB.props.AdvWeapons ? find(LIB.props.AdvWeapons, name) : null;
+    const P = LIB.props[name] || adv;
     const h = hand(side);
-    if (h) h.add(g);
+    if (!P || !h) return null;
+    // invólucro: a pose de encaixe fica nele, o nó copiado continua como no arquivo
+    const g = new THREE.Group();
+    g.add(P.clone());
+    g.traverse((c) => { if (c.isMesh) { c.material = wmat(c.material.map || map); c.castShadow = true; } });
+    if (adv) {
+      const p = (GRIP[name] && GRIP[name][side]) || GRIP[side];
+      g.position.set(p[0], p[1], p[2]);
+      g.rotation.y = p[3];
+    }
+    h.add(g);
     return g;
   };
   if (wantW && !weapon) weapon = prop(wantW, 'r');
   if (wantS && !find(scene, wantS)) prop(wantS, 'l');
-  if (o.offhand && !offhand) {
-    if (wantO) offhand = prop(wantO, 'l');
-    else if (weapon && hand('l')) { offhand = weapon.clone(); hand('l').add(offhand); }
-  }
+  if (o.offhand && !offhand && wantW) offhand = prop(wantW, 'l');
   // orbe no topo do cajado (o jogador anima o tamanho dele)
   const addOrb = (w) => {
     const b = new THREE.Box3();
@@ -272,7 +281,7 @@ export function buildGltfHumanoid(o, cartoon) {
     const clip = LIB.clips[name];
     if (!clip) continue;
     const a = mixer.clipAction(clip);
-    if (id === 'death' || id === 'chop' || id === 'slice' || id === 'shoot' || id === 'spell' || id === 'cast') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
+    if (ONCE.includes(id)) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
     acts[id] = a;
   }
   const S = (o.scale || 1) * cartoon;
@@ -281,7 +290,7 @@ export function buildGltfHumanoid(o, cartoon) {
     root, scene, kind: 'gltf', mixer, acts, mats,
     body: scene, torso: anchor(find(scene, 'chest'), scene), head: anchor(find(scene, 'head'), scene),
     weapon, offhand, cape: null, armorMat: M.body, trimMat: M.body, height: BODY_H * S,
-    anim: { cur: null, over: null, prev: 0, dead: false, lastT: null, flip: false },
+    anim: { cur: null, over: null, prev: 0, dead: false, lastT: null, flip: false, hit: false, hitUntil: 0, hitCd: 0, rise: false, riseUntil: 0 },
     atk: o.weapon === 'bow' ? 'shoot' : o.weapon === 'rod' || (key === 'mage' && o.weapon === 'staff') ? 'spell' : 'melee',
   };
   // idle começa num ponto aleatório: um grupo de monstros não respira em uníssono
@@ -321,15 +330,29 @@ export function animateGltf(m, s) {
   let dt = s.dt;
   if (dt == null) dt = A.lastT == null ? 0 : Math.max(0, Math.min(0.1, s.t - A.lastT));
   A.lastT = s.t;
+  const t = s.t, hitReq = A.hit;
+  A.hit = false;
   if (s.dead) {
-    if (!A.dead) { A.dead = true; A.over = null; const d = m.acts.death; if (d) { d.reset(); play(m, d, 0.1); } }
+    if (!A.dead) { A.dead = true; A.over = null; A.riseUntil = 0; const d = m.acts.death; if (d) { d.reset(); play(m, d, 0.1); } }
+  } else if (A.rise || t < A.riseUntil) {
+    // surgindo do chão: nada interrompe o clipe
+    if (A.rise) { A.rise = false; A.riseUntil = t + gltfRiseTime(m); m.acts.rise.reset(); play(m, m.acts.rise, 0); A.over = null; A.prev = 0; }
   } else {
     if (A.dead) { A.dead = false; if (m.acts.death) m.acts.death.stop(); A.cur = null; }
     const a = s.attack || 0, c = s.cast || 0;
+    // reação a dano: só parado e fora de golpes (andando, o corpo deslizaria)
+    if (hitReq && m.acts.hit && !a && !c && !s.moving && t >= A.hitCd) {
+      m.acts.hit.reset();
+      play(m, m.acts.hit, 0.05);
+      A.hitUntil = t + m.acts.hit.getClip().duration * 0.85;
+      A.hitCd = t + 1.2;
+    }
     if (c > 0) overlay(m, 'cast', c);
     else if (a > 0) {
       if (A.prev === 0 || !A.over) A.flip = !A.flip;
       overlay(m, m.atk === 'melee' ? (A.flip ? 'chop' : 'slice') : m.atk, a);
+    } else if (t < A.hitUntil && !s.moving) {
+      A.prev = 0; A.over = null;
     } else {
       A.prev = 0; A.over = null;
       const moving = !!s.moving;
@@ -340,6 +363,15 @@ export function animateGltf(m, s) {
     }
   }
   m.mixer.update(dt);
+}
+/** Reação a dano no próximo quadro (ignorada se estiver andando, golpeando ou logo depois de outra). */
+export function gltfHit(m) { if (m && m.kind === 'gltf') m.anim.hit = true; }
+function gltfRiseTime(m) { return m.acts.rise ? m.acts.rise.getClip().duration : 0; }
+/** Faz o personagem surgir do chão; devolve a duração (0 se o modelo não tem o clipe). */
+export function gltfRise(m) {
+  if (!m || m.kind !== 'gltf' || !m.acts.rise) return 0;
+  m.anim.rise = true;
+  return gltfRiseTime(m);
 }
 /** Duração da queda (para o corpo sumir só depois). */
 export function deathTime(m) {

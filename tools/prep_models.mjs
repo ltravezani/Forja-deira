@@ -1,25 +1,25 @@
 #!/usr/bin/env node
 // =============================================================================
-// Prepara os modelos glTF (KayKit, CC0) para o jogo: tira as animações de cada
-// personagem (todos usam o mesmo esqueleto), junta num só arquivo apenas os
-// clipes usados, reamostra as curvas e remove o que sobrou. Saída em
+// Prepara os modelos glTF do KayKit Skeletons 1.0 (CC0) para o jogo: tira as
+// animações de cada personagem (todos usam o mesmo esqueleto), junta num só
+// arquivo apenas os clipes usados, reamostra as curvas e remove o que sobrou.
+// Os heróis vêm do Adventurers 2.0 (tools/prep_adventurers.mjs). Saída em
 // assets/models/*.glb, que o tools/build.py embute no HTML em base64.
 //
 // Uso (uma vez, fora do jogo; o jogo não depende destes pacotes):
 //   npm i --no-save @gltf-transform/core@4 @gltf-transform/functions@4
-//   node tools/prep_models.mjs <pasta KayKit-Character-Pack-Adventures-1.0> <pasta KayKit-Character-Pack-Skeletons-1.0>
+//   node tools/prep_models.mjs <pasta KayKit-Character-Pack-Skeletons-1.0>
 // =============================================================================
 import { NodeIO } from '@gltf-transform/core';
 import { dedup, prune, resample } from '@gltf-transform/functions';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const [ADV, SKE] = process.argv.slice(2);
-if (!ADV || !SKE) { console.error('uso: node tools/prep_models.mjs <adventurers> <skeletons>'); process.exit(1); }
+const [SKE] = process.argv.slice(2);
+if (!SKE) { console.error('uso: node tools/prep_models.mjs <skeletons>'); process.exit(1); }
 const OUT = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'assets', 'models');
 fs.mkdirSync(OUT, { recursive: true });
 const io = new NodeIO();
-const advC = (n) => path.join(ADV, 'addons/kaykit_character_pack_adventures/Characters/gltf', n + '.glb');
 const skeC = (n) => path.join(SKE, 'addons/kaykit_character_pack_skeletons/Characters/gltf', n + '.glb');
 const skeA = (n) => path.join(SKE, 'addons/kaykit_character_pack_skeletons/Assets/gltf', n + '.gltf');
 
@@ -41,10 +41,8 @@ async function save(doc, name) {
 }
 
 // personagens: só malha, esqueleto e textura
-const CHARS = [[advC, 'Knight'], [advC, 'Mage'], [advC, 'Rogue_Hooded'], [advC, 'Rogue'], [advC, 'Barbarian'],
-  [skeC, 'Skeleton_Warrior'], [skeC, 'Skeleton_Rogue']];
-for (const [src, name] of CHARS) {
-  const doc = await io.read(src(name));
+for (const name of ['Skeleton_Warrior', 'Skeleton_Rogue']) {
+  const doc = await io.read(skeC(name));
   for (const a of doc.getRoot().listAnimations()) dropAnim(a);
   await save(doc, name);
 }

@@ -8,7 +8,7 @@ import { emit, spawnRing } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { shake, world } from '../engine/renderer.js';
 import { dropLoot } from './loot.js';
-import { spawnMonster } from './monsters.js';
+import { riseMonster, spawnMonster } from './monsters.js';
 import { recalc } from './player.js';
 import { log, toast } from '../ui/log.js';
 import { BIOMES } from '../world/biomes.js';
@@ -53,7 +53,7 @@ function spawnPack(size, at, opt) {
     if (!q) continue;
     const m = spawnMonster(rand() < 0.7 ? kind : pick(B.monsters), q.x, q.z, T.lvl + Math.floor(rand() * 4), { pack, elite: !!opt.elite && i === 0 });
     if (opt.aggro) m.aggro = true;
-    if (opt.puff) emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 });
+    if (opt.puff) { emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 }); riseMonster(m); }
     out.push(m);
   }
   return out;
