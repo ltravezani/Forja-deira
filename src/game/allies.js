@@ -62,7 +62,7 @@ export function updateAllies(dt) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
       G.ch.gold += a.gold;
-      log('Pet voltou com ' + fmt(a.gold) + ' Gold.', 'loot');
+      log('Pet voltou com ' + fmt(a.gold) + ' de Ouro.', 'loot');
       emit(a.x, 0.5, a.z, { n: 20, color: 0xffd24a, speed: 3, up: 2, life: 0.7, size: 0.9 });
       Sfx.coin();
     }

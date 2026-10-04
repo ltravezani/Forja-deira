@@ -12,7 +12,8 @@ const matCache = new Map();
  */
 function stdMat(color, emissive, ei, o) {
   o = o || {};
-  const m = new THREE.MeshToonMaterial({ color, flatShading: !!o.flat });
+  // MeshToonMaterial não tem flatShading (só gerava aviso no console); "flat" segue aceito e ignorado
+  const m = new THREE.MeshToonMaterial({ color });
   if (o.map) { m.map = o.map.map; m.normalMap = o.map.normalMap; m.normalScale.setScalar((o.nscale || 0.8) * 0.55); }
   m.emissive = new THREE.Color(emissive || 0x000000);
   m.emissiveIntensity = ei || (emissive ? 1 : 0);

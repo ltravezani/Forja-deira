@@ -6,6 +6,8 @@ import { G, persist, S, SAVE_KEY, UI } from '../core/state.js';
 import { $, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
+import { log } from './log.js';
+import { applyUiScale } from './touch.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
 import { toggleAutoSkill } from '../game/automation.js';
@@ -69,7 +71,14 @@ function paneAction(e) {
     case 'autoskill': toggleAutoSkill(b.dataset.id); break;
     case 'autoLoot': ch.autoLoot = b.dataset.v === '1'; break;
     case 'autoPetSell': ch.autoPetSell = b.dataset.v === '1'; break;
-    case 'node': ch.tree[b.dataset.id] = (ch.tree[b.dataset.id] || 0) + 1; recalc(); break;
+    case 'node': {
+      const nid = b.dataset.id, r = (ch.tree[nid] || 0) + 1;
+      ch.tree[nid] = r; recalc(); Sfx.loot(2);
+      const nm = b.querySelector('b');
+      log('Árvore de maestria: ' + (nm ? nm.textContent : 'nó') + ' agora no rank ' + r + '/5.', 'sys');
+      break;
+    }
+    case 'techToggle': UI.techOpen = !UI.techOpen; break;
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
@@ -109,5 +118,22 @@ export function initPaneActions() {
   // clique fora fecha o menu de contexto
   window.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctxMenu')) ContextMenu.close(); }, true);
 
+  // controles deslizantes de Opções: aplicam ao arrastar e salvam ao soltar
+  const RANGES = {
+    sfxVol: (v) => { S.settings.sfxVol = v; Sfx.vol = v / 100; },
+    musicVol: (v) => { S.settings.musicVol = v; Music.setVolume(v / 100); },
+    uiScale: (v) => { S.settings.uiScale = v; applyUiScale(S.settings); },
+  };
+  $('#pane').addEventListener('input', (e) => {
+    const f = RANGES[e.target.id];
+    if (!f) return;
+    const v = +e.target.value;
+    f(v);
+    const out = e.target.nextElementSibling;
+    if (out) out.textContent = v + '%';
+  });
+  $('#pane').addEventListener('change', (e) => {
+    if (RANGES[e.target.id]) { persist(); if (e.target.id === 'sfxVol') Sfx.coin(); }
+  });
   $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }

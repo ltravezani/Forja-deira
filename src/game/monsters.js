@@ -8,7 +8,7 @@ import { Sfx } from '../engine/audio.js';
 import { emit, spawnRing } from '../engine/effects.js';
 import { shake, world } from '../engine/renderer.js';
 import { hurtPlayer } from './combat.js';
-import { AFFIX, MON } from './data.js';
+import { AFFIX, MON, monsterName } from './data.js';
 import { face, stepToward, turn } from './movement.js';
 import { spawnProjectile } from './projectiles.js';
 import { inView } from './world.js';
@@ -70,7 +70,7 @@ export function spawnMonster(kind, x, z, level, opt) {
   model.root.rotation.y = rand() * 6.28;
   world.add(model.root);
   const m = {
-    id: G.nextMonId++, kind, T, name: (affix ? affix.name + ' ' : '') + T.name, level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
+    id: G.nextMonId++, kind, T, name: monsterName(T, affix), level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
     x, z, homeX: x, homeZ: z, rot: model.root.rotation.y, model, speed: T.speed * (affix && affix.speed ? affix.speed : 1),
     range: T.range, atkT: T.atkT, atkCd: rand(), atkWind: 0, attackAnim: 0, aggro: false, pack: opt.pack || 0,
     elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0, riseUntil: 0,

@@ -102,8 +102,8 @@ export function enterDungeon(biome, floor) {
     pack++;
   });
   G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
-  setZoneText(B.name + ' · Andar ' + floor, 'Monstros nv ' + lvl + '–' + (lvl + 6) + ' · seed ' + R.hex(seed));
-  log('Você entrou em ' + B.name + ', andar ' + floor + '. Seed pública ' + R.hex(seed) + '.', 'sys');
+  setZoneText(B.name + ' · Andar ' + floor, 'Monstros nv ' + lvl + '–' + (lvl + 6));
+  log('Você entrou em ' + B.name + ', andar ' + floor + '.', 'sys');
   toast(B.name, 'Andar ' + floor);
   persist();
 }
@@ -170,7 +170,7 @@ export function enterEden() {
   placePlayer(G.L);
   spawnEden(G.L, entry);
   setZoneText(BIOMES.eden.name, 'Monstros nv ' + entry + '+ · Guardião do Éden nv ' + R.edenLevel(entry, 'boss'));
-  log('Você entrou no Éden (seed ' + R.hex(seed) + '). Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
+  log('Você entrou no Éden. Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
   toast('O Éden', 'Escolha um caminho: Floresta, Raízes ou Rio');
   persist();
 }

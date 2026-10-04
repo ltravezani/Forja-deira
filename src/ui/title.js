@@ -2,7 +2,7 @@
 // Prévia 3D do personagem no centro da tela de título.
 import { disposeModel } from '../art/models.js';
 import { G, persist, S, UI } from '../core/state.js';
-import { $, esc, fmt, R, TILE } from '../core/util.js';
+import { $, esc, fmt, R, TILE, touchUI } from '../core/util.js';
 import { world } from '../engine/renderer.js';
 import { cpOf } from '../game/inventory.js';
 import { buildCharacterModel } from '../game/player.js';
@@ -51,18 +51,26 @@ export function renderTitle() {
   const ch = S.chars[UI.titleIdx];
   const conf = UI.confirmDel === UI.titleIdx;
   $('#tCard').innerHTML = '<div class="t-name">' + esc(ch.name) + '</div>' +
-    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.gold) + ' Gold</div>' +
+    '<div class="t-cls"><b style="color:' + R.CLASSES[ch.cls].color + '">' + esc(R.className(ch)) + '</b> · Nível <b>' + ch.level + '</b>' + (ch.resets ? ' · ' + ch.resets + ' reset' + (ch.resets > 1 ? 's' : '') : '') + ' · ' + fmt(ch.gold) + ' de Ouro</div>' +
     '<div class="t-cp">CP ' + fmt(cpOf(ch)) + '</div>' +
     '<button class="btn gold t-play" data-t="play">Entrar no jogo</button>' +
     (n > 1 ? '<div class="t-dots">' + S.chars.map((_, i) => '<i class="' + (i === UI.titleIdx ? 'on' : '') + '"></i>').join('') + '</div>' : '') +
     '<div class="t-sec"><button class="t-link" data-t="new"' + (n >= 5 ? ' disabled title="Limite de 5 personagens"' : '') + '>+ Criar novo personagem</button><button class="t-link danger" data-t="del">' + (conf ? 'Confirmar exclusão' : 'Excluir') + '</button></div>';
   titlePreview(ch);
 }
+/** Nome do personagem: 3 a 12 letras (com acento), números ou _; sem espaços nem símbolos (× e ÷ ficam de fora). */
+export function nameProblem(name) {
+  if (/\s/.test(name)) return 'O nome não pode ter espaços. Use 3 a 12 letras, números ou _ (ex.: Elfa_2).';
+  if (name.length < 3 || name.length > 12) return 'O nome precisa ter de 3 a 12 caracteres (agora tem ' + name.length + ').';
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ0-9_]+$/.test(name)) return 'Use só letras, números ou _ (sem símbolos como - . × ÷).';
+  return '';
+}
 function titleStep(d) { UI.titleIdx += d; UI.confirmDel = -1; renderTitle(); }
 function createChar() {
   const name = $('#nameInput').value.trim();
   const err = $('#createErr');
-  if (!/^[A-Za-zÀ-ÿ0-9_]{3,12}$/.test(name)) { err.textContent = 'Use 3 a 12 letras, números ou _.'; return; }
+  const v = nameProblem(name);
+  if (v) { err.textContent = v; return; }
   if (S.chars.some((c) => c.name.toLowerCase() === name.toLowerCase())) { err.textContent = 'Já existe um personagem com esse nome.'; return; }
   if (S.chars.length >= 5) { err.textContent = 'Limite de 5 personagens neste navegador.'; return; }
   const ch = R.newCharacter(name, UI.pickedClass);
@@ -76,7 +84,15 @@ function createChar() {
 }
 
 /** Tela de título: seleção, criação e teclado. */
+/** Rodapé do título: controles de teclado e mouse, ou de toque. */
+function titleFootHelp() {
+  const el = $('#tFootHelp');
+  if (el) el.textContent = touchUI()
+    ? 'Toque para andar e atacar · botões à direita: habilidades · à esquerda: poções e Coletar · dois dedos: zoom'
+    : 'Clique ou WASD move · clique ataca · 1–6 e botão direito: habilidades · Q/E poções · Espaço coleta · T portal · Alt mostra itens';
+}
 export function initTitle() {
+  titleFootHelp();
   $('#roster').addEventListener('click', (e) => { const b = e.target.closest('[data-cls]'); if (b && !b.disabled) { UI.pickedClass = b.dataset.cls; renderTitle(); } });
   $('#tCard').addEventListener('click', (e) => {
     const b = e.target.closest('[data-t]');

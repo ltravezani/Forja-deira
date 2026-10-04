@@ -1,7 +1,8 @@
-// ---------- mochila, poções, Combat Points e auto-equipar ----------
+// ---------- mochila, poções, Pontos de Combate (CP) e auto-equipar ----------
 import { CONFIG } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
-import { fmt, R } from '../core/util.js';
+import { dec, fmt, R } from '../core/util.js';
+import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { buildPlayerModel, recalc } from './player.js';
@@ -11,10 +12,10 @@ import { log } from '../ui/log.js';
 /** Capacidade da mochila (células). */
 export const BAG_SIZE = CONFIG.bag.size;
 
-// ---------- CP (Combat Points) e auto-equipar ----------
+// ---------- CP (Pontos de Combate) e auto-equipar ----------
 /** CP do personagem sem buffs temporários (valor estável para comparar equipamentos). */
 export function cpOf(ch) { return R.combatPower(R.deriveStats(ch, [])); }
-export function fmtCP(v) { return v >= 1e6 ? (v / 1e6).toFixed(1).replace('.0', '') + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v); }
+export function fmtCP(v) { return v >= 1e6 ? dec(Math.round(v / 1e5) / 10) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? dec(Math.round(v / 100) / 10) + 'k' : String(v); }
 /** Pode ser usado por esta classe (independe de requisito de atributo). */
 export function classOk(it) { return R.canUse(G.ch.cls, it); }
 export function reqOk(it) {
@@ -47,6 +48,8 @@ export function equipFromBag(idx, quiet) {
     const before = G.cp;
     recalc(); buildPlayerModel();
     const d = G.cp - before;
+    Sfx.loot(1);
+    log('Equipou ' + R.itemName(it) + (d ? ' (' + (d > 0 ? '+' : '') + fmt(d) + ' CP)' : '') + '.', 'loot');
     if (d) floatText(G.player.x, 3, G.player.z, (d > 0 ? '+' : '') + fmt(d) + ' CP', d > 0 ? 'heal' : 'info');
   }
   return true;

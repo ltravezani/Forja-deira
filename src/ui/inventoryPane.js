@@ -4,7 +4,7 @@
 // equipamento muda. Seleção, tooltip e menu de contexto ficam em itemTooltip.js.
 import { refineColor } from '../art/items.js';
 import { G, UI } from '../core/state.js';
-import { esc, fmt, R } from '../core/util.js';
+import { esc, fmt, R, touchUI } from '../core/util.js';
 import { autoEquipOn, BAG_SIZE, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
 import { petSellable } from '../game/allies.js';
 import { CharPreview } from './charPreview.js';
@@ -125,14 +125,14 @@ export const InventoryUI = {
   root: null,
   skeleton() {
     return '<div class="inv" id="invRoot">' +
-      '<h3 class="inv-h">Inventário <span class="cpbadge" id="invCP" title="Combat Points: poder total do personagem"></span></h3>' +
+      '<h3 class="inv-h">Inventário <span class="cpbadge" id="invCP" title="Pontos de Combate (CP): poder total do personagem"></span></h3>' +
       '<div class="inv-cols"><section class="inv-char" aria-label="Personagem e equipamento">' + EquipmentPanel.skeleton() + '</section>' +
       '<section class="inv-bag" aria-label="Mochila">' +
-      '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> Gold</span><span class="ups" id="bagUps"></span></div>' +
+      '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> de Ouro</span><span class="ups" id="bagUps"></span></div>' +
       '<div class="btabs" id="bagFilters" role="group" aria-label="Filtrar mochila"></div>' +
       '<div class="bag" id="bagGrid"></div>' +
       '<div class="row invtools" id="invTools"></div>' +
-      '<p class="note tip">Toque/clique seleciona · duplo equipa ou usa · botão direito ou toque longo abre o menu · arraste para equipar ou guardar.</p>' +
+      '<p class="note tip">' + (touchUI() ? 'Toque seleciona · toque duplo equipa ou usa · toque longo abre o menu · arraste para equipar ou guardar.' : 'Clique seleciona · duplo clique equipa ou usa · botão direito abre o menu · arraste para equipar ou guardar.') + '</p>' +
       '</section></div></div>';
   },
   mount(pane) {

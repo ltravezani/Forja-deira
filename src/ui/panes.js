@@ -1,10 +1,11 @@
 // ---------- painéis Personagem, Habilidades, Drops e Opções ----------
 import { gltfEnabled, gltfStats } from '../art/gltfModels.js';
 import { Cloud } from '../core/cloud.js';
-import { CONFIG } from '../core/config.js';
+import { CONFIG, uiScale } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
-import { esc, fmt, R } from '../core/util.js';
-import { MUSIC_LEVELS, musicLevel } from '../engine/music.js';
+import { dec, esc, fmt, R, touchUI } from '../core/util.js';
+import { sfxVolume } from '../engine/audio.js';
+import { musicVolume } from '../engine/music.js';
 import { bloomOn } from '../engine/renderer.js';
 import { autoSkillAllowed, autoSkillOn } from '../game/automation.js';
 import { skillUnlocked } from '../game/skills.js';
@@ -24,35 +25,35 @@ export function paneChar() {
   });
   h += '<div class="row" style="margin-top:8px"><button class="btn" data-act="auto"' + (ch.points ? '' : ' disabled') + '>Distribuir automaticamente</button><span class="note">Perfil ' + esc(C.tiers[0]) + ': ' + Object.entries(C.auto).map(([k, v]) => statLabel(k).slice(0, 3) + ' ' + Math.round(v * 100) + '%').join(' · ') + '</span></div>';
   h += '<h4>Combate</h4><dl class="kv">' +
-    '<dt>Combat Points</dt><dd class="cpv">' + fmt(G.cp || 0) + '</dd>' +
+    '<dt>Pontos de Combate (CP)</dt><dd class="cpv">' + fmt(G.cp || 0) + '</dd>' +
     '<dt>HP / MP / AG</dt><dd>' + fmt(st.maxHp) + ' / ' + fmt(st.maxMp) + ' / ' + fmt(st.maxAg) + '</dd>' +
     '<dt>' + (ch.cls === 'dw' || C.magic ? 'Dano mágico' : 'Dano') + '</dt><dd>' + fmt(st.minDmg) + ' ~ ' + fmt(st.maxDmg) + '</dd>' +
     '<dt>Defesa</dt><dd>' + fmt(st.def) + '</dd>' +
-    '<dt>Velocidade de ataque</dt><dd>' + st.atkSpeed + ' (' + st.attackInterval.toFixed(2) + 's)</dd>' +
-    '<dt>Crítico / Excelente</dt><dd>' + st.critPct + '% / ' + st.excPct + '%</dd>' +
-    '<dt>Bônus de dano</dt><dd>+' + st.dmgPct + '%</dd>' +
-    '<dt>Redução de dano</dt><dd>' + st.dmgRed.toFixed(1) + '%</dd>' +
-    '<dt>Multiplicador de habilidade</dt><dd>×' + st.skillMul.toFixed(3) + '</dd>' +
-    '<dt>Encontrar Magia (MF)</dt><dd>' + st.mf + '% <span class="note">(efetivo p/ raros ' + R.mfEffective(st.mf).toFixed(0) + '%)</span></dd>' +
+    '<dt>Velocidade de ataque</dt><dd>' + st.atkSpeed + ' (' + dec(st.attackInterval, 2) + 's)</dd>' +
+    '<dt>Crítico / Excelente</dt><dd>' + dec(st.critPct) + '% / ' + dec(st.excPct) + '%</dd>' +
+    '<dt>Bônus de dano</dt><dd>+' + dec(st.dmgPct) + '%</dd>' +
+    '<dt>Redução de dano</dt><dd>' + dec(st.dmgRed, 1) + '%</dd>' +
+    '<dt>Multiplicador de habilidade</dt><dd>×' + dec(st.skillMul, 3) + '</dd>' +
+    '<dt>Encontrar Magia</dt><dd>' + dec(st.mf) + '% <span class="note">(efetivo p/ raros ' + Math.round(R.mfEffective(st.mf)) + '%)</span></dd>' +
     '<dt>EXP para o próximo nível</dt><dd>' + fmt(R.expToNext(ch.level) - ch.exp) + '</dd></dl>';
   h += '<h4>Evolução de classe</h4>';
   h += '<p>' + C.tiers.map((t, i) => (i === ch.tier ? '<b style="color:var(--gold)">' + t + '</b>' : t)).join(' → ') + '</p>';
   h += ev.next ? '<p class="note">Próxima: ' + esc(ev.name) + ' — requer nível ' + ev.next.level + ', ' + ev.next.bosses + ' chefes' + (ev.next.resets ? ', ' + ev.next.resets + ' reset' : '') + '. ' + (ev.ok ? '<b style="color:var(--ok)">Pronto: fale com o Mestre Orvan.</b>' : 'Falta: ' + esc(ev.reasons.join(', ')) + '.') + '</p>' : '<p class="note">Evolução máxima alcançada.</p>';
-  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos e árvore de maestria voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' Gold. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
+  h += '<h4>Reset</h4><p class="note">Nível volta a 1, atributos e árvore de maestria voltam à base e você recebe ' + fmt(R.RATES.resetPoints) + ' pontos × resets (+' + R.RATES.resetBonusPerLevel + ' por nível acima de 400). Custo ' + fmt(rs.cost) + ' de Ouro. ' + (rs.ok ? '<b style="color:var(--ok)">Disponível com o Mestre Orvan.</b>' : 'Falta: ' + esc(rs.reasons.join(', ')) + '.') + '</p>';
   return h;
 }
 
 export function paneSkills() {
   const ch = G.ch, st = G.st;
   const pts = R.treePoints(ch) - R.treeSpent(ch);
-  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.</p>' +
+  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. ' + (touchUI() ? 'Toque no botão da habilidade para lançá-la no monstro mais próximo (ou à frente do herói).' : 'Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.') + '</p>' +
     '<p class="note"><b>Auto</b>: a habilidade sai sozinha quando houver um monstro ao alcance (o herói não anda sozinho; Teleporte e investidas ficam de fora).</p>';
   R.skillsFor(ch.cls).forEach((id) => {
     const sk = R.SKILLS[id];
     const ok = skillUnlocked(id);
     const inBar = ch.skillBar.indexOf(id);
     const c = R.skillCost(st, sk);
-    h += '<div class="skill' + (ok ? '' : ' locked') + '"><img class="skic" src="' + skillIconURI(id) + '" alt=""><div><span class="t">' + esc(sk.name) + '</span> <span class="c">· MP ' + c.mp + ' · AG ' + c.ag + ' · recarga ' + sk.cd + 's' + (sk.mult ? ' · ×' + sk.mult : '') + (st.boosts[id] ? ' · +' + st.boosts[id] + '%' : '') + '</span><div class="c">' + esc(sk.desc) + '</div>' +
+    h += '<div class="skill' + (ok ? '' : ' locked') + '"><img class="skic" src="' + skillIconURI(id) + '" alt=""><div><span class="t">' + esc(sk.name) + '</span> <span class="c">· MP ' + c.mp + ' · AG ' + c.ag + ' · recarga ' + dec(sk.cd) + 's' + (sk.mult ? ' · ×' + dec(sk.mult) : '') + (st.boosts[id] ? ' · +' + st.boosts[id] + '%' : '') + '</span><div class="c">' + esc(sk.desc) + '</div>' +
       (ok ? '' : '<div class="c" style="color:var(--danger)">Requer nível ' + sk.lvl + (sk.tier ? ' e ' + R.CLASSES[ch.cls].tiers[sk.tier] : '') + '</div>') + '</div><div>' +
       (ok && autoSkillAllowed(id) ? '<button class="btn sm' + (autoSkillOn(id) ? ' gold' : '') + '" data-act="autoskill" data-id="' + id + '" aria-pressed="' + autoSkillOn(id) + '" title="Lançar sozinha perto de monstros">Auto: ' + (autoSkillOn(id) ? 'sim' : 'não') + '</button> ' : '') +
       (ok ? (inBar >= 0 ? '<button class="btn sm" data-act="unbar" data-id="' + id + '">Slot ' + (inBar + 1) + ' ✕</button>' : '<button class="btn sm" data-act="bar" data-id="' + id + '"' + (ch.skillBar.length >= 6 ? ' disabled' : '') + '>Pôr na barra</button>') : '') + '</div></div>';
@@ -64,7 +65,7 @@ export function paneSkills() {
       const nid = R.treeNodeId(ch.cls, bi, ni);
       const r = ch.tree[nid] || 0;
       const k = n[0];
-      const lab = k.indexOf('skill:') === 0 ? R.SKILLS[k.slice(6)].name + ' +' + n[1] + '%' : { dmgPct: 'Dano', critPct: 'Crítico', hpPct: 'HP', defPct: 'Defesa', lifeSteal: 'Roubo de vida', agRegen: 'Regen. AG', atkSpeedPct: 'Vel. ataque', excPct: 'Excelente', costPct: 'Custo MP/AG', cdPct: 'Recarga', mpPct: 'MP', healPct: 'Cura', moveSpeedPct: 'Movimento', mfPct: 'Encontrar Magia' }[k] + ' ' + (n[1] > 0 ? '+' : '') + n[1] + '%';
+      const lab = k.indexOf('skill:') === 0 ? R.SKILLS[k.slice(6)].name + ' +' + n[1] + '%' : { dmgPct: 'Dano', critPct: 'Crítico', hpPct: 'HP', defPct: 'Defesa', lifeSteal: 'Roubo de vida', agRegen: 'Regen. AG', atkSpeedPct: 'Vel. ataque', excPct: 'Excelente', costPct: 'Custo MP/AG', cdPct: 'Recarga', mpPct: 'MP', healPct: 'Cura', moveSpeedPct: 'Movimento', mfPct: 'Encontrar Magia' }[k] + ' ' + (n[1] > 0 ? '+' : '') + dec(n[1]) + '%';
       h += '<button class="node' + (r ? ' has' : '') + '" data-act="node" data-id="' + nid + '"' + (pts > 0 && r < 5 ? '' : ' disabled') + '><span class="rk">' + r + '/5</span><b>' + esc(n[2]) + '</b><span>' + esc(lab) + ' por rank</span></button>';
     });
     h += '</div>';
@@ -86,13 +87,18 @@ export function paneLoot() {
     const st = G.st;
     const rows = ['comum', 'magico', 'excelente', 'ancestral', 'lendario'];
     const t0 = R.rarityTable(0, 'normal'), tn = R.rarityTable(st.mf, 'normal'), te = R.rarityTable(st.mf, 'elite'), tb = R.rarityTable(st.mf, 'boss');
-    const pc = (v) => (v * 100 < 0.1 ? (v * 100).toFixed(3) : (v * 100).toFixed(2)) + '%';
-    h += '<p>Seu Encontrar Magia: <b>' + st.mf + '%</b> · efetivo para Excelente+ <b>' + R.mfEffective(st.mf).toFixed(1) + '%</b> (retorno decrescente, teto suave ' + R.MF_SOFTCAP + ').</p>';
+    const pc = (v) => dec(v * 100, v * 100 < 0.1 ? 3 : 2) + '%';
+    h += '<p>Seu Encontrar Magia: <b>' + dec(st.mf) + '%</b> · efetivo para Excelente+ <b>' + dec(R.mfEffective(st.mf), 1) + '%</b> (retorno decrescente, teto suave ' + R.MF_SOFTCAP + ').</p>';
     h += '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Raridade (dado que caiu item)</th><th>Base</th><th>Você</th><th>Elite</th><th>Chefe</th></tr></thead><tbody>' +
       rows.map((r) => '<tr><td style="color:' + R.RARITY[r].color + '">' + R.RARITY[r].name + '</td><td>' + pc(t0[r]) + '</td><td>' + pc(tn[r]) + '</td><td>' + pc(te[r]) + '</td><td>' + pc(tb[r]) + '</td></tr>').join('') + '</tbody></table></div>';
-    h += '<p class="note">Chance de item por monstro comum: ' + (R.DROP_CHANCE.item * (1 + st.mf / 400) * 100).toFixed(1) + '%. Elites soltam 1–2 itens garantidos; chefes 3–5. 60% dos itens favorecem sua classe.</p>';
-    h += '<p class="note">Cada drop usa seed = hash(seed do andar, id do monstro, contador de abates): a mesma seed sempre gera o mesmo item.</p>';
-    h += '<h4>Últimos drops</h4><div class="list">' + (G.dropLog.length ? G.dropLog.slice(0, 15).map((d) => '<div class="li"><span style="color:' + R.RARITY[d.rarity].color + '">' + esc(d.name) + '</span><span class="a note">' + d.src + '</span><span class="s mono">seed ' + d.seed + (d.roll != null ? ' · rolagem ' + d.roll.toFixed(5) : '') + ' · MF ' + d.mf + '%</span></div>').join('') : '<p class="note">Mate alguns monstros.</p>') + '</div>';
+    h += '<p class="note">Chance de item por monstro comum: ' + dec(R.DROP_CHANCE.item * (1 + st.mf / 400) * 100, 1) + '%. Elites soltam 1–2 itens garantidos; chefes 3–5. 60% dos itens favorecem sua classe.</p>';
+    const SRC = { normal: 'monstro', elite: 'elite', boss: 'chefe', mini: 'mini chefe', chest: 'baú', secret: 'tesouro' };
+    const tech = !!UI.techOpen;
+    h += '<h4>Últimos drops</h4><div class="list">' + (G.dropLog.length ? G.dropLog.slice(0, 15).map((d) => '<div class="li"><span style="color:' + R.RARITY[d.rarity].color + '">' + esc(d.name) + '</span><span class="a note">' + esc(SRC[d.src] || d.src) + '</span>' +
+      (tech ? '<span class="s mono">seed ' + d.seed + (d.roll != null ? ' · rolagem ' + dec(d.roll, 5) : '') + ' · Encontrar Magia ' + dec(d.mf) + '%</span>' : '') + '</div>').join('') : '<p class="note">Mate alguns monstros.</p>') + '</div>';
+    // seed e rolagem só interessam a quem audita o sorteio: ficam num bloco recolhido
+    h += '<button class="btn sm techbtn" data-act="techToggle" aria-expanded="' + tech + '">' + (tech ? '▾' : '▸') + ' Detalhes técnicos</button>' +
+      (tech ? '<p class="note">Cada drop usa seed = hash(seed do andar, id do monstro, contador de abates): a mesma seed sempre gera o mesmo item. A rolagem é o sorteio de raridade (0 a 1) comparado com a tabela acima.</p>' : '');
   }
   return h;
 }
@@ -105,14 +111,18 @@ export function paneOpts() {
     '<button class="btn" data-act="toggleBloom">Brilho (bloom): ' + (bloomOn() ? 'ligado' : 'desligado') + '</button>' +
     (gltfStats().ready ? '<button class="btn" data-act="toggleAnimChars">Personagens: ' + (gltfEnabled() ? 'animados' : 'simples') + '</button>' : '') + '</div>' +
     '<p class="note">Personagens simples são mais leves; monstros e moradores trocam de modelo na próxima área.</p>';
-  h += '<h4>Interface</h4><div class="row"><button class="btn" data-act="toggleSound">Som: ' + (s.sound ? 'ligado' : 'desligado') + '</button><button class="btn" data-act="cycleMusic">Música: ' + MUSIC_LEVELS[musicLevel(s)].name + '</button><button class="btn" data-act="toggleLabels">Nomes de itens: ' + (s.labels ? 'todos' : 'só raros (Alt mostra todos)') + '</button></div>';
+  const vol = (id, label, v) => '<label class="optrange"><span>' + label + '</span><input type="range" id="' + id + '" min="0" max="100" step="5" value="' + v + '" aria-label="' + label + '"><b class="num">' + v + '%</b></label>';
+  h += '<h4>Som</h4><div class="row"><button class="btn" data-act="toggleSound">Som: ' + (s.sound ? 'ligado' : 'desligado') + '</button></div>' +
+    vol('sfxVol', 'Efeitos', sfxVolume(s)) + vol('musicVol', 'Música', musicVolume(s));
+  h += '<h4>Interface</h4><div class="row"><button class="btn" data-act="toggleLabels">Nomes de itens: ' + (s.labels ? 'todos' : 'só raros (' + (touchUI() ? 'botão Itens' : 'Alt') + ' mostra todos)') + '</button></div>' +
+    '<label class="optrange"><span>Escala da interface</span><input type="range" id="uiScale" min="90" max="130" step="10" value="' + uiScale(s) + '" aria-label="Escala da interface"><b class="num">' + uiScale(s) + '%</b></label>';
   const shakeLv = s.shake == null ? 1 : s.shake;
   h += '<h4>Jogabilidade</h4><div class="row">' +
     '<button class="btn" data-act="cycleShake">Tremor de tela: ' + ({ 0: 'desligado', 0.5: 'suave', 1: 'normal' }[shakeLv] || 'normal') + '</button>' +
     '<button class="btn" data-act="toggleHitStop">Pausa de impacto: ' + (s.hitStop === false ? 'desligada' : 'ligada') + '</button>' +
     '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button></div>' +
-    '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. Esc pausa o jogo.</p>';
-  h += '<h4>Câmera</h4><p class="note">Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima. A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica (Home)</button></div>';
+    '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. ' + (touchUI() ? 'O botão de pausa fica no menu do topo; fora da cidade, abrir um painel pausa o jogo.' : 'Esc pausa o jogo.') + '</p>';
+  h += '<h4>Câmera</h4><p class="note">' + (touchUI() ? 'Afaste ou junte dois dedos na tela para aproximar ou afastar a câmera.' : 'Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima.') + ' A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica' + (touchUI() ? '' : ' (Home)') + '</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
   h += '<p class="note">' + (Cloud.user ? 'Conectado à nuvem como <b>' + esc(Cloud.user.email) + '</b>: o progresso sobe sozinho a cada minuto. Apagar os dados locais não apaga o save da nuvem.' : 'Para guardar o progresso na nuvem, use o botão "Salvar na nuvem" na tela inicial.') + '</p>';
   h += '<p class="note" style="margin-top:14px">Protótipo Forja-deira v' + R.VERSION + ' · Three.js r160 · jogo offline. Progresso salvo neste navegador' + (Cloud.user ? ' e na nuvem' : '') + '.</p>';

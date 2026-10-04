@@ -334,6 +334,23 @@
     ancestral: { name: 'Ancestral', color: '#3fd6c9', order: 3 },
     lendario: { name: 'Lendário', color: '#ff9a2e', order: 4 },
   };
+  /** Adjetivo da raridade concordando com o nome base (g: 'm'|'f'; pl: plural). Comum não aparece no nome. */
+  const RARITY_ADJ = {
+    magico: { m: 'Mágico', f: 'Mágica', mp: 'Mágicos', fp: 'Mágicas' },
+    excelente: { m: 'Excelente', f: 'Excelente', mp: 'Excelentes', fp: 'Excelentes' },
+    ancestral: { m: 'Ancestral', f: 'Ancestral', mp: 'Ancestrais', fp: 'Ancestrais' },
+    lendario: { m: 'Lendário', f: 'Lendária', mp: 'Lendários', fp: 'Lendárias' },
+  };
+  function rarityAdj(r, g, pl) { const a = RARITY_ADJ[r]; return a ? a[(g || 'm') + (pl ? 'p' : '')] : ''; }
+  /** Gênero dos nomes base de armas (as não listadas são masculinas: Cajado, Arco). */
+  const FEM_WEAPON = /^(Espada|Lâmina|Katana|Besta)\b/;
+  /** Gênero e número do nome base de um equipamento. */
+  function itemGender(it) {
+    if (it.slot === 'weapon') return { g: FEM_WEAPON.test(WEAPON_NAMES[it.cls][it.tier]) ? 'f' : 'm', pl: false };
+    if (it.slot === 'wings' || it.slot === 'gloves' || it.slot === 'boots') return { g: 'f', pl: true };
+    if (it.slot === 'armor') return { g: 'f', pl: false };
+    return { g: 'm', pl: false }; // elmo, anel, colar
+  }
   const EXC_WEAPON = {
     excRate: { t: 'Chance de dano excelente +10%', s: { excPct: 10 } },
     dmgLvl: { t: 'Dano +nível/20', s: { dmgLvl: 1 } },
@@ -348,7 +365,7 @@
     dmgRed: { t: 'Redução de dano +4%', s: { dmgRed: 4 } },
     reflect: { t: 'Reflexão de dano +5%', s: { reflect: 5 } },
     defRate: { t: 'Taxa de defesa +10%', s: { defPct: 10 } },
-    gold30: { t: 'Gold obtido +30%', s: { goldPct: 30 } },
+    gold30: { t: 'Ouro obtido +30%', s: { goldPct: 30 } },
   };
   const LEGEND = {
     mf: { t: 'Encontrar Magia +40%', s: { mf: 40 } },
@@ -357,10 +374,10 @@
     haste: { t: 'Recarga de habilidades -10%', s: { cdPct: -10 } },
   };
   const JEWELS = {
-    bless: { name: 'Jewel of Bless', color: '#8fd3ff', desc: 'Aprimora itens de +0 até +6 (100%).' },
-    soul: { name: 'Jewel of Soul', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
-    chaos: { name: 'Jewel of Chaos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
-    life: { name: 'Jewel of Life', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
+    bless: { name: 'Joia da Bênção', color: '#8fd3ff', desc: 'Aprimora itens de +0 até +6 (100%).' },
+    soul: { name: 'Joia da Alma', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
+    chaos: { name: 'Joia do Caos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
+    life: { name: 'Joia da Vida', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
   };
   const POTIONS = {
     hp: { name: 'Poção de Vida', pct: 0.3, flat: 60, price: 60 },
@@ -378,7 +395,7 @@
   const BUFF_POTIONS = ['spd', 'cdr', 'str', 'agi', 'vit', 'ene'];
   /** Talismãs: consumidos no Ferreiro. */
   const TALISMANS = {
-    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Jewel of Chaos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
+    luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Joia do Caos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
 
   /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
@@ -397,10 +414,12 @@
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
     else if (it.slot === 'pendant') base = PENDANT_NAMES[it.tier];
-    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)] + (it.stage ? ' Ascendidas' : '');
-    else base = PIECE[it.slot] + ' ' + (it.slot === 'armor' ? 'de ' : 'de ') + SET_NAMES[it.cls][it.tier];
-    const pre = it.rarity === 'comum' ? '' : RARITY[it.rarity].name + ' ';
-    return pre + base + (it.plus ? ' +' + it.plus : '');
+    else if (it.slot === 'wings') base = WING_NAMES[Math.min(it.tier, WING_NAMES.length - 1)];
+    else base = PIECE[it.slot] + ' de ' + SET_NAMES[it.cls][it.tier];
+    // adjetivo depois do nome, no gênero certo: "Katana Lendária", "Anel de Ferro Mágico"
+    const gn = itemGender(it);
+    const adj = it.rarity === 'comum' ? '' : ' ' + rarityAdj(it.rarity, gn.g, gn.pl);
+    return base + adj + (it.slot === 'wings' && it.stage ? ' Ascendidas' : '') + (it.plus ? ' +' + it.plus : '');
   }
   /** Requisito de atributo para equipar (sobe com o +nível). */
   function itemReq(it) {
@@ -467,7 +486,7 @@
     if (it.slot === 'pendant') L.push(['Dano', '+' + (2 + it.tier + pendantPlus(it)) + '%']);
     if (it.slot === 'wings') {
       const wb = wingBonus(it);
-      L.push(['Dano', '+' + wb.dmg + '%']); L.push(['Absorção', '+' + wb.red + '%']);
+      L.push(['Dano', '+' + wb.dmg + '%']); L.push(['Absorção', '+' + String(Math.round(wb.red * 10) / 10).replace('.', ',') + '%']);
       if (wb.hp) L.push(['HP máximo', '+' + wb.hp + '%']);
     }
     return L;
@@ -943,7 +962,7 @@
   function canReset(ch) {
     const reasons = [];
     if (ch.level < RATES.resetLevel) reasons.push('Nível ' + RATES.resetLevel + ' necessário');
-    if (ch.gold < resetGoldCost(ch.resets)) reasons.push(resetGoldCost(ch.resets).toLocaleString('pt-BR') + ' Gold necessários');
+    if (ch.gold < resetGoldCost(ch.resets)) reasons.push(resetGoldCost(ch.resets).toLocaleString('pt-BR') + ' de Ouro');
     if (ch.resets >= RATES.maxResets) reasons.push('Limite de resets atingido');
     return { ok: reasons.length === 0, reasons, cost: resetGoldCost(ch.resets) };
   }
@@ -958,6 +977,14 @@
     ch.points = ch.resets * RATES.resetPoints + extra;
     ch.tree = {}; // a árvore de maestria é zerada; os pontos voltam para redistribuir
     return { ok: true, points: ch.points };
+  }
+  /**
+   * Risco de enfrentar monstros de nível `monLevel` com um herói de nível `heroLevel`
+   * (cor do portal): 'easy' 40+ níveis abaixo (pouca EXP), 'ok' até 5 acima, 'hard' até 25, 'deadly' além disso.
+   */
+  function levelRisk(monLevel, heroLevel) {
+    const d = monLevel - heroLevel;
+    return d < -40 ? 'easy' : d <= 5 ? 'ok' : d <= 25 ? 'hard' : 'deadly';
   }
   function canEvolve(ch) {
     const next = EVOLUTION[ch.tier + 1];
@@ -987,13 +1014,13 @@
     expToNext, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
-    plusBonus, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
+    plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
-    canReset, applyReset, canEvolve, autoDistribute, today,
+    canReset, applyReset, levelRisk, canEvolve, autoDistribute, today,
   };
 });
 
