@@ -8,6 +8,8 @@ import { NPCS } from '../game/data.js';
 import { addToBag, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
+import { questEvent } from '../game/quests.js';
+import { openQuestBoard } from './questUi.js';
 import { fmtWait } from '../game/npcs.js';
 import { buildSlots, hudTick } from './hud.js';
 import { glyph, iconHtml } from './icons.js';
@@ -99,6 +101,8 @@ const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat
 const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
 export function openNpc(id) {
+  if (id === 'board') { openQuestBoard(); return; } // Quadro de Missões (ui/questUi.js)
+  questEvent('talk', id);
   if (G.openNpcId !== id || $('#modal').hidden) { UI.merchConfirm = null; UI.npcConfirm = null; }
   G.openNpcId = id;
   const ch = G.ch;

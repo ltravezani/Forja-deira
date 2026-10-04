@@ -36,11 +36,26 @@ export function spawnNpcs(L) {
     const npc = { id: n.id, D, x, z, model, label, phase: rand() * 6 };
     G.npcs.push(npc);
   });
+  if (L.notice) G.npcs.push(makeQuestBoard(L.notice.x * TILE, L.notice.z * TILE));
   if (L.tower) G.townTower = makeTownTower(L.tower.x * TILE, L.tower.z * TILE, L.town ? L.town.cx * TILE : 23 * TILE, L.town ? L.town.cz * TILE : 23 * TILE);
   // portal da cidade
   const pp = L.portal;
   if (pp) G.townPortal = makePortal(pp.x * TILE, pp.z * TILE, 0x9a7aff, 'Portal das Masmorras', () => openNpc('portal'));
   if (L.eden) G.edenPortal = makeEdenPortal(L.eden.x * TILE, L.eden.z * TILE);
+}
+/**
+ * Quadro de Missões: o quadro de avisos da praça (já desenhado pelo cenário)
+ * entra na lista de NPCs só com rótulo e posição: clicar leva até ele e abre as
+ * missões. `board` marca que não há modelo para animar nem liberar.
+ */
+function makeQuestBoard(x, z) {
+  const label = document.createElement('div');
+  label.className = 'label npc board';
+  label.innerHTML = 'Quadro de Missões<small>Missões diárias</small>';
+  const npc = { id: 'board', board: true, D: { name: 'Quadro de Missões' }, x, z, model: { root: new THREE.Group(), height: 2.4 }, label, phase: 0 };
+  label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
+  overlay.appendChild(label);
+  return npc;
 }
 /** Tempo restante no formato "2h 05min" (ou "12min", "40s"). */
 export function fmtWait(ms) {
@@ -185,6 +200,7 @@ export function targetNpc(npc) {
 /** NPCs ociosos: só animam quando estão na tela. */
 export function updateNpcs(dt) {
   for (const n of G.npcs) {
+    if (n.board) continue;
     const vis = inView(n.x, n.model.root.position.y + 1.5, n.z, 3);
     n.model.root.visible = vis;
     if (vis) animateModel(n.model, { t: G.time + n.phase, dt, moving: false, attack: 0 });
@@ -201,7 +217,7 @@ export function updatePortals(dt) {
 }
 /** Remove NPCs e portais (troca de zona), liberando modelos, materiais e rótulos. */
 export function clearNpcs() {
-  for (const n of G.npcs) { world.remove(n.model.root); if (n.model.mixer) disposeModel(n.model); else disposeObject(n.model.root, true); n.label.remove(); }
+  for (const n of G.npcs) { if (n.board) { n.label.remove(); continue; } world.remove(n.model.root); if (n.model.mixer) disposeModel(n.model); else disposeObject(n.model.root, true); n.label.remove(); }
   G.npcs.length = 0;
   for (const pt of allPortals()) removePortal(pt);
   removeTownTower(G.townTower);

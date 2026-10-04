@@ -17,6 +17,11 @@ import { townLifeCount } from './game/townlife.js';
 import { updateWorld } from './game/world.js';
 import { enterDungeon, enterEden, enterTower, enterTown, inSafe } from './game/zones.js';
 import { edenState } from './game/eden.js';
+import { spawnAlly } from './game/allies.js';
+import { tryDodge } from './game/dodge.js';
+import { questEvent } from './game/quests.js';
+import { openQuestBoard } from './ui/questUi.js';
+import { telegraphCircle, telegraphCone } from './engine/telegraph.js';
 import { towerState } from './game/tower.js';
 import { glyph, skillIconURI } from './ui/icons.js';
 import { drawWeaponIcons } from './art/weaponIcons.js';
@@ -31,5 +36,6 @@ export function installDebugHook(loopStats) {
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
     enterEden, edenState, towerState, lineClear, gltfHit, gltfRise,
+    tryDodge, questEvent, openQuestBoard, spawnAlly, telegraphCircle, telegraphCone,
   };
 }

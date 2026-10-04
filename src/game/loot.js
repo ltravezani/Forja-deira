@@ -10,6 +10,7 @@ import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
 import { addToBag, autoEquipOn, BAG_SIZE, classOk } from './inventory.js';
 import { pathTo } from './movement.js';
+import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { glyph } from '../ui/icons.js';
 import { log } from '../ui/log.js';
@@ -131,7 +132,7 @@ function removeLootVisual(l) {
 export function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
-  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
+  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else {

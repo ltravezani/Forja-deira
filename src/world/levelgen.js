@@ -266,7 +266,9 @@ export function genTown() {
   spot(pen.x0 - 1, cz - 3, [pen.x0 + 1, cz - 3]);
   put(cx + 14, cz + 7, 'trough', {}, true);
   // quadro de avisos e placa na entrada do portal
-  if (put(cx - 2, cz - 10, 'notice', {}, true)) spot(cx - 2, cz - 9, [cx - 2, cz - 10]);
+  // (também é o Quadro de Missões: game/npcs.js põe o rótulo e o clique)
+  const notice = put(cx - 2, cz - 10, 'notice', {}, true) ? { x: cx - 2, z: cz - 10 } : null;
+  if (notice) spot(cx - 2, cz - 9, [cx - 2, cz - 10]);
   put(cx + 4, cz - 8, 'signpost', {}, true);
   // mercadorias soltas perto das barracas
   put(cx + 7, cz - 10, 'sacks', { v: rnd() });
@@ -304,5 +306,5 @@ export function genTown() {
   ];
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }, eden])) grid[n.z * W + n.x] = 1;
-  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, isPath, spots, pen, bunting, town: { cx, cz } };
+  return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, notice, isPath, spots, pen, bunting, town: { cx, cz } };
 }

@@ -24,7 +24,7 @@ export function updateTitleScene(dt) {
     updateCamera(23 * TILE, 21 * TILE, dt);
     heroLight.position.set(46, 4, 44);
   }
-  for (const n of G.npcs) animateModel(n.model, { t: G.time + n.phase, moving: false });
+  for (const n of G.npcs) if (!n.board) animateModel(n.model, { t: G.time + n.phase, moving: false });
   const tp = G.townPortal;
   if (tp) {
     tp.ring.rotation.z += dt;

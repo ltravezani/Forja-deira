@@ -12,6 +12,7 @@ import { renderPaneIfChanged } from '../ui/drawer.js';
 import { hudTick } from '../ui/hud.js';
 import { updateOverlay } from '../ui/labels.js';
 import { drawMinimap } from '../ui/minimap.js';
+import { questUiTick } from '../ui/questUi.js';
 
 const T = { hud: 0, minimap: 0, save: 0, pane: 0 };
 
@@ -23,7 +24,7 @@ export function updatePlayScene(dt) {
   const sim = simDelta(dt);
   guard('mundo', updateWorld, sim);
   guard('rótulos', updateOverlay);
-  if ((T.hud -= dt) <= 0) { T.hud = L.hudInterval; guard('hud', hudTick); }
+  if ((T.hud -= dt) <= 0) { T.hud = L.hudInterval; guard('hud', hudTick); guard('missões', questUiTick); }
   if ((T.minimap -= dt) <= 0) { T.minimap = L.minimapInterval; guard('minimapa', drawMinimap); }
   if ((T.save += dt) > L.autosaveInterval) { T.save = 0; persist(); }
   if (G.autoEqT > 0 && (G.autoEqT -= dt) <= 0) { G.autoEqT = 0; if (autoEquipOn()) guard('auto-equipar', autoEquip, false); }

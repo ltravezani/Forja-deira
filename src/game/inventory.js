@@ -5,6 +5,7 @@ import { fmt, R } from '../core/util.js';
 import { emit } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { buildPlayerModel, recalc } from './player.js';
+import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 
@@ -132,10 +133,11 @@ export function usePotion(id) {
   if (id === 'hp' && G.hp >= G.st.maxHp) { say('HP cheio'); return; }
   if (id === 'mp' && G.mp >= G.st.maxMp) { say('MP cheio'); return; }
   G.potCd = G.time + 0.5;
-  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); return; }
+  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); questEvent('potion', id); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });
   p.qty--;
   if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1);
+  questEvent('potion', id);
 }

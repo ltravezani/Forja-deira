@@ -9,6 +9,7 @@ import { slashArc } from '../engine/combatfx.js';
 import { world } from '../engine/renderer.js';
 import { hitMonster } from './combat.js';
 import { face, stepToward, turn } from './movement.js';
+import { summonOverflow } from './summonCap.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 import { gy } from '../world/grid.js';
@@ -20,6 +21,8 @@ const UNDEAD = {
 };
 export function spawnAlly(kind, x, z, dur) {
   const U = UNDEAD[kind];
+  // limite por tipo (5 esqueletos, 2 cavaleiros): o novo substitui o mais antigo
+  for (const old of summonOverflow(G.allies, kind)) dismissAlly(old);
   const model = kind === 'pet'
     ? buildBeast({ fur: 0xe8883a, dark: 0x3a2a22, eye: 0x1a1a1a, tailColor: 0xfff0e0, bushy: true, scale: 0.62 })
     : U ? buildHumanoid(U.o)
@@ -109,6 +112,14 @@ export function updateAllies(dt) {
   }
 }
 
+/** Desfaz um aliado antes do tempo (some em fumaça). */
+function dismissAlly(a) {
+  const i = G.allies.indexOf(a);
+  if (i < 0) return;
+  emit(a.x, 0.6, a.z, { n: 20, color: UNDEAD[a.kind] ? 0xd8e8d0 : 0x8affb0, speed: 3, life: 0.5, size: 0.9 });
+  removeAlly(a);
+  G.allies.splice(i, 1);
+}
 function removeAlly(a) {
   world.remove(a.model.root);
   disposeModel(a.model);

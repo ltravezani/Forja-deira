@@ -62,6 +62,22 @@ export const CONFIG = {
     regenHpTown: 0.1, regenHpField: 0.012, regenHpDelay: 4,
     missChance: 0.05,
   },
+  // esquiva (Shift no PC, botão no toque): passo curto com invulnerabilidade
+  dodge: {
+    dist: 4,                // m
+    dur: 0.24,              // s do deslocamento
+    invuln: 0.3,            // s sem receber dano a partir do início
+    cd: 1.7,                // s de recarga
+  },
+  // aviso no chão antes de golpes fortes (o dano só vale dentro da área marcada)
+  telegraph: {
+    time: 0.8,              // s entre o aviso e o golpe
+    heavyEvery: 3,          // chefes e mini chefes: 1 golpe pesado a cada N ataques corpo a corpo
+    heavyMult: 1.6,         // dano do golpe pesado
+    eliteSlamCd: 7,         // s entre pancadas em área das elites corpo a corpo
+    eliteSlamR: 2.8,        // m: raio da pancada da elite
+    eliteSlamMult: 1.5,
+  },
   loot: {
     autoPickupRadius: 1.48, // m (gold, poções e jewels)
     autoPickupDelay: 0.5,   // s após cair

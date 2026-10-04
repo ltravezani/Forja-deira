@@ -2,6 +2,7 @@
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
 // reatribuídos, para que todos os módulos vejam a mesma referência.
+import { sanitizeQuests } from '../game/questLogic.js';
 
 export const G = {
   mode: 'title', L: null, zone: 'town', floor: 0, ch: null, st: null,
@@ -113,6 +114,7 @@ export function sanitizeCharacter(ch) {
   ch.bag = ch.bag.filter((it) => !it.slot || R.SLOTS.includes(it.slot));
   ch.bag.forEach((it) => sanitizeItem(it, R));
   for (const k of Object.keys(ch.equip)) { if (k !== ch.equip[k].slot || !R.SLOTS.includes(k)) { ch.bag.push(ch.equip[k]); delete ch.equip[k]; } else sanitizeItem(ch.equip[k], R); }
+  sanitizeQuests(ch); // missões (iniciais e diárias); saves antigos ganham o campo aqui
   return ch;
 }
 const int = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
