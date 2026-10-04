@@ -73,7 +73,7 @@ input, select { font-family: inherit; }
 #hurtfx.low { animation: lowhp 1.1s ease-in-out infinite; }
 @keyframes lowhp { 0%, 100% { opacity: .18; } 50% { opacity: .42; } }
 #vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 45%, rgba(4,2,6,.42) 78%, rgba(2,1,3,.78) 100%); }
-#overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#overlay { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; } /* z-index 0: nomes e barras não passam por cima do painel */
 .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
 
 /* ---------- textos flutuantes ---------- */
@@ -116,7 +116,7 @@ input, select { font-family: inherit; }
 .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: rgba(244, 234, 210, .94); }
 
 /* ---------- HUD ---------- */
-.hud { position: absolute; inset: 0; pointer-events: none; }
+.hud { position: absolute; inset: 0; z-index: 0; pointer-events: none; } /* z-index 0: selos "!" e dicas do menu ficam sob o painel */
 .hud > * { pointer-events: auto; }
 .zone {
   position: absolute; right: 16px; top: calc(12px + env(safe-area-inset-top, 0px));
@@ -150,6 +150,13 @@ input, select { font-family: inherit; }
 }
 .menu button:first-child[data-tip]::after { left: 0; transform: none; }
 .menu button:hover::after, .menu button:focus-visible::after { opacity: 1; }
+/* recolher o menu (só no toque): fica só a seta; um selo "!" nela avisa pontos livres */
+.menu-fold { display: none !important; }
+html.touch .menu-fold { display: grid !important; }
+html.touch .menu-fold svg { transition: transform .15s; }
+html.touch .menu.fold > button:not(.menu-fold) { display: none; }
+html.touch .menu.fold .menu-fold svg { transform: rotate(180deg); }
+.menu:not(.fold) .menu-fold.alert::before { display: none; }
 .buffs { display: flex; gap: 4px; }
 .buff { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(40,30,60,.85); border: 1px solid #5c4a7a; }
 .buff.pot { background: rgba(20,52,30,.88); border-color: #6ac87a; color: #d8ffd0; }
@@ -220,6 +227,7 @@ input, select { font-family: inherit; }
 .slot.pot .sn { display: none; }
 .slot.has kbd { text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 .slot.has.nomana { filter: grayscale(.8) brightness(.6); }
+.slot.dodge { margin-left: 6px; } .slot.dodge kbd { font-size: 9px; } .slot.dodge.cooling { filter: brightness(.75); }
 .slot .cd { z-index: 1; }
 
 /* ---------- Drawer ---------- */
@@ -536,8 +544,9 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 @media (max-width: 760px) {
   body { font-size: 14px; }
   .zone { max-width: 150px; }
-  #minimap { width: 118px; height: 118px; }
-  .zone h2 { font-size: 18px; }
+  #minimap { width: 104px; height: 104px; }
+  .zone h2 { font-size: 15px; }
+  .zone { gap: 3px; }
   .menu { max-width: 220px; gap: 4px; }
   .menu button { width: 32px; height: 32px; }
   .menu button svg { width: 18px; height: 18px; }
@@ -569,20 +578,20 @@ html.touch .touchbtns { display: flex; flex-direction: column; gap: 8px; positio
 .tbtn.on { border-color: var(--gold); color: var(--gold); box-shadow: inset 0 0 8px rgba(242,207,122,.3); }
 html.touch .slot .sn, html.touch .slot kbd { display: none; }
 html.touch .slot { touch-action: none; }
-html.touch .slot.sk { width: 52px; height: 52px; }
+html.touch .slot.sk, html.touch .slot.dodge { width: 52px; height: 52px; }
 html.touch .menu button::after { display: none; }
 
 /*
  * Celular (retrato ou paisagem) com toque: o HUD vira dois blocos perto dos polegares.
  * Direita: habilidades 1–3 na linha de baixo (a 1 no canto) e 4–6 em cima, casas de 50 px.
- * Livre: a casa à esquerda da habilidade 3 (linha de baixo) fica reservada para um 7º botão
- * (esquiva). Esquerda: poções (Vida embaixo, Mana em cima) e, ao lado, Coletar e Itens.
+ * A casa à esquerda da habilidade 3 (linha de baixo) é a esquiva. Esquerda: poções (Vida embaixo, Mana em cima) e, ao lado, Coletar e Itens.
  */
 @media (max-width: 760px), (max-height: 500px) {
   html.touch { --ts: 50px; --tg: 6px; }
   html.touch .bar-dock { width: calc(100% - 16px); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); grid-template-columns: 64px minmax(0, 1fr) 64px; gap: 6px; }
   html.touch .slots { display: block; height: 0; }
-  html.touch .slot.sk, html.touch .slot.pot-hp, html.touch .slot.pot-mp { position: absolute; width: var(--ts); height: var(--ts); }
+  html.touch .slot.sk, html.touch .slot.dodge, html.touch .slot.pot-hp, html.touch .slot.pot-mp { position: absolute; width: var(--ts); height: var(--ts); }
+  html.touch .slot.dodge { margin: 0; right: calc(3 * (var(--ts) + var(--tg))); bottom: calc(100% + 8px); }
   html.touch .slot.sk { bottom: calc(100% + 8px); right: 0; }
   html.touch .slot[data-slot="1"], html.touch .slot[data-slot="4"] { right: calc(var(--ts) + var(--tg)); }
   html.touch .slot[data-slot="2"], html.touch .slot[data-slot="5"] { right: calc(2 * (var(--ts) + var(--tg))); }
@@ -601,8 +610,9 @@ html.touch .menu button::after { display: none; }
   html.touch .wallet-chip { font-size: 12px; gap: 8px; padding: 5px 8px; }
   html.touch .log { bottom: calc(8px + 64px + 8px + 2 * (var(--ts) + var(--tg)) + 6px + env(safe-area-inset-bottom, 0px)); max-height: 66px; font-size: 12px; }
   html.touch .castbar { bottom: calc(8px + 64px + 8px + 2 * (var(--ts) + var(--tg)) + 76px); }
-  .zone h2 { font-size: 18px; }
-  .zone .sub { font-size: 12px; }
+  .zone h2 { font-size: 14px; }
+  .zone .sub { font-size: 10.5px; }
+  html.touch .zmon { display: none; }
   .cell .c, .cell .n, .cell .p { font-size: 10px; }
   .dlg-x { display: block; position: sticky; top: -18px; float: right; z-index: 3; margin: -6px -8px 0 8px; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
 }
@@ -620,8 +630,8 @@ html.touch .menu button::after { display: none; }
 /* paisagem no celular: HUD compacto (minimapa menor, registro de 2 linhas, orbes menores) */
 @media (max-height: 500px) {
   .zone { max-width: 200px; gap: 3px; }
-  .zone h2 { font-size: 16px; }
-  .zone .sub { font-size: 11px; }
+  .zone h2 { font-size: 13px; }
+  .zone .sub { font-size: 10px; }
   #minimap { width: 92px; height: 92px; }
   .bossbar { top: calc(8px + env(safe-area-inset-top, 0px)); width: min(340px, calc(100% - 520px)); min-width: 200px; }
   .bossbar h3 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -694,26 +704,9 @@ html.touch .menu button::after { display: none; }
 .li.qb-done, .li.qb-daily.qb-done { opacity: .6; }
 .qb-bar { display: block; height: 5px; margin: 3px 0 4px; background: rgba(0,0,0,.6); border: 1px solid #33294a; border-radius: 2px; overflow: hidden; }
 .qb-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b8924a, var(--gold)); }
-.dodge-btn { display: none; }
-@media (pointer: coarse) {
-  .dodge-btn {
-    position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width: 60px; height: 60px; padding: 0;
-    display: grid; place-items: center; align-content: center; gap: 0; border-radius: 50%; overflow: hidden;
-    background: radial-gradient(circle at 50% 35%, #33284a, #17121f 75%); border: 1px solid var(--edge-hi); color: #d9c38a; box-shadow: 0 2px 8px rgba(0,0,0,.55);
-  }
-  .dodge-btn svg { width: 26px; height: 26px; }
-  .dodge-btn span { font-size: 10px; color: var(--muted); }
-  .dodge-btn .dodge-cd { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; background: conic-gradient(rgba(8,6,12,.72) calc(var(--cd, 0) * 360deg), transparent 0); }
-  .dodge-btn.cooling { color: #8a7a5a; }
-}
 @media (max-width: 760px) {
   .qtrack { max-width: 180px; font-size: 11.5px; }
   .qt-hint { display: none; }
-}
-/* celular: esquiva na casa reservada à esquerda da habilidade 3 (linha de baixo do bloco de habilidades) */
-@media (pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
-  html.touch .dodge-btn { width: var(--ts); height: var(--ts); right: calc(8px + 3 * (var(--ts) + var(--tg)) + env(safe-area-inset-right, 0px)); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
-  html.touch .dodge-btn svg { width: 22px; height: 22px; }
 }
 /* paisagem: a legenda do menu vira um quadro central com rolagem (não empurra o rastreador nem cobre o HUD) */
 @media (max-height: 500px) {
@@ -744,6 +737,7 @@ html.touch .menu button::after { display: none; }
         <span title="Encontrar Magia: aumenta a chance de itens raros">Encontrar Magia <b class="num" id="mfTxt">0%</b></span>
       </div>
       <nav class="menu" aria-label="Menu do jogo">
+        <button id="menuFold" class="menu-fold" type="button" aria-expanded="true" aria-label="Recolher menu"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></g></svg></button>
         <button data-tab="char" data-tip="Personagem (C)" aria-label="Personagem (C)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11a7 7 0 0 1 14 0v6h-4v-5H9v5H5z"/><path d="M12 4v7M9 14h6"/></g></svg></button>
         <button data-tab="inv" data-tip="Inventário (I)" aria-label="Inventário (I)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="M9 12h6"/></g></svg></button>
         <button data-tab="skills" data-tip="Habilidades (K)" aria-label="Habilidades (K)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/><path d="M16.5 8.5l-1 2 1 2"/></g></svg></button>
@@ -5876,7 +5870,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     stab: { cls: 'dk', name: 'Estocada Mortal', lvl: 30, tier: 0, mp: 12, ag: 10, cd: 1.1, kind: 'dash', mult: 2.3, range: 7, desc: 'Avança e perfura tudo no caminho.' },
     swell: { cls: 'dk', name: 'Vida Inabalável', lvl: 60, tier: 0, mp: 30, ag: 20, cd: 20, kind: 'buff', buff: { hpPct: 25 }, dur: 30, desc: '+25% HP máximo por 30s.' },
     rage: { cls: 'dk', name: 'Golpe Furioso', lvl: 150, tier: 1, mp: 25, ag: 18, cd: 2.2, kind: 'quake', mult: 3.1, radius: 5.5, desc: 'Esmaga o chão em ondas de choque.' },
-    destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 400, tier: 2, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
+    destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 300, tier: 1, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
     // Dark Wizard
     ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.15, range: 16, desc: 'Projétil rápido de energia.' },
     flame: { cls: 'dw', name: 'Chama', lvl: 20, tier: 0, mp: 10, ag: 3, cd: 0.8, kind: 'burst', mult: 1.7, radius: 2.8, range: 14, desc: 'Coluna de fogo no ponto alvo.' },
@@ -5884,28 +5878,28 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     meteor: { cls: 'dw', name: 'Meteoro', lvl: 70, tier: 0, mp: 18, ag: 6, cd: 1.2, kind: 'meteor', mult: 2.5, radius: 3.6, range: 15, desc: 'Um meteoro cai após 0,5s.' },
     barrier: { cls: 'dw', name: 'Barreira da Alma', lvl: 100, tier: 0, mp: 50, ag: 20, cd: 25, kind: 'buff', buff: { dmgRed: 30 }, dur: 30, desc: 'Reduz 30% do dano recebido por 30s.' },
     nova: { cls: 'dw', name: 'Nova Gélida', lvl: 150, tier: 1, mp: 35, ag: 12, cd: 2.4, kind: 'nova', mult: 3.0, radius: 7.5, desc: 'Anel de gelo que lentifica.' },
-    hell: { cls: 'dw', name: 'Inferno Primordial', lvl: 400, tier: 2, mp: 70, ag: 30, cd: 6, kind: 'nova', mult: 6.2, radius: 10, desc: 'Nova de fogo devastadora.' },
+    hell: { cls: 'dw', name: 'Inferno Primordial', lvl: 300, tier: 1, mp: 70, ag: 30, cd: 6, kind: 'nova', mult: 6.2, radius: 10, desc: 'Nova de fogo devastadora.' },
     // Elf
     triple: { cls: 'elf', name: 'Flecha Tripla', lvl: 1, tier: 0, mp: 4, ag: 3, cd: 0.42, kind: 'multishot', mult: 0.95, arrows: 3, range: 17, desc: 'Três flechas em leque.' },
     pierce: { cls: 'elf', name: 'Flecha Penetrante', lvl: 25, tier: 0, mp: 10, ag: 6, cd: 0.9, kind: 'pierce', mult: 1.9, range: 20, desc: 'Atravessa todos os inimigos.' },
     heal: { cls: 'elf', name: 'Cura', lvl: 40, tier: 0, mp: 25, ag: 5, cd: 4, kind: 'heal', desc: 'Cura 20% do HP + Energia/5 (você e aliados).' },
     aura: { cls: 'elf', name: 'Aura Élfica', lvl: 60, tier: 0, mp: 30, ag: 10, cd: 20, kind: 'buff', buff: { dmgPct: 15, defPct: 20 }, dur: 30, desc: '+15% dano e +20% defesa por 30s.' },
     spirit: { cls: 'elf', name: 'Espírito da Floresta', lvl: 150, tier: 1, mp: 60, ag: 20, cd: 25, kind: 'summon', dur: 30, desc: 'Invoca um guardião por 30s.' },
-    rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 400, tier: 2, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
+    rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 300, tier: 1, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
     // Dark Elf: lâminas duplas, área e fúria
     bladedance: { cls: 'de', name: 'Dança das Lâminas', lvl: 1, tier: 0, mp: 6, ag: 6, cd: 0.5, kind: 'spin', mult: 1.35, radius: 3.6, color: 0xff4a7a, desc: 'Gira as duas espadas e corta todos ao redor.' },
     bladefan: { cls: 'de', name: 'Leque de Lâminas', lvl: 25, tier: 0, mp: 12, ag: 8, cd: 1, kind: 'bladefan', mult: 1.25, blades: 5, range: 11, color: 0xff5a8a, desc: 'Arremessa lâminas sombrias em leque que atravessam os inimigos.' },
     fury: { cls: 'de', name: 'Fúria Sombria', lvl: 50, tier: 0, mp: 30, ag: 20, cd: 22, kind: 'buff', buff: { dmgPct: 25, atkSpeed: 25 }, dur: 30, color: 0xff2a4a, desc: '+25% dano e +25 de velocidade de ataque por 30s.' },
     shadowstep: { cls: 'de', name: 'Passo Sombrio', lvl: 80, tier: 0, mp: 16, ag: 12, cd: 1.6, kind: 'dash', mult: 2.1, range: 8, radius: 3, color: 0xc84aff, desc: 'Avança pelas sombras cortando o caminho e explode em lâminas no fim.' },
     bloodstorm: { cls: 'de', name: 'Tempestade Sangrenta', lvl: 150, tier: 1, mp: 30, ag: 18, cd: 3, kind: 'whirl', mult: 1.05, hits: 5, radius: 5, color: 0xff2a4a, desc: 'Redemoinho de lâminas: 5 cortes seguidos em área enquanto você anda.' },
-    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 400, tier: 2, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
+    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 300, tier: 1, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
     // Necromancer: roubo de vida, dano e necromancia
     drain: { cls: 'nc', name: 'Toque Vampírico', lvl: 1, tier: 0, mp: 4, ag: 1, cd: 0.36, kind: 'drain', mult: 1.1, drain: 30, range: 14, color: 0xff3a5a, desc: 'Projétil de sangue: cura 30% do dano causado.' },
     bonespear: { cls: 'nc', name: 'Lança de Ossos', lvl: 20, tier: 0, mp: 10, ag: 5, cd: 0.9, kind: 'pierce', mult: 1.9, range: 18, color: 0xe8e0c8, desc: 'Lança de osso que atravessa todos os inimigos.' },
     raise: { cls: 'nc', name: 'Erguer Esqueleto', lvl: 40, tier: 0, mp: 35, ag: 10, cd: 12, kind: 'summon', ally: 'skeleton', count: 2, dur: 30, color: 0x7affb0, desc: 'Ergue 2 esqueletos guerreiros por 30s.' },
     bloodpact: { cls: 'nc', name: 'Pacto de Sangue', lvl: 70, tier: 0, mp: 40, ag: 15, cd: 22, kind: 'buff', buff: { lifeSteal: 6, dmgPct: 12 }, dur: 30, color: 0xff2a3a, desc: '+6% de roubo de vida e +12% dano por 30s.' },
     soulburst: { cls: 'nc', name: 'Explosão de Almas', lvl: 150, tier: 1, mp: 40, ag: 14, cd: 2.4, kind: 'drainnova', mult: 2.9, radius: 7, drain: 15, color: 0x7affb0, desc: 'Onda de almas ao redor; cura 15% do dano causado.' },
-    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 400, tier: 2, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
+    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 300, tier: 1, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
   };
   const skillsFor = (cls) => Object.keys(SKILLS).filter((k) => SKILLS[k].cls === cls);
 
@@ -5941,7 +5935,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
   };
   const treeNodeId = (cls, b, n) => cls + '.' + b + '.' + n;
   function treePoints(ch) {
-    return Math.floor(ch.level / 10) + ch.resets * 10 + ch.tier * 5;
+    return Math.floor(ch.level / 20) + ch.resets + ch.tier * 2;
   }
   function treeSpent(ch) {
     let s = 0;
@@ -6456,7 +6450,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
   function newCharacter(name, cls) {
     const C = CLASSES[cls];
     return {
-      name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0,
+      name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0, treeV: 2,
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),
@@ -8521,6 +8515,9 @@ const num = (v, d) => (Number.isFinite(v) ? v : d);
 function sanitizeCharacter(ch) {
   const R = ForjaRules;
   if (!R.CLASSES[ch.cls]) ch.cls = 'dk';
+  // Árvore de maestria v2 (1 ponto/20 níveis, +1/reset, +2/evolução): saves
+  // antigos recebem de volta todos os pontos gastos para redistribuir.
+  if (ch.treeV !== 2) { ch.tree = {}; ch.treeV = 2; }
   const base = R.newCharacter(ch.name || 'Herói', ch.cls);
   for (const k of Object.keys(base)) if (ch[k] == null) ch[k] = base[k];
   ch.stats = ch.stats && typeof ch.stats === 'object' ? ch.stats : {};
@@ -12735,6 +12732,201 @@ function animateCritter(m, s) {
 return { animateCritter, buildCritter, buildVillager, mergeModelParts };
 })();
 
+// ---- ui/questUi.js ----
+const { initQuestUi, openQuestBoard, questTargetPos, questUiTick } = (() => {
+// ---------- interface das missões e auxílios do HUD ----------
+// Rastreador de missão (canto, recolhível), Quadro de Missões (janela), alvo da
+// missão no minimapa e no rótulo do NPC, selo "!" nos botões com pontos livres,
+// legenda dos ícones do menu no primeiro acesso.
+
+const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null };
+
+// ---------- alvo da missão (minimapa e rótulo) ----------
+/** Ponto do mundo que a missão atual aponta ({x, z}) ou null. Só na cidade. */
+function questTargetPos() {
+  const ch = G.ch;
+  if (!ch || !ch.quests || G.zone !== 'town') return null;
+  const step = currentOnboard(ch);
+  // missão de abate na cidade: a Guardiã dos portais é o caminho
+  const npcId = step ? step.npc || (step.id === 'kill' ? 'portal' : null) : null;
+  if (npcId) return G.npcs.find((n) => n.id === npcId) || null;
+  if (ch.quests.daily.some((d) => d.p >= d.n && !d.c)) return G.npcs.find((n) => n.id === 'board') || null;
+  return null;
+}
+/** Destaca o rótulo do NPC alvo com um "!". */
+function markTarget() {
+  const t = questTargetPos();
+  if (t === UIQ.target) return;
+  if (UIQ.target && UIQ.target.label) UIQ.target.label.classList.remove('qmark');
+  UIQ.target = t;
+  if (t && t.label) t.label.classList.add('qmark');
+}
+
+// ---------- rastreador ----------
+function trackerHtml(ch) {
+  const q = ch.quests, step = currentOnboard(ch);
+  const fold = S.settings.questFold === true;
+  const ready = q.daily.filter((d) => d.p >= d.n && !d.c).length;
+  const done = q.daily.filter((d) => d.p >= d.n).length;
+  let title, line = '', hint = '';
+  if (step) {
+    title = 'Primeiros passos ' + (q.ob + 1) + '/' + ONBOARD.length;
+    line = esc(step.text()) + (step.need > 1 ? ' <b class="num">' + q.obProg + '/' + step.need + '</b>' : '');
+    hint = step.id === 'stats' && !ch.points ? 'Suba de nível para ganhar pontos.' : step.hint;
+  } else {
+    title = 'Missões diárias ' + done + '/' + q.daily.length;
+    const next = q.daily.find((d) => d.p < d.n);
+    line = next ? esc(dailyText(next)) + ' <b class="num">' + next.p + '/' + next.n + '</b>' : 'Todas concluídas hoje.';
+    if (!ready) hint = 'Toque para ver o Quadro de Missões.';
+  }
+  if (ready) hint = '<b class="qt-ready">' + ready + (ready > 1 ? ' recompensas prontas' : ' recompensa pronta') + '</b> · resgate no Quadro de Missões' + (inSafe() ? '' : ', em Aldrena');
+  return { fold, ready, html: '<span class="qt-title">' + esc(title) + '</span>' + (fold ? '' : '<span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '')) };
+}
+function renderTracker() {
+  const ch = G.ch;
+  if (!ch || !ch.quests || !UIQ.track) return;
+  const t = trackerHtml(ch);
+  const key = t.html + (t.fold ? 1 : 0) + t.ready;
+  if (key === UIQ.last) return;
+  UIQ.last = key;
+  UIQ.body.innerHTML = t.html;
+  UIQ.track.classList.toggle('fold', t.fold);
+  UIQ.track.classList.toggle('ready', t.ready > 0);
+  UIQ.head.setAttribute('aria-expanded', String(!t.fold));
+  UIQ.head.textContent = t.fold ? '▸' : '▾';
+}
+
+// ---------- Quadro de Missões ----------
+function boardHtml() {
+  const ch = G.ch, q = ch.quests, town = inSafe();
+  let h = '<h3>Quadro de Missões</h3><div class="role">Missões iniciais e diárias de Aldrena</div>';
+  if (q.ob < ONBOARD.length) {
+    h += '<h4 class="qb-h">Primeiros passos</h4><div class="list">';
+    ONBOARD.forEach((s, i) => {
+      const st = i < q.ob ? 'done' : i === q.ob ? 'cur' : 'next';
+      const prog = st === 'cur' && s.need > 1 ? ' · ' + q.obProg + '/' + s.need : '';
+      h += '<div class="li qb-' + st + '"><span>' + (st === 'done' ? '✓ ' : '') + esc(s.text()) + prog + '</span><span class="a note">' + esc(rewardText(s.reward)) + '</span>' + (st === 'cur' ? '<span class="s">' + esc(s.hint) + '</span>' : '') + '</div>';
+    });
+    h += '</div><p class="note">A recompensa das missões iniciais chega na hora, onde você estiver.</p>';
+  }
+  h += '<h4 class="qb-h">Diárias de hoje</h4><div class="list">';
+  q.daily.forEach((d, i) => {
+    const ok = d.p >= d.n, pct = Math.min(100, (d.p / d.n) * 100).toFixed(0);
+    const btn = d.c ? '<button class="btn sm" disabled>Resgatada</button>'
+      : '<button class="btn sm' + (ok && town ? ' gold' : '') + '" data-q="claim" data-i="' + i + '"' + (ok && town ? '' : ' disabled') + '>Resgatar</button>';
+    h += '<div class="li qb-daily' + (d.c ? ' qb-done' : '') + '"><span>' + esc(dailyText(d)) + ' <b class="num">' + Math.min(d.p, d.n) + '/' + d.n + '</b></span><span class="a">' + btn + '</span>' +
+      '<span class="s"><span class="qb-bar"><i style="width:' + pct + '%"></i></span>' + esc(rewardText(d.r)) + '</span></div>';
+  });
+  h += '</div>';
+  h += '<p class="note">Resgate as três para ganhar também ' + esc(R.JEWELS[DAILY_BONUS.jewel].name) + ' e Ouro extra' + (q.bonus ? ' (já recebido hoje)' : '') + '. Novas missões à meia-noite (horário local).' +
+    (town ? '' : ' <b>Fora da cidade dá para acompanhar, mas o resgate é no quadro, em Aldrena.</b>') + '</p>';
+  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
+  return h;
+}
+/** Abre o Quadro de Missões (no quadro da praça ou pelo rastreador). */
+function openQuestBoard() {
+  if (!G.ch || !G.ch.quests) return;
+  questPoll();
+  G.openNpcId = 'board';
+  $('#dialog').innerHTML = boardHtml();
+  $('#modal').classList.remove('acct-on');
+  $('#modal').hidden = false;
+}
+function boardAction(e) {
+  const b = e.target.closest('[data-q]');
+  if (!b || b.disabled) return;
+  if (b.dataset.q === 'claim' && claimQuest(+b.dataset.i)) {
+    const dlg = $('#dialog'), top = dlg.scrollTop;
+    dlg.innerHTML = boardHtml();
+    dlg.scrollTop = top;
+  }
+}
+
+// ---------- selos "!" e legenda do menu ----------
+function updateBadges(ch) {
+  const pts = ch.points > 0, tree = R.treePoints(ch) - R.treeSpent(ch) > 0;
+  for (const [sel, on, tip] of [['char', pts, 'Pontos de atributo livres'], ['skills', tree, 'Pontos de maestria livres']]) {
+    for (const el of document.querySelectorAll('.menu [data-tab="' + sel + '"], #tabs [data-t="' + sel + '"]')) {
+      if (el.classList.contains('alert') === on) continue;
+      el.classList.toggle('alert', on);
+      if (on) el.dataset.alert = tip; else delete el.dataset.alert;
+    }
+  }
+  // menu recolhido no celular: o selo passa para a seta que abre o menu
+  const fold = document.getElementById('menuFold');
+  if (fold && fold.classList.contains('alert') !== (pts || tree)) fold.classList.toggle('alert', pts || tree);
+}
+/** Legenda dos ícones do menu: aparece no primeiro acesso e some com "Entendi" ou ao abrir um painel. */
+function showLegend() {
+  if (UIQ.legend || S.settings.menuHelpSeen) return;
+  const menu = $('.menu');
+  if (!menu) return;
+  const box = document.createElement('div');
+  box.className = 'menu-legend';
+  box.setAttribute('role', 'note');
+  let h = '<b>Menu</b>';
+  for (const btn of menu.querySelectorAll('button:not(.menu-fold)')) {
+    const svg = btn.querySelector('svg');
+    h += '<span class="ml-row">' + (svg ? svg.outerHTML : '') + esc(btn.dataset.tip || btn.getAttribute('aria-label') || '') + '</span>';
+  }
+  h += '<button class="btn sm" type="button">Entendi</button>';
+  box.innerHTML = h;
+  box.querySelector('button').addEventListener('click', hideLegend);
+  menu.parentNode.insertBefore(box, menu.nextSibling);
+  UIQ.legend = box;
+}
+function hideLegend() {
+  if (!UIQ.legend) return;
+  UIQ.legend.remove();
+  UIQ.legend = null;
+  S.settings.menuHelpSeen = true;
+  persist();
+}
+/** No toque não há "passar o mouse": o primeiro toque em cada ícone mostra o nome por 1,6 s. */
+function touchTips() {
+  for (const btn of document.querySelectorAll('.menu button[data-tip]')) {
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      btn.classList.add('tip-on');
+      clearTimeout(btn._tipT);
+      btn._tipT = setTimeout(() => btn.classList.remove('tip-on'), 1600);
+    });
+    btn.addEventListener('click', () => { if (UIQ.legend) hideLegend(); });
+  }
+}
+
+/** Atualização no ritmo do HUD (10×/s): progresso das missões, rastreador, selos e alvo. */
+function questUiTick() {
+  const ch = G.ch;
+  if (!ch) return;
+  if (UIQ.ch !== ch) { UIQ.ch = ch; UIQ.last = ''; UIQ.target = null; }
+  questPoll();
+  renderTracker();
+  markTarget();
+  updateBadges(ch);
+  if (!S.settings.menuHelpSeen && !UIQ.legend) showLegend();
+}
+
+/** Cria o rastreador dentro do HUD e liga os cliques do quadro. */
+function initQuestUi() {
+  const col = $('.topright');
+  const box = document.createElement('div');
+  box.className = 'qtrack';
+  box.id = 'qtrack';
+  box.innerHTML = '<button class="qt-fold" type="button" aria-label="Recolher ou abrir o rastreador de missão" aria-expanded="true">▾</button><div class="qt-body" role="button" tabindex="0" title="Abrir o Quadro de Missões"></div>';
+  col.appendChild(box);
+  UIQ.track = box;
+  UIQ.head = box.querySelector('.qt-fold');
+  UIQ.body = box.querySelector('.qt-body');
+  UIQ.head.addEventListener('click', (e) => { e.stopPropagation(); S.settings.questFold = S.settings.questFold !== true; persist(); renderTracker(); });
+  UIQ.body.addEventListener('click', openQuestBoard);
+  UIQ.body.addEventListener('keydown', (e) => { if (e.key === 'Enter') openQuestBoard(); });
+  touchTips();
+  $('#dialog').addEventListener('click', boardAction);
+}
+return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
+})();
+
 // ---- input/inputState.js ----
 const { KEYS, mouse } = (() => {
 // ---------- estado bruto da entrada (compartilhado entre entrada e simulação) ----------
@@ -12945,222 +13137,6 @@ function updateDodge(p, dt) {
 return { dodgeLeft, tryDodge, updateDodge };
 })();
 
-// ---- ui/questUi.js ----
-const { initQuestUi, openQuestBoard, questTargetPos, questUiTick } = (() => {
-// ---------- interface das missões e auxílios do HUD ----------
-// Rastreador de missão (canto, recolhível), Quadro de Missões (janela), alvo da
-// missão no minimapa e no rótulo do NPC, selo "!" nos botões com pontos livres,
-// legenda dos ícones do menu no primeiro acesso e o botão de esquiva do toque.
-
-const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null, dodge: null, dodgeCd: '' };
-
-// ---------- alvo da missão (minimapa e rótulo) ----------
-/** Ponto do mundo que a missão atual aponta ({x, z}) ou null. Só na cidade. */
-function questTargetPos() {
-  const ch = G.ch;
-  if (!ch || !ch.quests || G.zone !== 'town') return null;
-  const step = currentOnboard(ch);
-  // missão de abate na cidade: a Guardiã dos portais é o caminho
-  const npcId = step ? step.npc || (step.id === 'kill' ? 'portal' : null) : null;
-  if (npcId) return G.npcs.find((n) => n.id === npcId) || null;
-  if (ch.quests.daily.some((d) => d.p >= d.n && !d.c)) return G.npcs.find((n) => n.id === 'board') || null;
-  return null;
-}
-/** Destaca o rótulo do NPC alvo com um "!". */
-function markTarget() {
-  const t = questTargetPos();
-  if (t === UIQ.target) return;
-  if (UIQ.target && UIQ.target.label) UIQ.target.label.classList.remove('qmark');
-  UIQ.target = t;
-  if (t && t.label) t.label.classList.add('qmark');
-}
-
-// ---------- rastreador ----------
-function trackerHtml(ch) {
-  const q = ch.quests, step = currentOnboard(ch);
-  const fold = S.settings.questFold === true;
-  const ready = q.daily.filter((d) => d.p >= d.n && !d.c).length;
-  const done = q.daily.filter((d) => d.p >= d.n).length;
-  let title, line = '', hint = '';
-  if (step) {
-    title = 'Primeiros passos ' + (q.ob + 1) + '/' + ONBOARD.length;
-    line = esc(step.text()) + (step.need > 1 ? ' <b class="num">' + q.obProg + '/' + step.need + '</b>' : '');
-    hint = step.id === 'stats' && !ch.points ? 'Suba de nível para ganhar pontos.' : step.hint;
-  } else {
-    title = 'Missões diárias ' + done + '/' + q.daily.length;
-    const next = q.daily.find((d) => d.p < d.n);
-    line = next ? esc(dailyText(next)) + ' <b class="num">' + next.p + '/' + next.n + '</b>' : 'Todas concluídas hoje.';
-    if (!ready) hint = 'Toque para ver o Quadro de Missões.';
-  }
-  if (ready) hint = '<b class="qt-ready">' + ready + (ready > 1 ? ' recompensas prontas' : ' recompensa pronta') + '</b> · resgate no Quadro de Missões' + (inSafe() ? '' : ', em Aldrena');
-  return { fold, ready, html: '<span class="qt-title">' + esc(title) + '</span>' + (fold ? '' : '<span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '')) };
-}
-function renderTracker() {
-  const ch = G.ch;
-  if (!ch || !ch.quests || !UIQ.track) return;
-  const t = trackerHtml(ch);
-  const key = t.html + (t.fold ? 1 : 0) + t.ready;
-  if (key === UIQ.last) return;
-  UIQ.last = key;
-  UIQ.body.innerHTML = t.html;
-  UIQ.track.classList.toggle('fold', t.fold);
-  UIQ.track.classList.toggle('ready', t.ready > 0);
-  UIQ.head.setAttribute('aria-expanded', String(!t.fold));
-  UIQ.head.textContent = t.fold ? '▸' : '▾';
-}
-
-// ---------- Quadro de Missões ----------
-function boardHtml() {
-  const ch = G.ch, q = ch.quests, town = inSafe();
-  let h = '<h3>Quadro de Missões</h3><div class="role">Missões iniciais e diárias de Aldrena</div>';
-  if (q.ob < ONBOARD.length) {
-    h += '<h4 class="qb-h">Primeiros passos</h4><div class="list">';
-    ONBOARD.forEach((s, i) => {
-      const st = i < q.ob ? 'done' : i === q.ob ? 'cur' : 'next';
-      const prog = st === 'cur' && s.need > 1 ? ' · ' + q.obProg + '/' + s.need : '';
-      h += '<div class="li qb-' + st + '"><span>' + (st === 'done' ? '✓ ' : '') + esc(s.text()) + prog + '</span><span class="a note">' + esc(rewardText(s.reward)) + '</span>' + (st === 'cur' ? '<span class="s">' + esc(s.hint) + '</span>' : '') + '</div>';
-    });
-    h += '</div><p class="note">A recompensa das missões iniciais chega na hora, onde você estiver.</p>';
-  }
-  h += '<h4 class="qb-h">Diárias de hoje</h4><div class="list">';
-  q.daily.forEach((d, i) => {
-    const ok = d.p >= d.n, pct = Math.min(100, (d.p / d.n) * 100).toFixed(0);
-    const btn = d.c ? '<button class="btn sm" disabled>Resgatada</button>'
-      : '<button class="btn sm' + (ok && town ? ' gold' : '') + '" data-q="claim" data-i="' + i + '"' + (ok && town ? '' : ' disabled') + '>Resgatar</button>';
-    h += '<div class="li qb-daily' + (d.c ? ' qb-done' : '') + '"><span>' + esc(dailyText(d)) + ' <b class="num">' + Math.min(d.p, d.n) + '/' + d.n + '</b></span><span class="a">' + btn + '</span>' +
-      '<span class="s"><span class="qb-bar"><i style="width:' + pct + '%"></i></span>' + esc(rewardText(d.r)) + '</span></div>';
-  });
-  h += '</div>';
-  h += '<p class="note">Resgate as três para ganhar também ' + esc(R.JEWELS[DAILY_BONUS.jewel].name) + ' e Ouro extra' + (q.bonus ? ' (já recebido hoje)' : '') + '. Novas missões à meia-noite (horário local).' +
-    (town ? '' : ' <b>Fora da cidade dá para acompanhar, mas o resgate é no quadro, em Aldrena.</b>') + '</p>';
-  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
-  return h;
-}
-/** Abre o Quadro de Missões (no quadro da praça ou pelo rastreador). */
-function openQuestBoard() {
-  if (!G.ch || !G.ch.quests) return;
-  questPoll();
-  G.openNpcId = 'board';
-  $('#dialog').innerHTML = boardHtml();
-  $('#modal').classList.remove('acct-on');
-  $('#modal').hidden = false;
-}
-function boardAction(e) {
-  const b = e.target.closest('[data-q]');
-  if (!b || b.disabled) return;
-  if (b.dataset.q === 'claim' && claimQuest(+b.dataset.i)) {
-    const dlg = $('#dialog'), top = dlg.scrollTop;
-    dlg.innerHTML = boardHtml();
-    dlg.scrollTop = top;
-  }
-}
-
-// ---------- selos "!" e legenda do menu ----------
-function updateBadges(ch) {
-  const pts = ch.points > 0, tree = R.treePoints(ch) - R.treeSpent(ch) > 0;
-  for (const [sel, on, tip] of [['char', pts, 'Pontos de atributo livres'], ['skills', tree, 'Pontos de maestria livres']]) {
-    for (const el of document.querySelectorAll('.menu [data-tab="' + sel + '"], #tabs [data-t="' + sel + '"]')) {
-      if (el.classList.contains('alert') === on) continue;
-      el.classList.toggle('alert', on);
-      if (on) el.dataset.alert = tip; else delete el.dataset.alert;
-    }
-  }
-}
-/** Legenda dos ícones do menu: aparece no primeiro acesso e some com "Entendi" ou ao abrir um painel. */
-function showLegend() {
-  if (UIQ.legend || S.settings.menuHelpSeen) return;
-  const menu = $('.menu');
-  if (!menu) return;
-  const box = document.createElement('div');
-  box.className = 'menu-legend';
-  box.setAttribute('role', 'note');
-  let h = '<b>Menu</b>';
-  for (const btn of menu.querySelectorAll('button')) {
-    const svg = btn.querySelector('svg');
-    h += '<span class="ml-row">' + (svg ? svg.outerHTML : '') + esc(btn.dataset.tip || btn.getAttribute('aria-label') || '') + '</span>';
-  }
-  h += '<button class="btn sm" type="button">Entendi</button>';
-  box.innerHTML = h;
-  box.querySelector('button').addEventListener('click', hideLegend);
-  menu.parentNode.insertBefore(box, menu.nextSibling);
-  UIQ.legend = box;
-}
-function hideLegend() {
-  if (!UIQ.legend) return;
-  UIQ.legend.remove();
-  UIQ.legend = null;
-  S.settings.menuHelpSeen = true;
-  persist();
-}
-/** No toque não há "passar o mouse": o primeiro toque em cada ícone mostra o nome por 1,6 s. */
-function touchTips() {
-  for (const btn of document.querySelectorAll('.menu button[data-tip]')) {
-    btn.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;
-      btn.classList.add('tip-on');
-      clearTimeout(btn._tipT);
-      btn._tipT = setTimeout(() => btn.classList.remove('tip-on'), 1600);
-    });
-    btn.addEventListener('click', () => { if (UIQ.legend) hideLegend(); });
-  }
-}
-
-// ---------- botão de esquiva (toque) ----------
-function buildDodgeButton(hud) {
-  const b = document.createElement('button');
-  b.id = 'btnDodge';
-  b.className = 'dodge-btn';
-  b.type = 'button';
-  b.setAttribute('aria-label', 'Esquiva');
-  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16c3-1 5-4 8-8"/><path d="M9 7h4v4"/><path d="M4 20h6" opacity=".6"/><path d="M14 17c2 0 4-1 6-3" opacity=".6"/></g></svg><span>Esquiva</span><i class="dodge-cd"></i>';
-  b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); tryDodge(false); });
-  hud.appendChild(b);
-  UIQ.dodge = b;
-}
-function updateDodgeButton() {
-  if (!UIQ.dodge) return;
-  const left = dodgeLeft();
-  const v = left > 0 ? (left / CONFIG.dodge.cd).toFixed(2) : '0';
-  if (v === UIQ.dodgeCd) return;
-  UIQ.dodgeCd = v;
-  UIQ.dodge.style.setProperty('--cd', v);
-  UIQ.dodge.classList.toggle('cooling', left > 0);
-}
-
-/** Atualização no ritmo do HUD (10×/s): progresso das missões, rastreador, selos e alvo. */
-function questUiTick() {
-  const ch = G.ch;
-  if (!ch) return;
-  if (UIQ.ch !== ch) { UIQ.ch = ch; UIQ.last = ''; UIQ.target = null; }
-  questPoll();
-  renderTracker();
-  markTarget();
-  updateBadges(ch);
-  updateDodgeButton();
-  if (!S.settings.menuHelpSeen && !UIQ.legend) showLegend();
-}
-
-/** Cria o rastreador e o botão de esquiva dentro do HUD e liga os cliques do quadro. */
-function initQuestUi() {
-  const hud = $('#hud'), col = $('.topright');
-  const box = document.createElement('div');
-  box.className = 'qtrack';
-  box.id = 'qtrack';
-  box.innerHTML = '<button class="qt-fold" type="button" aria-label="Recolher ou abrir o rastreador de missão" aria-expanded="true">▾</button><div class="qt-body" role="button" tabindex="0" title="Abrir o Quadro de Missões"></div>';
-  col.appendChild(box);
-  UIQ.track = box;
-  UIQ.head = box.querySelector('.qt-fold');
-  UIQ.body = box.querySelector('.qt-body');
-  UIQ.head.addEventListener('click', (e) => { e.stopPropagation(); S.settings.questFold = S.settings.questFold !== true; persist(); renderTracker(); });
-  UIQ.body.addEventListener('click', openQuestBoard);
-  UIQ.body.addEventListener('keydown', (e) => { if (e.key === 'Enter') openQuestBoard(); });
-  buildDodgeButton(hud);
-  touchTips();
-  $('#dialog').addEventListener('click', boardAction);
-}
-return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
-})();
-
 // ---- ui/feedback.js ----
 const { hurtFeedback, updateLowHp } = (() => {
 // ---------- retorno visual de dano e vida baixa (vinheta vermelha) ----------
@@ -13189,6 +13165,10 @@ const { buildSlots, hudTick, resetHudCache } = (() => {
 // ---------- barra de habilidades e HUD (orbes, EXP, chefe, buffs) ----------
 
 const slotRefs = [];
+const DODGE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3a2e52"/><stop offset="1" stop-color="#14101c"/></radialGradient></defs>' +
+  '<rect width="64" height="64" fill="url(#g)"/><g fill="none" stroke="#e8d08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 44c9-3 15-11 22-22"/><path d="M24 20h11v11"/></g>' +
+  '<g fill="none" stroke="#e8d08a" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"><path d="M10 54h16"/><path d="M38 46c6 0 11-3 16-8"/></g>' +
+  '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>');
 /** Recria a barra de habilidades (troca de habilidades, evolução, novo personagem). */
 function buildSlots() {
   const box = $('#slots');
@@ -13213,6 +13193,22 @@ function buildSlots() {
     });
     box.appendChild(el);
     slotRefs.push({ i, el, cd: el.querySelector('.cd'), h: null, no: null });
+  }
+  // esquiva: casa fixa entre as habilidades e as poções (Shift no PC, toque no celular)
+  {
+    const el = document.createElement('button');
+    el.className = 'slot dodge has';
+    el.style.backgroundImage = 'url("' + DODGE_ICON + '")';
+    el.title = 'Esquiva · Shift · passo rápido sem receber dano';
+    el.setAttribute('aria-label', 'Esquiva');
+    el.innerHTML = '<kbd>Shift</kbd><span class="sn">Esquiva</span><i class="cd"></i>';
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      Sfx.init();
+      tryDodge(false);
+    });
+    box.appendChild(el);
+    slotRefs.push({ dodge: true, el, cd: el.querySelector('.cd'), h: null });
   }
   for (const id of ['hp', 'mp']) {
     const el = document.createElement('button');
@@ -13271,6 +13267,12 @@ function hudTick() {
 }
 function updateSlotStates(ch, st) {
   for (const s of slotRefs) {
+    if (s.dodge) {
+      const left = dodgeLeft();
+      const h = left > 0 ? Math.min(100, (left / CONFIG.dodge.cd) * 100).toFixed(1) + '%' : '0';
+      if (s.h !== h) { s.h = h; s.cd.style.height = h; s.el.classList.toggle('cooling', left > 0); }
+      continue;
+    }
     if (s.pot) { const n = String(potionCount(s.pot)); if (s.qty !== n) { s.qty = n; s.q.textContent = n; } continue; }
     const id = ch.skillBar[s.i];
     if (!id) continue;
@@ -13322,7 +13324,15 @@ function toast(big, small) {
   void t.offsetWidth; // reinicia a animação CSS (1 reflow, só neste evento raro)
   t.classList.add('show');
 }
-function setZoneText(a, b) { dom('zoneName').innerHTML = partsHtml(a); dom('zoneSub').innerHTML = partsHtml(b); }
+/** Subtítulo da zona: a parte "Monstros nv …" ganha a classe zmon (o celular a esconde para poupar espaço). */
+function subHtml(text) {
+  const parts = String(text).split(' · ');
+  const keep = parts.filter((p) => !/^monstros nv/i.test(p)), mon = parts.filter((p) => /^monstros nv/i.test(p));
+  if (!mon.length) return partsHtml(text);
+  const m = partsHtml(mon.join(' · '));
+  return keep.length ? partsHtml(keep.join(' · ')) + '<span class="zmon"> · ' + m + '</span>' : '<span class="zmon">' + m + '</span>';
+}
+function setZoneText(a, b) { dom('zoneName').innerHTML = partsHtml(a); dom('zoneSub').innerHTML = subHtml(b); }
 /** Limpa o registro de mensagens (ao voltar para a tela de título). */
 function clearLog() { dom('log').textContent = ''; }
 return { clearLog, log, setZoneText, toast };
@@ -13504,8 +13514,8 @@ function openNpc(id) {
   } else if (id === 'master') {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
-    h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP, nova habilidade e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +10 pontos de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
+    h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP' + (R.skillsFor(ch.cls).some((k) => R.SKILLS[k].tier === ch.tier + 1) ? ', nova habilidade' : '') + ' e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
       (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
         : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
         : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
@@ -18653,7 +18663,7 @@ function paneChar() {
 function paneSkills() {
   const ch = G.ch, st = G.st;
   const pts = R.treePoints(ch) - R.treeSpent(ch);
-  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. ' + (touchUI() ? 'Toque no botão da habilidade para lançá-la no monstro mais próximo (ou à frente do herói).' : 'Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.') + '</p>' +
+  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. ' + (touchUI() ? 'Toque no botão da habilidade para lançá-la no monstro mais próximo (ou à frente do herói).' : 'Teclas 1–6 lançam no cursor (Shift esquiva); clique no slot para escolher a do botão direito.') + '</p>' +
     '<p class="note"><b>Auto</b>: a habilidade sai sozinha quando houver um monstro ao alcance (o herói não anda sozinho; Teleporte e investidas ficam de fora).</p>';
   R.skillsFor(ch.cls).forEach((id) => {
     const sk = R.SKILLS[id];
@@ -18665,7 +18675,7 @@ function paneSkills() {
       (ok && autoSkillAllowed(id) ? '<button class="btn sm' + (autoSkillOn(id) ? ' gold' : '') + '" data-act="autoskill" data-id="' + id + '" aria-pressed="' + autoSkillOn(id) + '" title="Lançar sozinha perto de monstros">Auto: ' + (autoSkillOn(id) ? 'sim' : 'não') + '</button> ' : '') +
       (ok ? (inBar >= 0 ? '<button class="btn sm" data-act="unbar" data-id="' + id + '">Slot ' + (inBar + 1) + ' ✕</button>' : '<button class="btn sm" data-act="bar" data-id="' + id + '"' + (ch.skillBar.length >= 6 ? ' disabled' : '') + '>Pôr na barra</button>') : '') + '</div></div>';
   });
-  h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 10 níveis, +10 por reset, +5 por evolução. Até 5 ranks por nó.</p><div class="tree">';
+  h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 20 níveis, +1 por reset, +2 por evolução. Até 5 ranks por nó.</p><div class="tree">';
   R.TREES[ch.cls].forEach((br, bi) => {
     h += '<div class="branch"><h5>' + esc(br.name) + '</h5>';
     br.nodes.forEach((n, ni) => {
@@ -20064,7 +20074,7 @@ function enterTower(floor) {
   spawnTowerEvents(G.L, lvl);
   G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
   const plan = TOWER_LAYOUTS[G.L.layout];
-  setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
+  setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · recorde ' + G.ch.towerBest + ' · monstros nv ' + lvl + '–' + (lvl + 6));
   log('Torre Infinita, andar ' + floor + ': ' + plan.name + ' (' + B.name + '). ' + plan.hint + ' Fique atento: emboscadas e invasões podem surgir a qualquer momento.', 'sys');
   toast('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name);
   questEvent('tower', floor);
@@ -21812,6 +21822,16 @@ function initTouch() {
   tap('#tbPick', () => spacePickup());
   tap('#tbItems', (b) => { G.showAllLabels = !G.showAllLabels; b.classList.toggle('on', G.showAllLabels); b.setAttribute('aria-pressed', String(G.showAllLabels)); });
   $('#btnPause').addEventListener('click', () => setPaused(true));
+  // recolher/abrir os botões do menu (Personagem, Inventário, Habilidades…); lembra a escolha
+  const fold = $('#menuFold');
+  const applyFold = () => {
+    const on = S.settings.menuFold === true;
+    fold.parentElement.classList.toggle('fold', on);
+    fold.setAttribute('aria-expanded', String(!on));
+    fold.setAttribute('aria-label', on ? 'Abrir menu' : 'Recolher menu');
+  };
+  fold.addEventListener('click', (e) => { e.stopPropagation(); S.settings.menuFold = S.settings.menuFold !== true; persist(); applyFold(); });
+  applyFold();
 }
 return { applyUiScale, initTouch, panelHold, showHeld };
 })();

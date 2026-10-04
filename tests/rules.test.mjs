@@ -136,7 +136,7 @@ test('classes novas: 3 evoluções, habilidades e árvore completas', () => {
     const sk = R.skillsFor(c);
     assert.ok(sk.length >= 6, c);
     assert.ok(sk.some((id) => R.SKILLS[id].lvl === 1));
-    assert.ok(sk.some((id) => R.SKILLS[id].tier === 1) && sk.some((id) => R.SKILLS[id].tier === 2));
+    assert.ok(sk.some((id) => R.SKILLS[id].tier === 1));
     for (const br of R.TREES[c]) for (const n of br.nodes) if (n[0].indexOf('skill:') === 0) assert.equal(R.SKILLS[n[0].slice(6)].cls, c);
   }
   // Necromancer tem dano mágico e roubo de vida próprio
@@ -244,4 +244,15 @@ test('item não se libera com o próprio bônus de atributo', () => {
   ch.equip.boots = boots;
   assert.equal(R.itemActive(ch, boots, []), false);
   assert.equal(R.deriveStats(ch, []).total.str, 10);
+});
+
+test('maestria: 1 ponto a cada 20 níveis, 1 por reset, 2 por evolução; última habilidade no nível 300', () => {
+  assert.equal(R.treePoints({ level: 19, resets: 0, tier: 0 }), 0);
+  assert.equal(R.treePoints({ level: 400, resets: 0, tier: 0 }), 20);
+  assert.equal(R.treePoints({ level: 400, resets: 3, tier: 2 }), 27);
+  for (const c of Object.keys(R.CLASSES)) {
+    const top = Math.max(...R.skillsFor(c).map((id) => R.SKILLS[id].lvl));
+    assert.equal(top, 300, c);
+    for (const id of R.skillsFor(c)) if (R.SKILLS[id].lvl === 300) assert.ok(R.SKILLS[id].tier <= 1, id);
+  }
 });

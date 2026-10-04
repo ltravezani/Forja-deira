@@ -1,16 +1,14 @@
 // ---------- interface das missões e auxílios do HUD ----------
 // Rastreador de missão (canto, recolhível), Quadro de Missões (janela), alvo da
 // missão no minimapa e no rótulo do NPC, selo "!" nos botões com pontos livres,
-// legenda dos ícones do menu no primeiro acesso e o botão de esquiva do toque.
+// legenda dos ícones do menu no primeiro acesso.
 import { G, persist, S } from '../core/state.js';
 import { $, esc, R } from '../core/util.js';
-import { dodgeLeft, tryDodge } from '../game/dodge.js';
 import { claimQuest, questPoll, rewardText } from '../game/quests.js';
 import { currentOnboard, DAILY_BONUS, dailyText, ONBOARD } from '../game/questLogic.js';
 import { inSafe } from '../game/zones.js';
-import { CONFIG } from '../core/config.js';
 
-const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null, dodge: null, dodgeCd: '' };
+const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null };
 
 // ---------- alvo da missão (minimapa e rótulo) ----------
 /** Ponto do mundo que a missão atual aponta ({x, z}) ou null. Só na cidade. */
@@ -123,6 +121,9 @@ function updateBadges(ch) {
       if (on) el.dataset.alert = tip; else delete el.dataset.alert;
     }
   }
+  // menu recolhido no celular: o selo passa para a seta que abre o menu
+  const fold = document.getElementById('menuFold');
+  if (fold && fold.classList.contains('alert') !== (pts || tree)) fold.classList.toggle('alert', pts || tree);
 }
 /** Legenda dos ícones do menu: aparece no primeiro acesso e some com "Entendi" ou ao abrir um painel. */
 function showLegend() {
@@ -133,7 +134,7 @@ function showLegend() {
   box.className = 'menu-legend';
   box.setAttribute('role', 'note');
   let h = '<b>Menu</b>';
-  for (const btn of menu.querySelectorAll('button')) {
+  for (const btn of menu.querySelectorAll('button:not(.menu-fold)')) {
     const svg = btn.querySelector('svg');
     h += '<span class="ml-row">' + (svg ? svg.outerHTML : '') + esc(btn.dataset.tip || btn.getAttribute('aria-label') || '') + '</span>';
   }
@@ -163,28 +164,6 @@ function touchTips() {
   }
 }
 
-// ---------- botão de esquiva (toque) ----------
-function buildDodgeButton(hud) {
-  const b = document.createElement('button');
-  b.id = 'btnDodge';
-  b.className = 'dodge-btn';
-  b.type = 'button';
-  b.setAttribute('aria-label', 'Esquiva');
-  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16c3-1 5-4 8-8"/><path d="M9 7h4v4"/><path d="M4 20h6" opacity=".6"/><path d="M14 17c2 0 4-1 6-3" opacity=".6"/></g></svg><span>Esquiva</span><i class="dodge-cd"></i>';
-  b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); tryDodge(false); });
-  hud.appendChild(b);
-  UIQ.dodge = b;
-}
-function updateDodgeButton() {
-  if (!UIQ.dodge) return;
-  const left = dodgeLeft();
-  const v = left > 0 ? (left / CONFIG.dodge.cd).toFixed(2) : '0';
-  if (v === UIQ.dodgeCd) return;
-  UIQ.dodgeCd = v;
-  UIQ.dodge.style.setProperty('--cd', v);
-  UIQ.dodge.classList.toggle('cooling', left > 0);
-}
-
 /** Atualização no ritmo do HUD (10×/s): progresso das missões, rastreador, selos e alvo. */
 export function questUiTick() {
   const ch = G.ch;
@@ -194,13 +173,12 @@ export function questUiTick() {
   renderTracker();
   markTarget();
   updateBadges(ch);
-  updateDodgeButton();
   if (!S.settings.menuHelpSeen && !UIQ.legend) showLegend();
 }
 
-/** Cria o rastreador e o botão de esquiva dentro do HUD e liga os cliques do quadro. */
+/** Cria o rastreador dentro do HUD e liga os cliques do quadro. */
 export function initQuestUi() {
-  const hud = $('#hud'), col = $('.topright');
+  const col = $('.topright');
   const box = document.createElement('div');
   box.className = 'qtrack';
   box.id = 'qtrack';
@@ -212,7 +190,6 @@ export function initQuestUi() {
   UIQ.head.addEventListener('click', (e) => { e.stopPropagation(); S.settings.questFold = S.settings.questFold !== true; persist(); renderTracker(); });
   UIQ.body.addEventListener('click', openQuestBoard);
   UIQ.body.addEventListener('keydown', (e) => { if (e.key === 'Enter') openQuestBoard(); });
-  buildDodgeButton(hud);
   touchTips();
   $('#dialog').addEventListener('click', boardAction);
 }
