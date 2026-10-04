@@ -150,7 +150,7 @@ export function enterTower(floor) {
   spawnTowerEvents(G.L, lvl);
   G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
   const plan = TOWER_LAYOUTS[G.L.layout];
-  setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
+  setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · recorde ' + G.ch.towerBest + ' · monstros nv ' + lvl + '–' + (lvl + 6));
   log('Torre Infinita, andar ' + floor + ': ' + plan.name + ' (' + B.name + '). ' + plan.hint + ' Fique atento: emboscadas e invasões podem surgir a qualquer momento.', 'sys');
   toast('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name);
   questEvent('tower', floor);

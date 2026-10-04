@@ -85,6 +85,9 @@ const num = (v, d) => (Number.isFinite(v) ? v : d);
 export function sanitizeCharacter(ch) {
   const R = ForjaRules;
   if (!R.CLASSES[ch.cls]) ch.cls = 'dk';
+  // Árvore de maestria v2 (1 ponto/20 níveis, +1/reset, +2/evolução): saves
+  // antigos recebem de volta todos os pontos gastos para redistribuir.
+  if (ch.treeV !== 2) { ch.tree = {}; ch.treeV = 2; }
   const base = R.newCharacter(ch.name || 'Herói', ch.cls);
   for (const k of Object.keys(base)) if (ch[k] == null) ch[k] = base[k];
   ch.stats = ch.stats && typeof ch.stats === 'object' ? ch.stats : {};

@@ -233,7 +233,7 @@
     stab: { cls: 'dk', name: 'Estocada Mortal', lvl: 30, tier: 0, mp: 12, ag: 10, cd: 1.1, kind: 'dash', mult: 2.3, range: 7, desc: 'Avança e perfura tudo no caminho.' },
     swell: { cls: 'dk', name: 'Vida Inabalável', lvl: 60, tier: 0, mp: 30, ag: 20, cd: 20, kind: 'buff', buff: { hpPct: 25 }, dur: 30, desc: '+25% HP máximo por 30s.' },
     rage: { cls: 'dk', name: 'Golpe Furioso', lvl: 150, tier: 1, mp: 25, ag: 18, cd: 2.2, kind: 'quake', mult: 3.1, radius: 5.5, desc: 'Esmaga o chão em ondas de choque.' },
-    destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 400, tier: 2, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
+    destruct: { cls: 'dk', name: 'Lâmina Destruidora', lvl: 300, tier: 1, mp: 45, ag: 30, cd: 5, kind: 'nuke', mult: 5.5, radius: 6.5, range: 12, desc: 'Explosão massiva no alvo; lentifica sobreviventes.' },
     // Dark Wizard
     ball: { cls: 'dw', name: 'Bola de Energia', lvl: 1, tier: 0, mp: 3, ag: 0, cd: 0.32, kind: 'bolt', mult: 1.15, range: 16, desc: 'Projétil rápido de energia.' },
     flame: { cls: 'dw', name: 'Chama', lvl: 20, tier: 0, mp: 10, ag: 3, cd: 0.8, kind: 'burst', mult: 1.7, radius: 2.8, range: 14, desc: 'Coluna de fogo no ponto alvo.' },
@@ -241,28 +241,28 @@
     meteor: { cls: 'dw', name: 'Meteoro', lvl: 70, tier: 0, mp: 18, ag: 6, cd: 1.2, kind: 'meteor', mult: 2.5, radius: 3.6, range: 15, desc: 'Um meteoro cai após 0,5s.' },
     barrier: { cls: 'dw', name: 'Barreira da Alma', lvl: 100, tier: 0, mp: 50, ag: 20, cd: 25, kind: 'buff', buff: { dmgRed: 30 }, dur: 30, desc: 'Reduz 30% do dano recebido por 30s.' },
     nova: { cls: 'dw', name: 'Nova Gélida', lvl: 150, tier: 1, mp: 35, ag: 12, cd: 2.4, kind: 'nova', mult: 3.0, radius: 7.5, desc: 'Anel de gelo que lentifica.' },
-    hell: { cls: 'dw', name: 'Inferno Primordial', lvl: 400, tier: 2, mp: 70, ag: 30, cd: 6, kind: 'nova', mult: 6.2, radius: 10, desc: 'Nova de fogo devastadora.' },
+    hell: { cls: 'dw', name: 'Inferno Primordial', lvl: 300, tier: 1, mp: 70, ag: 30, cd: 6, kind: 'nova', mult: 6.2, radius: 10, desc: 'Nova de fogo devastadora.' },
     // Elf
     triple: { cls: 'elf', name: 'Flecha Tripla', lvl: 1, tier: 0, mp: 4, ag: 3, cd: 0.42, kind: 'multishot', mult: 0.95, arrows: 3, range: 17, desc: 'Três flechas em leque.' },
     pierce: { cls: 'elf', name: 'Flecha Penetrante', lvl: 25, tier: 0, mp: 10, ag: 6, cd: 0.9, kind: 'pierce', mult: 1.9, range: 20, desc: 'Atravessa todos os inimigos.' },
     heal: { cls: 'elf', name: 'Cura', lvl: 40, tier: 0, mp: 25, ag: 5, cd: 4, kind: 'heal', desc: 'Cura 20% do HP + Energia/5 (você e aliados).' },
     aura: { cls: 'elf', name: 'Aura Élfica', lvl: 60, tier: 0, mp: 30, ag: 10, cd: 20, kind: 'buff', buff: { dmgPct: 15, defPct: 20 }, dur: 30, desc: '+15% dano e +20% defesa por 30s.' },
     spirit: { cls: 'elf', name: 'Espírito da Floresta', lvl: 150, tier: 1, mp: 60, ag: 20, cd: 25, kind: 'summon', dur: 30, desc: 'Invoca um guardião por 30s.' },
-    rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 400, tier: 2, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
+    rain: { cls: 'elf', name: 'Chuva de Flechas', lvl: 300, tier: 1, mp: 45, ag: 25, cd: 4, kind: 'meteor', mult: 5.2, radius: 6, range: 16, desc: 'Dezenas de flechas caem no alvo.' },
     // Dark Elf: lâminas duplas, área e fúria
     bladedance: { cls: 'de', name: 'Dança das Lâminas', lvl: 1, tier: 0, mp: 6, ag: 6, cd: 0.5, kind: 'spin', mult: 1.35, radius: 3.6, color: 0xff4a7a, desc: 'Gira as duas espadas e corta todos ao redor.' },
     bladefan: { cls: 'de', name: 'Leque de Lâminas', lvl: 25, tier: 0, mp: 12, ag: 8, cd: 1, kind: 'bladefan', mult: 1.25, blades: 5, range: 11, color: 0xff5a8a, desc: 'Arremessa lâminas sombrias em leque que atravessam os inimigos.' },
     fury: { cls: 'de', name: 'Fúria Sombria', lvl: 50, tier: 0, mp: 30, ag: 20, cd: 22, kind: 'buff', buff: { dmgPct: 25, atkSpeed: 25 }, dur: 30, color: 0xff2a4a, desc: '+25% dano e +25 de velocidade de ataque por 30s.' },
     shadowstep: { cls: 'de', name: 'Passo Sombrio', lvl: 80, tier: 0, mp: 16, ag: 12, cd: 1.6, kind: 'dash', mult: 2.1, range: 8, radius: 3, color: 0xc84aff, desc: 'Avança pelas sombras cortando o caminho e explode em lâminas no fim.' },
     bloodstorm: { cls: 'de', name: 'Tempestade Sangrenta', lvl: 150, tier: 1, mp: 30, ag: 18, cd: 3, kind: 'whirl', mult: 1.05, hits: 5, radius: 5, color: 0xff2a4a, desc: 'Redemoinho de lâminas: 5 cortes seguidos em área enquanto você anda.' },
-    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 400, tier: 2, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
+    eclipse: { cls: 'de', name: 'Eclipse das Lâminas', lvl: 300, tier: 1, mp: 50, ag: 30, cd: 5, kind: 'eclipse', mult: 5.8, radius: 8, buff: { dmgPct: 15 }, dur: 8, color: 0xb02aff, desc: 'Explosão de lâminas em volta de você; a fúria cresce (+15% dano por 8s).' },
     // Necromancer: roubo de vida, dano e necromancia
     drain: { cls: 'nc', name: 'Toque Vampírico', lvl: 1, tier: 0, mp: 4, ag: 1, cd: 0.36, kind: 'drain', mult: 1.1, drain: 30, range: 14, color: 0xff3a5a, desc: 'Projétil de sangue: cura 30% do dano causado.' },
     bonespear: { cls: 'nc', name: 'Lança de Ossos', lvl: 20, tier: 0, mp: 10, ag: 5, cd: 0.9, kind: 'pierce', mult: 1.9, range: 18, color: 0xe8e0c8, desc: 'Lança de osso que atravessa todos os inimigos.' },
     raise: { cls: 'nc', name: 'Erguer Esqueleto', lvl: 40, tier: 0, mp: 35, ag: 10, cd: 12, kind: 'summon', ally: 'skeleton', count: 2, dur: 30, color: 0x7affb0, desc: 'Ergue 2 esqueletos guerreiros por 30s.' },
     bloodpact: { cls: 'nc', name: 'Pacto de Sangue', lvl: 70, tier: 0, mp: 40, ag: 15, cd: 22, kind: 'buff', buff: { lifeSteal: 6, dmgPct: 12 }, dur: 30, color: 0xff2a3a, desc: '+6% de roubo de vida e +12% dano por 30s.' },
     soulburst: { cls: 'nc', name: 'Explosão de Almas', lvl: 150, tier: 1, mp: 40, ag: 14, cd: 2.4, kind: 'drainnova', mult: 2.9, radius: 7, drain: 15, color: 0x7affb0, desc: 'Onda de almas ao redor; cura 15% do dano causado.' },
-    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 400, tier: 2, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
+    army: { cls: 'nc', name: 'Exército dos Mortos', lvl: 300, tier: 1, mp: 80, ag: 30, cd: 20, kind: 'army', mult: 5, radius: 7, range: 14, ally: 'deathknight', count: 3, dur: 25, color: 0xff3a5a, desc: 'Os mortos rompem o chão no alvo e 3 cavaleiros da morte lutam por 25s.' },
   };
   const skillsFor = (cls) => Object.keys(SKILLS).filter((k) => SKILLS[k].cls === cls);
 
@@ -298,7 +298,7 @@
   };
   const treeNodeId = (cls, b, n) => cls + '.' + b + '.' + n;
   function treePoints(ch) {
-    return Math.floor(ch.level / 10) + ch.resets * 10 + ch.tier * 5;
+    return Math.floor(ch.level / 20) + ch.resets + ch.tier * 2;
   }
   function treeSpent(ch) {
     let s = 0;
@@ -813,7 +813,7 @@
   function newCharacter(name, cls) {
     const C = CLASSES[cls];
     return {
-      name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0,
+      name, cls, level: 1, exp: 0, resets: 0, tier: 0, points: 0, treeV: 2,
       stats: Object.assign({}, C.base), tree: {},
       gold: 5000, bossKills: 0, created: Date.now(),
       equip: {}, bag: [], skillBar: skillsFor(cls).filter((k) => SKILLS[k].lvl <= 1),

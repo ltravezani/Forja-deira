@@ -3,7 +3,7 @@
 // viram um bloco perto do polegar direito, as poções e os botões Coletar/Itens ficam
 // perto do polegar esquerdo (ver shell.html, seção "toque"). No PC nada disso aparece.
 import { CONFIG, uiScale } from '../core/config.js';
-import { G } from '../core/state.js';
+import { G, persist, S } from '../core/state.js';
 import { $, touchUI } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { CAM, canvas } from '../engine/renderer.js';
@@ -77,4 +77,14 @@ export function initTouch() {
   tap('#tbPick', () => spacePickup());
   tap('#tbItems', (b) => { G.showAllLabels = !G.showAllLabels; b.classList.toggle('on', G.showAllLabels); b.setAttribute('aria-pressed', String(G.showAllLabels)); });
   $('#btnPause').addEventListener('click', () => setPaused(true));
+  // recolher/abrir os botões do menu (Personagem, Inventário, Habilidades…); lembra a escolha
+  const fold = $('#menuFold');
+  const applyFold = () => {
+    const on = S.settings.menuFold === true;
+    fold.parentElement.classList.toggle('fold', on);
+    fold.setAttribute('aria-expanded', String(!on));
+    fold.setAttribute('aria-label', on ? 'Abrir menu' : 'Recolher menu');
+  };
+  fold.addEventListener('click', (e) => { e.stopPropagation(); S.settings.menuFold = S.settings.menuFold !== true; persist(); applyFold(); });
+  applyFold();
 }

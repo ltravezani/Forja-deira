@@ -46,7 +46,7 @@ export function paneChar() {
 export function paneSkills() {
   const ch = G.ch, st = G.st;
   const pts = R.treePoints(ch) - R.treeSpent(ch);
-  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. ' + (touchUI() ? 'Toque no botão da habilidade para lançá-la no monstro mais próximo (ou à frente do herói).' : 'Teclas 1–6 lançam no cursor; clique no slot para escolher a do botão direito.') + '</p>' +
+  let h = '<h3>Habilidades</h3><p class="note">Custam MP e AG. ' + (touchUI() ? 'Toque no botão da habilidade para lançá-la no monstro mais próximo (ou à frente do herói).' : 'Teclas 1–6 lançam no cursor (Shift esquiva); clique no slot para escolher a do botão direito.') + '</p>' +
     '<p class="note"><b>Auto</b>: a habilidade sai sozinha quando houver um monstro ao alcance (o herói não anda sozinho; Teleporte e investidas ficam de fora).</p>';
   R.skillsFor(ch.cls).forEach((id) => {
     const sk = R.SKILLS[id];
@@ -58,7 +58,7 @@ export function paneSkills() {
       (ok && autoSkillAllowed(id) ? '<button class="btn sm' + (autoSkillOn(id) ? ' gold' : '') + '" data-act="autoskill" data-id="' + id + '" aria-pressed="' + autoSkillOn(id) + '" title="Lançar sozinha perto de monstros">Auto: ' + (autoSkillOn(id) ? 'sim' : 'não') + '</button> ' : '') +
       (ok ? (inBar >= 0 ? '<button class="btn sm" data-act="unbar" data-id="' + id + '">Slot ' + (inBar + 1) + ' ✕</button>' : '<button class="btn sm" data-act="bar" data-id="' + id + '"' + (ch.skillBar.length >= 6 ? ' disabled' : '') + '>Pôr na barra</button>') : '') + '</div></div>';
   });
-  h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 10 níveis, +10 por reset, +5 por evolução. Até 5 ranks por nó.</p><div class="tree">';
+  h += '<h4>Árvore de maestria · <span class="pts">' + pts + ' pontos</span></h4><p class="note">1 ponto a cada 20 níveis, +1 por reset, +2 por evolução. Até 5 ranks por nó.</p><div class="tree">';
   R.TREES[ch.cls].forEach((br, bi) => {
     h += '<div class="branch"><h5>' + esc(br.name) + '</h5>';
     br.nodes.forEach((n, ni) => {

@@ -82,7 +82,7 @@ test('sanitizeCharacter limita tier, árvore e campos dos itens de saves corromp
   const { sanitizeCharacter } = await load('core/state.js');
   const n0 = R.treeNodeId('dk', 0, 0), n1 = R.treeNodeId('dk', 1, 0);
   const ch = sanitizeCharacter({
-    name: 'Z', cls: 'dk', level: 100, tier: 3.7,
+    name: 'Z', cls: 'dk', level: 100, tier: 3.7, treeV: 2,
     tree: { [n0]: 9, [n1]: 'x', 'nc.0.0': 2 },
     bag: [{ slot: 'armor', cls: 'dk', tier: 'a', plus: NaN, rarity: 'mítico' }, { kind: 'jewel', id: 'bless', qty: NaN }],
     equip: { weapon: { slot: 'weapon', cls: 'dk', tier: 1, plus: 99, rarity: 'magico', locked: 'sim' } },
@@ -100,6 +100,16 @@ test('sanitizeCharacter limita tier, árvore e campos dos itens de saves corromp
   const st = R.deriveStats(ch, []);
   for (const k of ['maxHp', 'minDmg', 'maxDmg', 'attackInterval']) assert.ok(Number.isFinite(st[k]), k);
   // árvore acima dos pontos disponíveis é cortada
-  const poor = sanitizeCharacter({ name: 'P', cls: 'dk', level: 20, tree: { [n0]: 5, [n1]: 5 } });
+  const poor = sanitizeCharacter({ name: 'P', cls: 'dk', level: 20, treeV: 2, tree: { [n0]: 5, [n1]: 5 } });
   assert.equal(R.treeSpent(poor), R.treePoints(poor));
+});
+
+test('sanitizeCharacter devolve os pontos de maestria de saves da árvore antiga', async () => {
+  const { sanitizeCharacter } = await load('core/state.js');
+  const ch = sanitizeCharacter({ name: 'V', cls: 'dk', level: 400, resets: 2, tier: 1, tree: { [R.treeNodeId('dk', 0, 0)]: 5, [R.treeNodeId('dk', 1, 0)]: 5 } });
+  assert.deepEqual(ch.tree, {});
+  assert.equal(ch.treeV, 2);
+  assert.equal(R.treePoints(ch), 24);
+  ch.tree[R.treeNodeId('dk', 0, 0)] = 3;
+  assert.equal(sanitizeCharacter(ch).tree[R.treeNodeId('dk', 0, 0)], 3);
 });

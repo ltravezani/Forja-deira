@@ -3,11 +3,17 @@ import { G } from '../core/state.js';
 import { $, dec, esc, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { potionCount, usePotion } from '../game/inventory.js';
+import { CONFIG } from '../core/config.js';
+import { dodgeLeft, tryDodge } from '../game/dodge.js';
 import { cdLeft, requestCast } from '../game/skills.js';
 import { updateLowHp } from './feedback.js';
 import { iconURI, skillIconURI } from './icons.js';
 
 const slotRefs = [];
+const DODGE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3a2e52"/><stop offset="1" stop-color="#14101c"/></radialGradient></defs>' +
+  '<rect width="64" height="64" fill="url(#g)"/><g fill="none" stroke="#e8d08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 44c9-3 15-11 22-22"/><path d="M24 20h11v11"/></g>' +
+  '<g fill="none" stroke="#e8d08a" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"><path d="M10 54h16"/><path d="M38 46c6 0 11-3 16-8"/></g>' +
+  '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>');
 /** Recria a barra de habilidades (troca de habilidades, evolução, novo personagem). */
 export function buildSlots() {
   const box = $('#slots');
@@ -32,6 +38,22 @@ export function buildSlots() {
     });
     box.appendChild(el);
     slotRefs.push({ i, el, cd: el.querySelector('.cd'), h: null, no: null });
+  }
+  // esquiva: casa fixa entre as habilidades e as poções (Shift no PC, toque no celular)
+  {
+    const el = document.createElement('button');
+    el.className = 'slot dodge has';
+    el.style.backgroundImage = 'url("' + DODGE_ICON + '")';
+    el.title = 'Esquiva · Shift · passo rápido sem receber dano';
+    el.setAttribute('aria-label', 'Esquiva');
+    el.innerHTML = '<kbd>Shift</kbd><span class="sn">Esquiva</span><i class="cd"></i>';
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      Sfx.init();
+      tryDodge(false);
+    });
+    box.appendChild(el);
+    slotRefs.push({ dodge: true, el, cd: el.querySelector('.cd'), h: null });
   }
   for (const id of ['hp', 'mp']) {
     const el = document.createElement('button');
@@ -90,6 +112,12 @@ export function hudTick() {
 }
 function updateSlotStates(ch, st) {
   for (const s of slotRefs) {
+    if (s.dodge) {
+      const left = dodgeLeft();
+      const h = left > 0 ? Math.min(100, (left / CONFIG.dodge.cd) * 100).toFixed(1) + '%' : '0';
+      if (s.h !== h) { s.h = h; s.cd.style.height = h; s.el.classList.toggle('cooling', left > 0); }
+      continue;
+    }
     if (s.pot) { const n = String(potionCount(s.pot)); if (s.qty !== n) { s.qty = n; s.q.textContent = n; } continue; }
     const id = ch.skillBar[s.i];
     if (!id) continue;
