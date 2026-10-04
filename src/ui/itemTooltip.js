@@ -3,7 +3,7 @@
 // reaproveitados; os botões usam os mesmos data-act do painel (paneActions.js).
 import { CONFIG } from '../core/config.js';
 import { G, UI } from '../core/state.js';
-import { $, esc, fmt, R } from '../core/util.js';
+import { $, dec, esc, fmt, R, touchUI } from '../core/util.js';
 import { classOk, cpOf, cpWith, reqOk } from '../game/inventory.js';
 import { hasTownServices } from '../game/zones.js';
 import { glyph, iconHtml } from './icons.js';
@@ -51,9 +51,9 @@ function itemDesc(it) {
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'potion') {
     const P = R.POTIONS[it.id];
-    if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Gold.';
+    if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Ouro.';
     if (P.buff) return esc(P.desc) + ' Beber de novo renova o tempo.';
-    return 'Recupera ' + Math.round(P.pct * 100) + '% + ' + P.flat + '. Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.';
+    return 'Recupera ' + Math.round(P.pct * 100) + '% + ' + P.flat + '. ' + (touchUI() ? 'Botão de poção na barra.' : 'Atalho ' + (it.id === 'hp' ? 'Q' : 'E') + '.');
   }
   return (it.cls ? 'Usável por ' + R.itemUsers(it).join(', ') : 'Usável por todas as classes') + '.';
 }
@@ -67,7 +67,7 @@ export function itemInfoHtml(it, where) {
     const lines = R.itemLines(it);
     if (lines.length) h += '<div class="sec">' + lines.map(([k, v]) => '<div class="ln">' + k + ' <b class="num">' + v + '</b></div>').join('') + '</div>';
     let a = '';
-    if (it.luck) a += '<div class="ln">Sorte (crítico +5%, +25% no Soul)</div>';
+    if (it.luck) a += '<div class="ln">Sorte (crítico +5%, +25% de chance com a Joia da Alma)</div>';
     if (it.skill) a += '<div class="ln">Habilidade (+10% dano de habilidades)</div>';
     if (it.addOpt) a += '<div class="ln">Opção adicional +' + it.addOpt + '</div>';
     const exSet = it.slot === 'weapon' || it.slot === 'pendant' ? R.EXC_WEAPON : R.EXC_ARMOR;
@@ -82,7 +82,7 @@ export function itemInfoHtml(it, where) {
       const bad = !reqOk(it), have = req.stat === 'level' ? G.ch.level : G.st.total[req.stat];
       r += '<div class="ln req' + (bad ? ' bad' : '') + '">Requer ' + (req.stat === 'level' ? 'nível' : statLabel(req.stat)) + ' ' + req.value + (bad ? ' (você tem ' + have + ')' : '') + '</div>';
     }
-    if (it.cls && !classOk(it)) r += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + ' — venda ou negocie no mercado.</div>';
+    if (it.cls && !classOk(it)) r += '<div class="ln req bad">Exclusivo de ' + R.itemUsers(it).join(', ') + '. Venda na Mercadora Lira (Comuns e Mágicos) ou envie com o pet.</div>';
     if (r) h += '<div class="sec">' + r + '</div>';
     h += '<div class="sec ln cpl">CP do item <b class="num">' + fmt(R.itemCP(it)) + '</b>';
     if (where === 'bag' && classOk(it)) {
@@ -93,7 +93,11 @@ export function itemInfoHtml(it, where) {
     h += '</div>';
   }
   h += '<div class="sec desc">' + itemDesc(it) + '</div>';
-  if (it.slot) h += '<div class="seed">Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + it.rolls[0].roll.toFixed(5) : '') + ' · valor ' + fmt(R.itemValue(it)) + ' Gold</div>';
+  if (it.slot) {
+    // seed e rolagem ficam num bloco recolhido "Detalhes técnicos" (a mesma escolha vale para a aba Drops)
+    h += '<div class="seed">Valor ' + fmt(R.itemValue(it)) + ' de Ouro · <button class="techlink" data-act="techToggle" aria-expanded="' + !!UI.techOpen + '">' + (UI.techOpen ? '▾' : '▸') + ' Detalhes técnicos</button>' +
+      (UI.techOpen ? '<br>Seed ' + esc(it.seed || '—') + (it.rolls && it.rolls[0] ? ' · rolagem ' + dec(it.rolls[0].roll, 5) : '') : '') + '</div>';
+  }
   h += '</div><div class="tip-ft">' + actionButtons(it, where, false) + '</div>';
   return h;
 }
@@ -110,7 +114,7 @@ function actionButtons(it, where, menu) {
   h += b('lock', it.locked ? 'Destrancar' : 'Trancar');
   // item trancado nunca é vendido nem descartado (nem pelo pet)
   if (where === 'bag' && !it.locked) {
-    if (hasTownServices()) h += confirming(it, 'sell') ? b('sell', 'Confirmar venda · ' + fmt(R.sellValue(it)) + ' Gold', 'gold') : b('sell', 'Vender ' + fmt(R.sellValue(it)) + ' Gold');
+    if (hasTownServices()) h += confirming(it, 'sell') ? b('sell', 'Confirmar venda · ' + fmt(R.sellValue(it)) + ' de Ouro', 'gold') : b('sell', 'Vender · ' + fmt(R.sellValue(it)) + ' de Ouro');
     h += confirming(it, 'drop') ? b('drop', 'Confirmar descarte', 'gold') : b('drop', 'Descartar');
   }
   return h;

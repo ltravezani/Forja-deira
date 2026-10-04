@@ -3,7 +3,7 @@ import { gltfHit } from '../art/gltfModels.js';
 import { flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G, persist } from '../core/state.js';
-import { fmt, R, rand } from '../core/util.js';
+import { fmt, R, rand, touchUI } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { impactStar, shockRing, slashArc } from '../engine/combatfx.js';
 import { emit, spawnRing } from '../engine/effects.js';
@@ -205,20 +205,20 @@ function dropMonsterLoot(m, src) {
     dropLoot(m.x, m.z, { type: 'item', item: it });
     const ord = R.RARITY[it.rarity].order;
     G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: it.rolls[0] ? it.rolls[0].roll : null, table: it.rolls[0] ? it.rolls[0].table : null, src, mf: G.st.mf, at: Date.now() });
-    if (ord >= 2) { log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot'); Sfx.loot(ord); }
+    if (ord >= 2) { log('Drop raro: ' + R.itemName(it) + '.', 'loot'); Sfx.loot(ord); }
   }
   if (G.dropLog.length > 40) G.dropLog.length = 40;
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
-/** Torre Infinita: só Gold (em dobro) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+/** Torre Infinita: só Ouro (em dobro) e Joias; o chefe tem 20% de chance de soltar o tesouro. */
 function dropTowerLoot(m, src, seed) {
   const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   if (src !== 'boss') return;
-  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' Gold e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Jewels.' : ' Jewel.'), 'loot'); Sfx.loot(3); }
+  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
   else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
 }
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */
@@ -283,7 +283,7 @@ export function unlockSkills() {
     const sk = R.SKILLS[id];
     if (sk.lvl <= ch.level && sk.tier <= ch.tier && ch.skillBar.indexOf(id) < 0 && ch.skillBar.length < 6) {
       ch.skillBar.push(id);
-      log('Nova habilidade: ' + sk.name + ' (tecla ' + ch.skillBar.length + ').', 'sys');
+      log('Nova habilidade: ' + sk.name + (touchUI() ? ' (já na barra de habilidades).' : ' (tecla ' + ch.skillBar.length + ').'), 'sys');
     }
   });
 }
@@ -349,7 +349,7 @@ export function breakBarrel(b) {
   const lvl = zoneLevel();
   const goldMult = G.zone === 'tower' ? R.TOWER.goldMult : 1;
   if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor((lvl * (8 + rand() * 12) + 10) * goldMult) });
-  if (G.zone === 'tower') return; // na torre só cai Gold
+  if (G.zone === 'tower') return; // na torre só cai Ouro
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }

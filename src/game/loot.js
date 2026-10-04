@@ -17,7 +17,7 @@ import { log } from '../ui/log.js';
 import { gy, walkable } from '../world/grid.js';
 
 function lootLabel(l) {
-  if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
+  if (l.type === 'gold') return { text: fmt(l.amount) + ' de Ouro', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
   if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: R.POTIONS[l.id].color || (l.id === 'hp' ? '#ff8a7a' : '#8ab8ff') };
   if (l.type === 'talisman') return { text: R.TALISMANS[l.id].name, color: R.TALISMANS[l.id].color };
@@ -87,7 +87,7 @@ export function dropEdenRoll(x, z, drop, src) {
   for (const it of drop.items) {
     dropLoot(x, z, { type: 'item', item: it });
     G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: null, table: null, src, mf: G.st.mf, at: Date.now() });
-    log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot');
+    log('Drop raro: ' + R.itemName(it) + '.', 'loot');
     Sfx.loot(R.RARITY[it.rarity].order);
   }
   if (G.dropLog.length > 40) G.dropLog.length = 40;

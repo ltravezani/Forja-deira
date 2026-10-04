@@ -20,9 +20,9 @@ Cada ajuste abaixo muda algo concreto no código. Nenhum remove um pilar do brie
 | 2 | Fórmulas de atributos | As classes seguem um modelo de *relações de atributo* (`alvo = multiplicador × fonte`) | Deixa o balanceamento de cada classe declarativo e fácil de testar. |
 | 3 | 9–15 classes | Elenco de 15 definido, **5 jogáveis** (DK, DW, Elf, Dark Elf, Necromancer) | Cada classe exige ~6 habilidades, árvore, modelo e balanceamento. |
 | 4 | Nível 800–1100+ e resets | **Nível máximo 1000**, **reset a partir do 400**, pontos fixos por reset + bônus por nível acima de 400 | Resolve a tensão entre "cap alto" e "reset": quem gosta de grind vai até 1000; quem gosta de reset reinicia no 400. |
-| 8 | Magic Find visível | Tabela de drop **visível no jogo** (painel Drops), MF com **teto suave** (retorno decrescente) e **seed por drop** | Transparência: a mesma seed sempre gera o mesmo item. |
-| 9 | Aprimoramento de itens | Fusão Chaos que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 Gold | Perder um item de horas de farm por azar frustra mais do que desafia. |
-| 11 | — | **Pet vendedor**: envia itens comuns para a cidade e volta com Gold | Mantém o ritmo contínuo de combate, sem voltar à cidade. |
+| 8 | Magic Find visível | Tabela de drop **visível no jogo** (painel Drops), Encontrar Magia (MF) com **teto suave** (retorno decrescente) e **seed por drop** | Transparência: a mesma seed sempre gera o mesmo item. |
+| 9 | Aprimoramento de itens | Fusão do Caos (Joia do Caos) que falha **volta o item a +0**, sem destruí-lo; custa 1.000.000 de Ouro | Perder um item de horas de farm por azar frustra mais do que desafia. |
+| 11 | — | **Pet vendedor**: envia itens comuns para a cidade e volta com Ouro | Mantém o ritmo contínuo de combate, sem voltar à cidade. |
 | 14 | Mobile | Layout responsivo e toque **desde o protótipo** | Portar HUD tarde sai caro; o protótipo já funciona em 390 px. |
 | 15 | Assets de terceiros | **Descontinuado (27/09/2026).** O jogo não lê arquivos de arte de terceiros: modelos, mapas e texturas são só os próprios do projeto | Evita dependência de terceiros e risco de PI. Ver §11. |
 | 16 | Itens NFT, token, mercado e staking | **Descontinuado (27/09/2026).** Jogo 100% offline | Sem dependência de rede, carteira ou regulação de token; o foco fica no combate e no loot. |
@@ -113,8 +113,8 @@ Ritmo resultante (abates por nível):
 
 ### 4.2 Reset
 
-- Requisitos: nível ≥ 400 e `min(500 000 × (resets+1), 20 000 000)` Gold.
-- Efeito: nível 1, atributos voltam à base, `2 200 × resets` pontos livres, +3 pontos por nível acima de 400, +2% MF permanente, +10 pontos de árvore.
+- Requisitos: nível ≥ 400 e `min(500 000 × (resets+1), 20 000 000)` de Ouro.
+- Efeito: nível 1, atributos voltam à base, `2 200 × resets` pontos livres, +3 pontos por nível acima de 400, +2% de Encontrar Magia permanente, +10 pontos de árvore.
 - Itens ficam equipados, mas **inativos** até o personagem cumprir o requisito de novo.
 - Limite: 100 resets (Grand Reset fica para a Fase 3).
 
@@ -159,7 +159,7 @@ Marca do chefe (v0.7): selo rúnico plano no chão, do tamanho do alcance do che
 
 Slots: arma, elmo, armadura, luvas, botas, anel, colar e asas (só de chefes). 10 tiers por nível de drop (0, 15, 35, 60, 95, 140, 200, 270, 350, 450).
 
-Atributos dos itens: **+nível (0–15)**, **Sorte** (+5% crítico, +25% no Soul), **Habilidade** (+10% dano de habilidade), **Opção adicional** (+4 a +16), **opções Excelentes** (6 de arma, 6 de armadura), **Ancestral** (+atributo) e **Lendário** (afixo único, como Encontrar Magia +40%).
+Atributos dos itens: **+nível (0–15)**, **Sorte** (+5% crítico, +25% com a Joia da Alma), **Habilidade** (+10% dano de habilidade), **Opção adicional** (+4 a +16), **opções Excelentes** (6 de arma, 6 de armadura), **Ancestral** (+atributo) e **Lendário** (afixo único, como Encontrar Magia +40%).
 
 Requisito de atributo: `(15 + 38·tier + 4·plus) × (1 para armas, 0,7 para armaduras)`.
 
@@ -182,21 +182,21 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 ```
 
 - `rollDrop(seed, nível, fonte, MF, classe)` é determinístico: a mesma seed gera sempre o mesmo item.
-- O painel **Drops** (tecla L) mostra a tabela de raridade (base, você, elite, chefe) com o seu MF e os últimos drops com seed e rolagem.
+- O painel **Drops** (tecla L) mostra a tabela de raridade (base, você, elite, chefe) com o seu MF e os últimos drops com seed e rolagem num bloco recolhido "Detalhes técnicos".
 - Um teste automatizado compara a frequência observada com a tabela publicada (40 000 amostras, desvio < 1,2 p.p.).
 
 ### 6.4 Aprimoramento
 
-| Jewel | Faixa | Chance | Falha |
+| Joia | Faixa | Chance | Falha |
 |---|---|---|---|
-| Bless | +0 → +6 | 100% | — |
-| Soul | +6 → +9 | 50% (+25% com Sorte) | −1 (mínimo +6) |
-| Chaos | +9 → +15 | 60% − 5% por nível (mínimo 30%) + 20% com Sorte; custa 1.000.000 Gold | volta a +0, **nunca destrói** |
+| Bênção (Bless) | +0 → +6 | 100% | — |
+| Alma (Soul) | +6 → +9 | 50% (+25% com Sorte) | −1 (mínimo +6) |
+| Caos (Chaos) | +9 → +15 | 60% − 5% por nível (mínimo 30%) + 20% com Sorte; custa 1.000.000 de Ouro | volta a +0, **nunca destrói** |
 | Life | opção adicional +4 | 50% (+10% com Sorte) | nada |
 
 ---
 
-### 6.5 Combat Points, auto-equipar e inventário
+### 6.5 Pontos de Combate (CP), auto-equipar e inventário
 
 - **CP do personagem** (`R.combatPower`): ofensa (dano médio × bônus de dano, crítico/excelente, habilidades ÷ intervalo de ataque) × 6 + HP efetivo (HP × defesa, dividido pela absorção) × 0,9 + utilitários (roubo de vida, reflexão, MF, Gold). Calculado sem buffs temporários, para ser estável. Aparece no HUD, no painel Personagem e no topo do Inventário.
 - **CP do item** (`R.itemCP`): soma ponderada dos atributos da peça (`itemStats`), independe de quem usa. Marcado em cada célula da mochila e do equipamento.
@@ -211,7 +211,7 @@ seed_do_drop = hash32(seed_do_andar, id_do_monstro, contador_de_abates)
 
 ## 7. Tela inicial
 
-- O último personagem jogado aparece **no centro**, em 3D, na praça de Aldrena, com nome, classe, nível, Gold e CP. Um botão grande **Entrar no jogo** (ou Enter).
+- O último personagem jogado aparece **no centro**, em 3D, na praça de Aldrena, com nome, classe, nível, Ouro e CP. Um botão grande **Entrar no jogo** (ou Enter).
 - Com mais de um personagem, setas ‹ › (ou ← →) trocam o personagem mostrado; pontos indicam a posição.
 - **Criar novo personagem** é opção secundária (link abaixo do botão): abre um painel lateral com as 5 classes jogáveis, prévia 3D da classe escolhida e o campo de nome. Sem personagens salvos, esse painel abre direto.
 - Até 5 personagens por navegador; excluir pede confirmação.

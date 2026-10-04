@@ -124,7 +124,7 @@ export function buildItemModel(kind, o) {
     part(GEO.oct, gem, 0.08, 0.1, 0.06, 0, 0.05, 0.02, h, false);
   } else if (kind === 'jewel') {
     h.position.y = 0.26;
-    const facet = shared('jewel|' + col, () => toonMaterial({ color: col, flatShading: true, transparent: true, opacity: 0.85, emissive: new THREE.Color(col), emissiveIntensity: 0.35 }, { rim: 0.7, spec: 1.2 }));
+    const facet = shared('jewel|' + col, () => toonMaterial({ color: col, transparent: true, opacity: 0.85, emissive: new THREE.Color(col), emissiveIntensity: 0.35 }, { rim: 0.7, spec: 1.2 }));
     part(GEO.oct, facet, 0.34, 0.46, 0.34, 0, 0, 0, h);
     part(GEO.oct, gem, 0.18, 0.26, 0.18, 0, 0, 0, h, false);
     part(GEO.sphS, halo, 0.6, 0.6, 0.6, 0, 0, 0, h, false);

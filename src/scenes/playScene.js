@@ -13,6 +13,7 @@ import { hudTick } from '../ui/hud.js';
 import { updateOverlay } from '../ui/labels.js';
 import { drawMinimap } from '../ui/minimap.js';
 import { questUiTick } from '../ui/questUi.js';
+import { panelHold, showHeld } from '../ui/touch.js';
 
 const T = { hud: 0, minimap: 0, save: 0, pane: 0 };
 
@@ -20,6 +21,10 @@ const T = { hud: 0, minimap: 0, save: 0, pane: 0 };
 export function updatePlayScene(dt) {
   const L = CONFIG.loop;
   if (G.paused) { guard('rótulos', updateOverlay); return 0; }
+  // toque fora da cidade: painel ou diálogo aberto segura a simulação (o herói não apanha sem ver)
+  const held = panelHold();
+  showHeld(held);
+  if (held) { guard('rótulos', updateOverlay); if ((T.hud -= dt) <= 0) { T.hud = L.hudInterval; guard('hud', hudTick); } return 0; }
   guard('seleção', updateHover);
   const sim = simDelta(dt);
   guard('mundo', updateWorld, sim);

@@ -127,6 +127,12 @@ export const CONFIG = {
   },
 };
 
+/** Escala da interface em % (Opções): 90 a 130, de 10 em 10; padrão 100. */
+export function uiScale(settings) {
+  const v = settings && settings.uiScale;
+  return Number.isFinite(v) ? Math.max(90, Math.min(130, Math.round(v / 10) * 10)) : 100;
+}
+
 /** Preferências do jogador que afetam CONFIG (aplicadas ao carregar o save e ao mudar Opções). */
 export function applyFeelSettings(settings) {
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;

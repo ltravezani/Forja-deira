@@ -6,6 +6,8 @@ import { G, persist, S, SAVE_KEY, SaveGuard, UI } from '../core/state.js';
 import { $, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
+import { log } from './log.js';
+import { applyUiScale } from './touch.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
 import { sendPetToSell } from '../game/allies.js';
 import { toggleAutoSkill } from '../game/automation.js';
@@ -76,7 +78,7 @@ function paneAction(e) {
       // o segundo clique precisa ser deliberado (um clique duplo acidental não confirma)
       if (needsConfirm(it) && !(conf && conf.it === it && conf.act === a && performance.now() - conf.t > 250)) { UI.itemConfirm = { it, act: a, t: performance.now() }; ItemTooltip.open(false); break; }
       ch.bag.splice(i, 1); UI.sel = null;
-      if (a === 'sell') { const v = R.sellValue(it); ch.gold += v; Sfx.coin(); log('Vendeu ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + ' por ' + fmt(v) + ' Gold.', 'loot'); }
+      if (a === 'sell') { const v = R.sellValue(it); ch.gold += v; Sfx.coin(); log('Vendeu ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + ' por ' + fmt(v) + ' de Ouro.', 'loot'); }
       else log('Descartou ' + R.itemName(it) + (it.qty > 1 ? ' ×' + it.qty : '') + '.', 'sys');
       break;
     }
@@ -91,9 +93,14 @@ function paneAction(e) {
       // revalida: nó da classe, ponto livre e limite de 5 ranks
       const id = b.dataset.id, r = ch.tree[id] || 0;
       const valid = R.TREES[ch.cls].some((br, bi) => br.nodes.some((n, ni) => R.treeNodeId(ch.cls, bi, ni) === id));
-      if (valid && r < 5 && R.treePoints(ch) - R.treeSpent(ch) > 0) { ch.tree[id] = r + 1; recalc(); }
+      if (valid && r < 5 && R.treePoints(ch) - R.treeSpent(ch) > 0) {
+        ch.tree[id] = r + 1; recalc(); Sfx.loot(2);
+        const nm = b.querySelector('b');
+        log('Árvore de maestria: ' + (nm ? nm.textContent : 'nó') + ' agora no rank ' + (r + 1) + '/5.', 'sys');
+      }
       break;
     }
+    case 'techToggle': UI.techOpen = !UI.techOpen; break;
     case 'toggleSound': S.settings.sound = !S.settings.sound; Sfx.on = S.settings.sound; break;
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
@@ -134,5 +141,22 @@ export function initPaneActions() {
   // clique fora fecha o menu de contexto
   window.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctxMenu')) ContextMenu.close(); }, true);
 
+  // controles deslizantes de Opções: aplicam ao arrastar e salvam ao soltar
+  const RANGES = {
+    sfxVol: (v) => { S.settings.sfxVol = v; Sfx.vol = v / 100; },
+    musicVol: (v) => { S.settings.musicVol = v; Music.setVolume(v / 100); },
+    uiScale: (v) => { S.settings.uiScale = v; applyUiScale(S.settings); },
+  };
+  $('#pane').addEventListener('input', (e) => {
+    const f = RANGES[e.target.id];
+    if (!f) return;
+    const v = +e.target.value;
+    f(v);
+    const out = e.target.nextElementSibling;
+    if (out) out.textContent = v + '%';
+  });
+  $('#pane').addEventListener('change', (e) => {
+    if (RANGES[e.target.id]) { persist(); if (e.target.id === 'sfxVol') Sfx.coin(); }
+  });
   $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }

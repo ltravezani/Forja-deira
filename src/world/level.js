@@ -191,7 +191,7 @@ function buildWalls(L, T, opt) {
   g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3));
   if (opt.rough) g.computeVertexNormals(); else g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(N), 3));
   g.computeBoundingSphere();
-  const mat = toonMaterial({ map: T.wall.map, normalMap: T.wall.normalMap, vertexColors: true, flatShading: !!opt.rough }, { rim: 0.12 });
+  const mat = toonMaterial({ map: T.wall.map, normalMap: T.wall.normalMap, vertexColors: true }, { rim: 0.12 });
   mat.normalScale.setScalar(0.7);
   mat.color.setHex(T.wallCol || 0xffffff);
   if (T.wall.emissiveMap) { mat.emissiveMap = T.wall.emissiveMap; mat.emissive = new THREE.Color(T.wallGlow || 0xff5a10); mat.emissiveIntensity = 0.9; }

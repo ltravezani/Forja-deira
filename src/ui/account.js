@@ -159,6 +159,7 @@ export function refreshAccountUi() {
     const label = !on ? 'Salvar na nuvem' : ({ busy: 'Sincronizando…', synced: 'Salvo na nuvem', offline: 'Nuvem: offline', conflict: 'Escolha qual save manter', relogin: 'Entrar de novo', error: 'Erro na nuvem' }[Cloud.status] || 'Conta');
     btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.1 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>' + esc(label) + '</span>';
     btn.className = 't-acct' + (on ? ' on st-' + Cloud.status : '');
+    btn.title = label; btn.setAttribute('aria-label', label); // no celular, com o painel de criação aberto, só o ícone aparece
   }
   if (foot) foot.textContent = cloudEnabled() && Cloud.user ? 'Progresso salvo neste navegador e na nuvem (' + Cloud.user.email + ')' : 'Jogo offline · progresso salvo neste navegador';
   if (isOpen() && A.mode === 'account' && !A.busy) render();

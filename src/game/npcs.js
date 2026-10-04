@@ -30,7 +30,8 @@ export function spawnNpcs(L) {
     world.add(model.root);
     const label = document.createElement('div');
     label.className = 'label npc';
-    label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + '</small>';
+    // NPC ainda sem função (Kora, arena): selo "Em breve" claro no rótulo
+    label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + (D.soon ? ' <em class="soon">Em breve</em>' : '') + '</small>';
     label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
     overlay.appendChild(label);
     const npc = { id: n.id, D, x, z, model, label, phase: rand() * 6 };
@@ -76,6 +77,7 @@ function makeEdenPortal(x, z) {
     const left = G.ch ? R.edenRemaining(G.ch, Date.now()) : 0;
     const asleep = left > 0;
     pt.label.textContent = asleep ? 'Portal do Éden · ' + fmtWait(left) : 'Portal do Éden';
+    pt.lw = 0; // largura muda com o texto (rótulos de loot desviam dela)
     pt.color = asleep ? 0x4a6a58 : 0x7aff9a;
     pt.ring.material.color.setHex(asleep ? 0x2a4a38 : 0x7aff9a).multiplyScalar(asleep ? 1 : CONFIG.style.glowCore);
     pt.disc.material.color.setHex(asleep ? 0x1a2a20 : 0x7aff9a);

@@ -9,10 +9,10 @@ import { Cloud, cloudTick, initCloud } from './core/cloud.js';
 import { G, loadSave, persist, S, UI } from './core/state.js';
 import { TILE } from './core/util.js';
 import { installDebugHook } from './debug.js';
-import { Sfx } from './engine/audio.js';
+import { Sfx, sfxVolume } from './engine/audio.js';
 import { updateCombatFx } from './engine/combatfx.js';
 import { updateParticles, updateRings } from './engine/effects.js';
-import { Music, MUSIC_LEVELS, musicLevel } from './engine/music.js';
+import { Music, musicVolume } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
 import { updateTelegraphs } from './engine/telegraph.js';
 import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
@@ -23,13 +23,14 @@ import { updateTitleScene } from './scenes/titleScene.js';
 import { initAccount, openAccount, refreshAccountUi, showConflictDialog } from './ui/account.js';
 import { initCursor } from './ui/cursor.js';
 import { initDragDrop } from './ui/dragdrop.js';
-import { initDrawer } from './ui/drawer.js';
+import { initDrawer, openTab } from './ui/drawer.js';
 import { initDialogs } from './ui/npcDialogs.js';
 import { initPaneActions } from './ui/paneActions.js';
 import { initPause } from './ui/pause.js';
 import { initTabLock } from './ui/tabLock.js';
 import { initQuestUi } from './ui/questUi.js';
 import { initTitle, renderTitle, titlePreview } from './ui/title.js';
+import { applyUiScale, initTouch } from './ui/touch.js';
 
 function frame(dt) {
   // efeitos seguem o tempo da simulação: congelam na pausa e desaceleram na micro-pausa
@@ -53,7 +54,9 @@ function applySettings() {
   applyQuality(S.settings.quality || 'media');
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
-  Music.setVolume(MUSIC_LEVELS[musicLevel(S.settings)].v);
+  Sfx.vol = sfxVolume(S.settings) / 100;
+  Music.setVolume(musicVolume(S.settings) / 100);
+  applyUiScale(S.settings);
 }
 
 /** O save foi trocado pelo da nuvem (ou por uma cópia de segurança): redesenha a tela de título. */
@@ -78,7 +81,8 @@ function boot() {
   initPaneActions();
   initDragDrop();
   initTitle();
-  initPause(returnToTitle);
+  initPause(returnToTitle, () => openTab('opts'));
+  initTouch();
   initAccount();
   initQuestUi();
   buildTitleBackdrop();
