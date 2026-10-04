@@ -5,7 +5,7 @@ import { cloudDebug } from './core/cloud.js';
 import { CONFIG } from './core/config.js';
 import { G, S } from './core/state.js';
 import { R } from './core/util.js';
-import { CAM, camera, camTarget, renderer, scene, world } from './engine/renderer.js';
+import { activeLights, applyQuality, CAM, camera, camTarget, currentQuality, dynResScale, renderer, scene, warming, world } from './engine/renderer.js';
 import { hurtPlayer, killMonster } from './game/combat.js';
 import { MON } from './game/data.js';
 import { followPath, pathTo } from './game/movement.js';
@@ -37,5 +37,6 @@ export function installDebugHook(loopStats) {
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
     enterEden, edenState, towerState, lineClear, gltfHit, gltfRise,
     tryDodge, questEvent, openQuestBoard, spawnAlly, telegraphCircle, telegraphCone,
+    warming, applyQuality, currentQuality, dynResScale, activeLights,
   };
 }

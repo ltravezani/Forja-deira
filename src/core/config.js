@@ -24,11 +24,18 @@ export const CONFIG = {
   title: {
     pitch: 0.3, zoom: 0.44, sway: 0.1, swaySpeed: 0.12,
   },
+  // lights: luzes pontuais no shader (herói + tochas/clarões); fixo por qualidade (mudar recompila tudo).
+  // lite: pós-processo leve (sem contorno por normais nem silhueta larga). dynRes: baixa a resolução
+  // sozinha quando o quadro passa de ~20 ms. shadowSize/softShadows: mapa de sombra do sol.
   quality: {
-    alta: { dpr: 2, shadows: true, particles: 1, msaa: 4, bloom: true },
-    media: { dpr: 1.3, shadows: true, particles: 0.8, msaa: 4, bloom: true },
-    baixa: { dpr: 1, shadows: false, particles: 0.5, msaa: 0, bloom: false },
+    alta: { dpr: 2, shadows: true, shadowSize: 2048, softShadows: true, particles: 1, msaa: 4, bloom: true, lights: 9, lite: false, dynRes: false, aniso: 8 },
+    media: { dpr: 1.3, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.8, msaa: 4, bloom: true, lights: 4, lite: false, dynRes: false, aniso: 4 },
+    celular: { dpr: 1.5, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.6, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
+    baixa: { dpr: 1, shadows: false, shadowSize: 1024, softShadows: false, particles: 0.5, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
   },
+  // resolução dinâmica (qualidades com dynRes): média de quadro acima de `slowMs` por 1 s baixa um
+  // degrau; abaixo de `fastMs` por 3 s sobe um. A escala multiplica o DPR da qualidade.
+  dynRes: { slowMs: 20, fastMs: 14, step: 0.1, min: 0.6 },
   style: {
     ink: 0.16,              // cor do contorno = cor da cena × ink (tinta escura colorida, não preto puro)
     edge0: 0.012, edge1: 0.05, // faixa do laplaciano relativo de profundidade que vira traço
@@ -139,4 +146,18 @@ export function applyFeelSettings(settings) {
   const s = settings.shake == null ? 1 : settings.shake;
   CONFIG.feel.shake = reduce ? Math.min(s, 0.3) : s;
   CONFIG.feel.hitStop = settings.hitStop === false || reduce ? 0 : 0.045;
+}
+
+/**
+ * Qualidade inicial para quem ainda não escolheu (sem save): telas de toque e telas
+ * pequenas começam na "celular"; aparelhos com pouca memória (≤ 2 GB), na "baixa".
+ */
+export function autoQuality() {
+  const nav = typeof navigator === 'object' ? navigator : {};
+  const mem = nav.deviceMemory || 4;
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const scr = typeof screen === 'object' ? Math.min(screen.width || 0, screen.height || 0) : 0;
+  const small = scr > 0 && scr < 500;
+  if (mem <= 2) return 'baixa';
+  return coarse || small ? 'celular' : 'media';
 }

@@ -7,7 +7,7 @@ import { fbm, hash2, makeTexSet, sat, texDecal, texPlaza, vnoise } from '../art/
 import { CONFIG } from '../core/config.js';
 import { R, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
-import { camera, hemi, heroLight, renderer, scene, setGrade, setHeightFog, sun, torchLights, world } from '../engine/renderer.js';
+import { activeLights, camera, hemi, heroLight, renderer, scene, sceneChanged, setGrade, setHeightFog, sun, torchLights, world } from '../engine/renderer.js';
 import { biomeTex } from './biomeTextures.js';
 import { BIOMES } from './biomes.js';
 import { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, setKitGlowTime } from './kit.js';
@@ -25,31 +25,77 @@ export function getLevelMeshes() { return levelMeshes; }
 let torches = [];
 let fires = []; // {x, y, z, size, kind} para chamas animadas
 function addLevel(o) { world.add(o); levelMeshes.push(o); return o; }
-/** Desenha uma lista de adereços `name` com instancing. fn(p) → {x,y,z,ry,s,sy} */
+/**
+ * Recorte por região: o nível é dividido em blocos de CHUNK × CHUNK tiles. Cada bloco vira uma
+ * malha com esfera envolvente própria, para o Three.js descartar o que está fora da câmera e
+ * fora da câmera da sombra (antes cada tipo de adereço era um bloco único do tamanho do mapa).
+ */
+const CHUNK = 20 * TILE;
+const chunkKey = (x, z) => Math.floor(x / CHUNK) * 4096 + Math.floor(z / CHUNK);
+/** Com poucas instâncias, um bloco só (cada bloco a mais é uma chamada de desenho a mais). */
+const CHUNK_MIN = 8;
+/** Adereço pequeno (raio em m abaixo disto): não projeta sombra (quase não aparece e custa no passe de sombra). */
+const SMALL_SHADOW = 0.45;
+/** Desenha uma lista de adereços `name` com instancing, uma malha por bloco do nível. fn(p) → {x,y,z,ry,s,sy} */
 function placeKit(name, list, fn, opt) {
   if (!list.length) return;
   const k = kit(name);
-  const mk = (geo, mat, shadow) => {
-    const m = new THREE.InstancedMesh(geo, mat, list.length);
-    list.forEach((p, i) => {
-      const o = fn(p, i);
-      const s = o.s || 1;
-      setInstance(m, i, o.x, o.y || 0, o.z, o.rx || 0, o.ry || 0, 0, o.sx || s, o.sy || s, o.sz || s);
-    });
-    m.castShadow = shadow; m.receiveShadow = true;
-    m.computeBoundingSphere();
-    return addLevel(m);
+  const items = list.map((p, i) => fn(p, i));
+  const groups = new Map();
+  for (const o of items) { const key = items.length < CHUNK_MIN ? 0 : chunkKey(o.x, o.z); let g = groups.get(key); if (!g) groups.set(key, (g = [])); g.push(o); }
+  if (!k.geo.boundingSphere) k.geo.computeBoundingSphere();
+  const big = (o) => k.geo.boundingSphere.radius * Math.max(o.sx || o.s || 1, o.sy || o.s || 1, o.sz || o.s || 1) >= SMALL_SHADOW;
+  const mk = (geo, mat, shadow, renderOrder) => {
+    for (const g of groups.values()) {
+      const m = new THREE.InstancedMesh(geo, mat, g.length);
+      g.forEach((o, i) => {
+        const s = o.s || 1;
+        setInstance(m, i, o.x, o.y || 0, o.z, o.rx || 0, o.ry || 0, 0, o.sx || s, o.sy || s, o.sz || s);
+      });
+      m.castShadow = shadow && g.some(big); m.receiveShadow = true;
+      if (renderOrder) m.renderOrder = renderOrder;
+      m.computeBoundingSphere();
+      addLevel(m);
+    }
   };
   mk(k.geo, k.geo.attributes.wind ? kitWindMat() : kitMat(), !(opt && opt.noShadow));
   // raios de luz falsos saindo de braseiros e cristais grandes (ver buildCones)
   const cs = CONE_KITS[name];
-  if (cs) list.forEach((p, i) => { const o = fn(p, i), s = o.s || 1; cones.push({ x: o.x, y: (o.y || 0) + cs[0] * s, z: o.z, r: cs[1] * s, h: cs[2] * s, color: cs[3] }); });
-  if (k.glow) { const g = mk(k.glow, kitGlowMat(), false); g.renderOrder = 3; }
+  if (cs) items.forEach((o) => { const s = o.s || 1; cones.push({ x: o.x, y: (o.y || 0) + cs[0] * s, z: o.z, r: cs[1] * s, h: cs[2] * s, color: cs[3] }); });
+  if (k.glow) mk(k.glow, kitGlowMat(), false, 3);
   if (k.roof) mk(k.roof, roofMat(), true);
+}
+/**
+ * Divide uma geometria sem índice (triângulos soltos) em blocos do nível pelo centro de cada
+ * triângulo; cada bloco vira uma malha com o mesmo material. Usado no chão e nas paredes.
+ */
+function addChunked(g, mat, cast, receive) {
+  const pos = g.attributes.position.array, tris = pos.length / 9;
+  const groups = new Map();
+  for (let t = 0; t < tris; t++) {
+    const o = t * 9, key = chunkKey((pos[o] + pos[o + 3] + pos[o + 6]) / 3, (pos[o + 2] + pos[o + 5] + pos[o + 8]) / 3);
+    let a = groups.get(key);
+    if (!a) groups.set(key, (a = []));
+    a.push(t);
+  }
+  const names = Object.keys(g.attributes);
+  for (const list of groups.values()) {
+    const cg = new THREE.BufferGeometry();
+    for (const n of names) {
+      const src = g.attributes[n], is = src.itemSize * 3, arr = new Float32Array(list.length * is);
+      list.forEach((t, i) => arr.set(src.array.subarray(t * is, t * is + is), i * is));
+      cg.setAttribute(n, new THREE.BufferAttribute(arr, src.itemSize));
+    }
+    cg.computeBoundingSphere();
+    const m = new THREE.Mesh(cg, mat);
+    m.castShadow = cast; m.receiveShadow = receive;
+    addLevel(m);
+  }
+  g.dispose();
 }
 
 // =============================================================================
-// Chão e paredes: malhas únicas com UV em coordenadas de mundo (sem emendas),
+// Chão e paredes: malhas (divididas em blocos, ver addChunked) com UV em coordenadas de mundo (sem emendas),
 // oclusão ambiente por vértice e mistura de duas texturas por manchas.
 // =============================================================================
 function groundMaterial(A, Bt, tint) {
@@ -106,10 +152,7 @@ function buildGround(L, T, blendFn, tintFn) {
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('blend', new THREE.BufferAttribute(bl, 1));
-  g.computeBoundingSphere();
-  const m = new THREE.Mesh(g, groundMaterial(T.a, T.b));
-  m.receiveShadow = true;
-  return addLevel(m);
+  addChunked(g, groundMaterial(T.a, T.b), false, true);
 }
 /**
  * Paredes: bloco por tile de parede vizinho do chão. Faces só onde aparecem;
@@ -196,9 +239,7 @@ function buildWalls(L, T, opt) {
   mat.color.setHex(T.wallCol || 0xffffff);
   if (T.wall.emissiveMap) { mat.emissiveMap = T.wall.emissiveMap; mat.emissive = new THREE.Color(T.wallGlow || 0xff5a10); mat.emissiveIntensity = 0.9; }
   cutaway(mat);
-  const m = new THREE.Mesh(g, mat);
-  m.castShadow = true; m.receiveShadow = true;
-  addLevel(m);
+  addChunked(g, mat, true, true);
   return walls;
 }
 
@@ -369,6 +410,7 @@ export function buildLevel(L) {
   buildMist(mc[0], mc[1]);
   buildShafts(L, R.mulberry32(L.seed * 7 + 3));
   buildCones();
+  sceneChanged();
 }
 
 // ---------- raios de luz (fachos inclinados vindos do alto, na direção do sol) ----------
@@ -798,18 +840,40 @@ export function updateTorchLights(px, pz, t) {
       emit(f.x + (Math.random() - 0.5) * 0.2 * f.size, f.y - 0.1, f.z + (Math.random() - 0.5) * 0.2 * f.size, { n: 1, color: Math.random() < 0.5 ? 0xffc060 : 0xff6a20, speed: 0.5, up: 2.6, life: 0.45 + f.size * 0.1, size: 0.35 + f.size * 0.25, grav: 2.2, drag: 2, spread: 0.1 });
     }
   }
-  if (!torches.length) { torchLights.forEach((l) => (l.intensity = 0)); return; }
-  const near = torches.map((tc) => ({ tc, d: (tc.x - px) ** 2 + (tc.z - pz) ** 2 })).sort((a, b) => a.d - b.d).slice(0, torchLights.length);
-  torchLights.forEach((l, i) => {
-    const n = near[i];
-    if (!n || n.d > 1100) { l.intensity = 0; return; }
-    const tc = n.tc;
+  // até 6 luzes de tocha (as do conjunto que não estão num clarão de habilidade)
+  const nl = Math.min(6, activeLights());
+  if (!torches.length) { for (let i = 0; i < nl; i++) if (!torchLights[i].userData.busy) torchLights[i].intensity = 0; return; }
+  // tochas mais próximas: refeito a cada 0,2 s ou quando o herói anda mais de 1 m (sem alocar)
+  if (torches !== nearOf || t - nearT > 0.2 || t < nearT || (px - nearX) ** 2 + (pz - nearZ) ** 2 > 1) findNearTorches(px, pz, t);
+  let k = 0;
+  for (let i = 0; i < nl; i++) {
+    const l = torchLights[i];
+    if (l.userData.busy) continue;
+    const tc = nearTc[k], d = nearD[k];
+    k++;
+    if (!tc || d > 1100) { l.intensity = 0; continue; }
     l.position.set(tc.x, tc.y + 0.3, tc.z);
     l.color.setHex(tc.green ? 0x8affb0 : tc.water ? 0x5ac8e8 : tc.cold ? 0x6aa8ff : tc.lava ? 0xff4a10 : tc.lamp ? 0xffb060 : 0xff8a30);
     l.distance = tc.lamp ? 16 : tc.lava ? 10 : 13;
+    l.decay = 1.6;
     const flick = tc.cold ? 1 : 0.84 + Math.sin(t * 9 + i * 2) * 0.09 + Math.sin(t * 23 + i) * 0.06;
     l.intensity = (tc.water ? 7 : tc.cold ? 16 : tc.lava ? 24 : tc.lamp ? 30 : 34) * flick;
-  });
+  }
+}
+const nearTc = new Array(6).fill(null), nearD = new Float64Array(6);
+let nearOf = null, nearT = -1, nearX = 0, nearZ = 0;
+/** Guarda as 6 tochas mais próximas de (px, pz), em ordem (inserção num vetor fixo). */
+function findNearTorches(px, pz, t) {
+  nearOf = torches; nearT = t; nearX = px; nearZ = pz;
+  let n = 0;
+  for (const tc of torches) {
+    const d = (tc.x - px) ** 2 + (tc.z - pz) ** 2;
+    if (n === 6 && d >= nearD[5]) continue;
+    let j = n < 6 ? n++ : 5;
+    while (j > 0 && nearD[j - 1] > d) { nearD[j] = nearD[j - 1]; nearTc[j] = nearTc[j - 1]; j--; }
+    nearD[j] = d; nearTc[j] = tc;
+  }
+  for (let i = n; i < 6; i++) nearTc[i] = null;
 }
 
 // =============================================================================

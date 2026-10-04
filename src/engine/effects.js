@@ -90,9 +90,13 @@ export function updateParticles(dt) {
   if (P.n === 0 && lastDrawn === 0) return; // nada vivo: não reenvia buffers à GPU
   lastDrawn = P.n;
   pGeo.setDrawRange(0, P.n);
-  pGeo.attributes.position.needsUpdate = true;
-  pGeo.attributes.pcolor.needsUpdate = true;
-  pGeo.attributes.size.needsUpdate = true;
+  // só as partículas vivas sobem para a GPU (não o pool inteiro de 4000)
+  for (const k of ['position', 'pcolor', 'size']) {
+    const a = pGeo.attributes[k];
+    a.clearUpdateRanges();
+    if (P.n) a.addUpdateRange(0, P.n * a.itemSize);
+    a.needsUpdate = P.n > 0;
+  }
   pMat.uniforms.uScale.value = renderer.domElement.height * 0.9;
 }
 

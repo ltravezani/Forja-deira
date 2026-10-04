@@ -6,6 +6,7 @@ antes/depois de uma mudança, com números de desempenho opcionais.
 Uso:
   python3 tools/shots.py --tag antes [--perf] [--zones title,town,forest,...]
                          [--perto] [--sem-hud] [--zoom 0.55] [--classe dk] [--out shots]
+                         [--qualidade alta|media|celular|baixa]
   python3 tools/shots.py --comparar antes atual [--out shots]
 
 Zonas: title, town, forest, caves, ruins, castle, abyss, tower. As masmorras usam
@@ -32,6 +33,7 @@ ap.add_argument('--classe', default='dk')
 ap.add_argument('--out', default=os.path.join(ROOT, 'shots'))
 ap.add_argument('--page', default='dist/forja-deira.html')
 ap.add_argument('--size', default='1280x800')
+ap.add_argument('--qualidade', default=None, help='alta, media, celular ou baixa (padrão: a automática)')
 ap.add_argument('--comparar', nargs=2, metavar=('A', 'B'))
 a = ap.parse_args()
 
@@ -124,6 +126,7 @@ with sync_playwright() as p:
 
     pg.goto(url)
     pg.wait_for_function('window.__FORJA_BOOTED === true', timeout=60000)
+    if a.qualidade: pg.evaluate('(q) => window.__FORJA_DEBUG.applyQuality(q)', a.qualidade)
     zones = [z for z in a.zones.split(',') if z]
     if 'title' in zones:
         wait_game(1.5)
