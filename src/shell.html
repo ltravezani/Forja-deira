@@ -641,6 +641,8 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 (function () {
   var gl = null;
   try { var c = document.createElement('canvas'); gl = c.getContext('webgl2') || c.getContext('webgl'); } catch (e) { gl = null; }
+  // só uma sonda: libera o contexto (celulares têm poucos contextos WebGL e memória de vídeo curta)
+  if (gl) { try { var lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch (e) { /* ignora */ } gl = true; }
   function show(msg) {
     var el = document.getElementById('fatal');
     if (!el || window.__FORJA_BOOTED) return;

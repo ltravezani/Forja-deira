@@ -17,7 +17,8 @@ export function allPortals() { return [G.exitPortal, G.townPortal, G.edenPortal,
 export const S = defaultSave();
 export const SAVE_KEY = 'forjadeira.save.v1';
 function defaultSave() {
-  return { chars: [], active: -1, settings: { quality: 'media', sound: true, labels: true } };
+  // quality null = ainda não escolhida: o main.js escolhe pelo aparelho (autoQuality) no primeiro acesso
+  return { chars: [], active: -1, settings: { quality: null, sound: true, labels: true } };
 }
 function readSave(obj) {
   try {

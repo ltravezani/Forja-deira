@@ -100,7 +100,7 @@ export function paneLoot() {
 export function paneOpts() {
   const s = S.settings;
   let h = '<h3>Opções</h3>';
-  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
+  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'celular', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', celular: 'Celular (leve)', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
     '<button class="btn" data-act="toggleOutline">Contorno cartoon: ' + (s.outline === false ? 'desligado' : 'ligado') + '</button>' +
     '<button class="btn" data-act="toggleBloom">Brilho (bloom): ' + (bloomOn() ? 'ligado' : 'desligado') + '</button>' +
     (gltfStats().ready ? '<button class="btn" data-act="toggleAnimChars">Personagens: ' + (gltfEnabled() ? 'animados' : 'simples') + '</button>' : '') + '</div>' +

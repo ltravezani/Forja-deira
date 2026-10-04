@@ -3,7 +3,8 @@
 Monta o jogo a partir de src/ (módulos ES) em dois formatos:
 
   dist/forja-deira.html  arquivo único e offline (Three.js, regras e módulos embutidos)
-  (os modelos glTF de assets/models/ vão embutidos em base64; em dev ficam em dist/models.js)
+  (os modelos glTF de assets/models/ vão embutidos em base64, em <script type="application/octet-stream">,
+   fora do interpretador de JavaScript; em dev ficam em dist/models.js)
   dist/dev.html     carrega src/main.js como módulo ES nativo (desenvolvimento;
                     servir a pasta do projeto por HTTP, ex.: python3 -m http.server)
 
@@ -116,15 +117,27 @@ def bundle():
     return js, order
 
 
-def models_js():
-    """Modelos glTF (assets/models/*.glb, preparados por tools/prep_models.mjs) em base64: o jogo continua um arquivo só."""
+def model_files():
+    """Modelos glTF (assets/models/*.glb, preparados por tools/prep_models.mjs): [(nome, base64)]."""
     d = os.path.join(ROOT, 'assets', 'models')
     names = sorted(f for f in os.listdir(d) if f.endswith('.glb')) if os.path.isdir(d) else []
-    parts = []
+    out = []
     for f in names:
-        with open(os.path.join(d, f), 'rb') as fh: parts.append('%s:"%s"' % (json.dumps(f[:-4]), base64.b64encode(fh.read()).decode()))
+        with open(os.path.join(d, f), 'rb') as fh: out.append((f[:-4], base64.b64encode(fh.read()).decode()))
+    return out
+
+
+def models_js(files):
+    """dist/models.js (dev.html): os modelos em base64 num objeto global."""
+    parts = ['%s:"%s"' % (json.dumps(n), b) for n, b in files]
     # o elemento sai do DOM depois de lido (o texto base64 é grande)
     return 'window.__FORJA_GLB = {' + ',\n'.join(parts) + '};\nif (document.currentScript) document.currentScript.remove();'
+
+
+def models_tags(files):
+    """Arquivo único: cada modelo num <script type="application/octet-stream"> (o navegador guarda
+    o texto sem passar pelo interpretador de JavaScript; art/gltfModels.js decodifica o base64)."""
+    return ''.join('<script type="application/octet-stream" data-glb="%s">%s</script>\n' % (n, b) for n, b in files)
 
 
 def main():
@@ -132,10 +145,11 @@ def main():
     if '<!--@@SCRIPTS@@-->' not in shell: fail('src/shell.html sem o marcador <!--@@SCRIPTS@@-->')
     js, order = bundle()
     three, rules = rd(os.path.join(ROOT, 'vendor/three.js')), rd(os.path.join(SRC, 'rules.js'))
-    gltf, models = rd(os.path.join(ROOT, 'vendor/gltf.js')), models_js()
+    gltf, files = rd(os.path.join(ROOT, 'vendor/gltf.js')), model_files()
+    models = models_js(files)
     for name, s in (('three.js', three), ('gltf.js', gltf), ('rules.js', rules), ('jogo', js)):
         if '</script' in s: fail(name + ' contém "</script" e quebraria o HTML embutido')
-    scripts = ('<script>\n' + three + '\n</script>\n<script>\n' + gltf + '\n</script>\n<script>\n' + models + '\n</script>\n'
+    scripts = ('<script>\n' + three + '\n</script>\n<script>\n' + gltf + '\n</script>\n' + models_tags(files) +
                '<script>\n' + rules + '\n</script>\n<script>\n' + js + '</script>\n')
     os.makedirs(os.path.join(ROOT, 'dist'), exist_ok=True)
     out = shell.replace('<!--@@SCRIPTS@@-->', scripts)

@@ -1,22 +1,26 @@
 // ---------- prévia 3D do herói no inventário ----------
 // Renderer pequeno e próprio (fundo escuro opaco, para os brilhos aditivos
 // somarem sobre ele), criado uma vez. O modelo só é refeito quando classe, evolução ou
-// equipamento mudam; o desenho roda a ~30 fps e só com o inventário aberto.
+// equipamento mudam; o desenho roda a ~30 fps e só com o inventário aberto. Fechado por
+// RELEASE_MS, o renderer é liberado (o contexto WebGL e a memória de vídeo voltam ao sistema).
 import { gltfEnabled } from '../art/gltfModels.js';
 import { animateModel, disposeModel } from '../art/models.js';
 import { UI } from '../core/state.js';
 import { $ } from '../core/util.js';
 import { buildCharacterModel } from '../game/player.js';
 
-const PV = { host: null, canvas: null, r: null, scene: null, cam: null, model: null, key: '', yaw: 0.5, drag: null, raf: 0, last: 0, failed: false, w: 0, h: 0, center: null, size: null };
+const PV = { host: null, canvas: null, r: null, scene: null, cam: null, model: null, key: '', yaw: 0.5, drag: null, raf: 0, last: 0, failed: false, w: 0, h: 0, center: null, size: null, idle: 0 };
+const RELEASE_MS = 20000;
 
 function setup() {
   try {
     PV.r = new THREE.WebGLRenderer({ canvas: PV.canvas, antialias: true, powerPreference: 'low-power' });
   } catch { PV.failed = true; PV.host.classList.add('off'); return; }
+  PV.w = PV.h = 0;
   PV.r.outputColorSpace = THREE.SRGBColorSpace;
   PV.r.toneMapping = THREE.ACESFilmicToneMapping;
   PV.r.toneMappingExposure = 1.1;
+  if (PV.scene) return; // renderer recriado depois de liberado: cena, câmera e modelo continuam
   const sc = (PV.scene = new THREE.Scene());
   sc.background = backdrop();
   sc.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a1e30, 1.15));
@@ -87,9 +91,25 @@ function resize() {
   fitCamera();
 }
 const visible = () => PV.canvas.isConnected && UI.tab === 'inv' && !$('#drawer').hidden && !document.hidden;
+/**
+ * Libera o renderer da prévia: o contexto perdido não volta no mesmo canvas, então um canvas
+ * novo toma o lugar (os eventos de girar são ligados de novo por mount).
+ */
+function release() {
+  PV.idle = 0;
+  if (!PV.r || visible()) return;
+  PV.r.dispose();
+  PV.r.forceContextLoss();
+  PV.r = null;
+  const c = PV.canvas.cloneNode(false);
+  if (PV.canvas.parentNode) { PV.canvas.replaceWith(c); CharPreview.mount(PV.host); } else PV.canvas = c;
+}
 function frame(now) {
   PV.raf = 0;
-  if (!PV.model || !visible()) return; // volta a rodar no próximo sync() do inventário
+  if (!PV.model || !visible()) { // volta a rodar no próximo sync() do inventário
+    if (PV.r && !PV.idle) PV.idle = setTimeout(release, RELEASE_MS);
+    return;
+  }
   PV.raf = requestAnimationFrame(frame);
   if (now - PV.last < 32) return;
   const dt = Math.min(0.1, (now - PV.last) / 1000);
@@ -119,6 +139,7 @@ export const CharPreview = {
   /** Refaz o modelo só se a aparência mudou e garante o laço de desenho com o painel aberto. */
   sync(ch) {
     if (PV.failed || !PV.canvas) return;
+    if (PV.idle) { clearTimeout(PV.idle); PV.idle = 0; }
     if (!PV.r) { setup(); if (PV.failed) return; }
     const key = ch.cls + '|' + ch.tier + '|' + gltfEnabled() + '|' + Object.keys(ch.equip).sort().map((k) => ch.equip[k] && ch.equip[k].uid + '+' + (ch.equip[k].plus || 0) + '+' + (ch.equip[k].stage || 0)).join(',');
     if (key !== PV.key) { PV.key = key; rebuild(ch); }

@@ -1,10 +1,12 @@
 // ---------- renderer, cena, luzes e câmera ----------
 import { CONFIG } from '../core/config.js';
 import { $, V3 } from '../core/util.js';
+import { setTexAnisotropy } from '../art/textures.js';
 import { gy } from '../world/grid.js';
 
 export const canvas = $('#view');
-export const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// sem antialias no canvas: ele só recebe o quadro pronto do passe final; o MSAA de verdade fica no alvo da cena
+export const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
@@ -29,13 +31,21 @@ sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 export const heroLight = new THREE.PointLight(0xffc88a, 55, 18, 1.5);
 scene.add(heroLight);
-/** Orçamento fixo de luzes de tocha, reaproveitadas pelas tochas mais próximas do herói. */
+/**
+ * Luzes pontuais reaproveitáveis: as tochas mais próximas do herói e os clarões de habilidade
+ * (engine/skillfx.js) dividem o mesmo conjunto. Quantas ficam ligadas no shader depende da
+ * qualidade (CONFIG.quality[q].lights, contando a do herói); as outras ficam invisíveis, e luzes
+ * invisíveis não entram na conta de cada pixel. Uma luz com `userData.busy` está num clarão.
+ */
 export const torchLights = [];
-for (let i = 0; i < 6; i++) {
+for (let i = 0; i < 8; i++) {
   const l = new THREE.PointLight(0xff9a40, 0, 12, 1.6);
   scene.add(l);
   torchLights.push(l);
 }
+let poolOn = torchLights.length;
+/** Quantas luzes do conjunto estão ativas na qualidade atual. */
+export function activeLights() { return poolOn; }
 
 /** Grupo com tudo que pertence ao nível atual (limpo a cada troca de zona). */
 export const world = new THREE.Group();
@@ -44,19 +54,61 @@ scene.add(world);
 let quality = 'media';
 /** Fração de partículas emitidas no nível de qualidade atual. */
 export function particleScale() { return CONFIG.quality[quality].particles; }
+/** Qualidade em uso (já resolvida). */
+export function currentQuality() { return quality; }
+/**
+ * Aplica a qualidade. Só o que mudou é refeito: o tipo de sombra e ligar/desligar sombras
+ * recompilam os materiais da cena; o número de luzes recompila sozinho (estado das luzes do
+ * Three.js); MSAA recria o alvo da cena; desligar o brilho libera os alvos dele.
+ */
 export function applyQuality(q) {
   if (!CONFIG.quality[q]) q = 'media';
   quality = q;
   const Q = CONFIG.quality[q];
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.dpr));
+  dyn.scale = 1; dyn.slowT = dyn.fastT = dyn.acc = dyn.n = 0;
+  renderer.setPixelRatio(baseDpr());
+  const type = Q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  const recompile = renderer.shadowMap.type !== type || renderer.shadowMap.enabled !== Q.shadows;
   renderer.shadowMap.enabled = Q.shadows;
-  post.samples = Q.msaa;
+  renderer.shadowMap.type = type;
+  sun.castShadow = Q.shadows;
+  if (sun.shadow.mapSize.x !== Q.shadowSize) {
+    sun.shadow.mapSize.set(Q.shadowSize, Q.shadowSize);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  }
+  poolOn = Math.max(0, Math.min(torchLights.length, Q.lights - 1));
+  torchLights.forEach((l, i) => { l.visible = i < poolOn; if (!l.visible) { l.intensity = 0; l.userData.busy = false; } });
+  if (!!postMat.defines.POST_LITE !== Q.lite) {
+    if (Q.lite) postMat.defines.POST_LITE = 1; else delete postMat.defines.POST_LITE;
+    postMat.needsUpdate = true;
+  }
+  if (post.samples !== Q.msaa) { post.samples = Q.msaa; if (post.rt) { post.rt.dispose(); post.rt = null; } }
   post.qBloom = Q.bloom;
   updateBloom();
-  if (post.rt) { post.rt.dispose(); post.rt = null; }
-  sun.castShadow = Q.shadows;
-  scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+  setTexAnisotropy(Q.aniso);
+  if (recompile) scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
   resize();
+}
+/** DPR base da qualidade (sem a escala dinâmica). */
+function baseDpr() { return Math.min(window.devicePixelRatio || 1, CONFIG.quality[quality].dpr); }
+// ---------- resolução dinâmica (qualidades com dynRes) ----------
+const dyn = { scale: 1, last: 0, acc: 0, n: 0, slowT: 0, fastT: 0 };
+/** Escala atual da resolução dinâmica (1 = DPR cheio da qualidade). */
+export function dynResScale() { return dyn.scale; }
+function dynResTick(now) {
+  const d = now - dyn.last;
+  dyn.last = now;
+  if (!CONFIG.quality[quality].dynRes || d <= 0 || d > 250) return; // pausas, aba oculta e travadas longas não contam
+  dyn.acc += d; dyn.n++;
+  if (dyn.acc < 500) return;
+  const avg = dyn.acc / dyn.n, D = CONFIG.dynRes;
+  dyn.acc = dyn.n = 0;
+  let next = dyn.scale;
+  if (avg > D.slowMs) { dyn.fastT = 0; if ((dyn.slowT += 0.5) >= 1) { dyn.slowT = 0; next = Math.max(D.min, dyn.scale - D.step); } }
+  else if (avg < D.fastMs) { dyn.slowT = 0; if ((dyn.fastT += 0.5) >= 3) { dyn.fastT = 0; next = Math.min(1, dyn.scale + D.step); } }
+  else dyn.slowT = dyn.fastT = 0;
+  next = Math.round(next * 100) / 100;
+  if (next !== dyn.scale) { dyn.scale = next; renderer.setPixelRatio(Math.max(0.5, baseDpr() * next)); resize(); }
 }
 export function resize() {
   const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
@@ -104,7 +156,7 @@ export function updateCamera(x, z, dt) {
 // aplica o tone mapping e converte para sRGB. O contorno é o que une
 // personagens, adereços e paredes no mesmo traço de desenho animado.
 // =============================================================================
-const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null };
+const post = { rt: null, samples: 4, outline: true, bloom: true, qBloom: true, userBloom: null, size: new THREE.Vector2(), b: null, warm: null, dirty: false };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const postMat = new THREE.ShaderMaterial({
   uniforms: {
@@ -150,6 +202,7 @@ const postMat = new THREE.ShaderMaterial({
         // laplaciano relativo: rampas (chão inclinado na tela) somem, degraus e silhuetas ficam
         float lap = (abs(l + r - 2.0 * z) + abs(u + d - 2.0 * z)) / z;
         float e = smoothstep(uEdge.x, uEdge.y, lap);
+        #ifndef POST_LITE
         // quinas e dobras: normais dos quatro quadrantes em volta do pixel (reconstruídas da
         // profundidade, sem passe extra). Num plano são iguais; numa quina, divergem.
         vec3 pc = vpos(vUv), pl = vpos(vUv - vec2(o.x, 0.0)) - pc, pr = vpos(vUv + vec2(o.x, 0.0)) - pc;
@@ -161,6 +214,7 @@ const postMat = new THREE.ShaderMaterial({
         vec2 w = o * uSilWidth;
         float zn = min(min(lin(vUv - vec2(w.x, 0.0)), lin(vUv + vec2(w.x, 0.0))), min(lin(vUv - vec2(0.0, w.y)), lin(vUv + vec2(0.0, w.y))));
         e = max(e, smoothstep(0.06, 0.12, (z - zn) / z));
+        #endif
         e *= 1.0 - smoothstep(uFade.x, uFade.y, min(z, min(min(l, r), min(u, d))));
         c.rgb = mix(c.rgb, c.rgb * uInk, e);
       }
@@ -260,7 +314,7 @@ function resizePost() {
     post.rt.depthTexture = new THREE.DepthTexture(w, h);
     post.rt.depthTexture.type = THREE.UnsignedIntType;
   } else post.rt.setSize(w, h);
-  bloomTargets(w, h);
+  if (post.bloom) bloomTargets(w, h);
   postMat.uniforms.uTexel.value.set(1 / w, 1 / h);
   postMat.uniforms.uAspect.value = w / h;
   postMat.uniforms.uWidth.value = Math.max(1, renderer.getPixelRatio() * CONFIG.style.lineWidth);
@@ -278,17 +332,73 @@ function renderBloom() {
   blurMat.uniforms.tColor.value = B.b0.texture; blurMat.uniforms.uDir.value.set(1.5 / b, 0); pass(blurMat, B.b1);
   blurMat.uniforms.tColor.value = B.b1.texture; blurMat.uniforms.uDir.value.set(0, 1.5 / bh); pass(blurMat, B.b0);
 }
-/** Desenha um quadro: cena → alvo intermediário → brilho → contorno, cor e tone mapping na tela. */
-export function renderFrame() {
-  if (!post.outline && !post.bloom) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+/** Sem contorno, brilho nem MSAA: a cena vai direto para a tela (sem alvo intermediário). */
+const directToScreen = () => !post.outline && !post.bloom && !post.samples;
+/**
+ * Avisa que o nível foi trocado: no próximo quadro os shaders da cena são compilados e as
+ * texturas enviadas à GPU antes de desenhar (ver warmScene).
+ */
+export function sceneChanged() { post.dirty = true; }
+/** true enquanto a cena nova ainda está sendo preparada (o quadro anterior fica na tela). */
+export function warming() { return !!post.warm || post.dirty; }
+const TEX_KEYS = ['map', 'normalMap', 'emissiveMap', 'gradientMap', 'alphaMap', 'aoMap', 'bumpMap'];
+/**
+ * Pré-compila os programas da cena no mesmo alvo em que ela será desenhada (o alvo muda o
+ * programa: espaço de cor e tone mapping) e envia as texturas. Com KHR_parallel_shader_compile
+ * a compilação corre fora da thread principal; até terminar (no máximo `ms`) o renderFrame não
+ * desenha, em vez de travar o primeiro quadro da zona nova.
+ */
+function warmScene(ms) {
+  const seen = new Set();
+  const up = (t) => { if (t && t.isTexture && !seen.has(t)) { seen.add(t); try { renderer.initTexture(t); } catch { /* ignora */ } } };
+  scene.traverse((o) => {
+    if (!o.material || !o.visible) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      for (const k of TEX_KEYS) up(m[k]);
+      if (m.uniforms) for (const k in m.uniforms) up(m.uniforms[k].value);
+    }
+  });
+  if (!directToScreen() && !post.rt) resizePost();
+  const prev = renderer.getRenderTarget();
+  renderer.setRenderTarget(directToScreen() ? null : post.rt);
+  let mats = null;
+  try { mats = renderer.compile(scene, camera); } catch { mats = null; }
+  renderer.setRenderTarget(prev);
+  if (!mats || !mats.size) return;
+  // espera os programas ficarem prontos (como o compileAsync, mas tolera materiais liberados no meio:
+  // uma troca de zona rápida descarta materiais antes de a compilação terminar)
+  post.warm = { until: performance.now() + ms, done: false, mats };
+}
+/** true quando todos os programas pré-compilados já foram ligados pelo driver. */
+function warmReady(w) {
+  for (const m of w.mats) {
+    const pr = renderer.properties.get(m).currentProgram;
+    if (!pr || pr.isReady()) w.mats.delete(m);
+    else return false;
+  }
+  return true;
+}
+/**
+ * Desenha um quadro: cena → alvo intermediário → brilho → contorno, cor e tone mapping na tela.
+ * lowRate: o laço está desenhando em ritmo reduzido (pausa): não conta para a resolução dinâmica.
+ */
+export function renderFrame(lowRate) {
+  if (post.dirty) { post.dirty = false; warmScene(900); }
+  if (post.warm) {
+    if (!warmReady(post.warm) && performance.now() < post.warm.until) return;
+    post.warm = null;
+    dyn.last = 0;
+  }
+  if (lowRate) dyn.last = 0; else dynResTick(performance.now());
+  if (directToScreen()) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
   if (!post.rt) resizePost();
   renderer.setRenderTarget(post.rt);
   renderer.render(scene, camera);
-  if (post.bloom) renderBloom();
+  if (post.bloom) { if (!post.b) bloomTargets(post.size.x, post.size.y); renderBloom(); }
   const U = postMat.uniforms;
   U.tColor.value = post.rt.texture;
   U.tDepth.value = post.rt.depthTexture;
-  U.tBloomA.value = post.b.a0.texture; U.tBloomB.value = post.b.b0.texture;
+  U.tBloomA.value = post.b ? post.b.a0.texture : null; U.tBloomB.value = post.b ? post.b.b0.texture : null;
   U.uBloom.value = post.bloom ? CONFIG.style.bloom : 0;
   U.uOutline.value = post.outline ? 1 : 0;
   U.uNear.value = camera.near; U.uFar.value = camera.far;
@@ -305,6 +415,8 @@ export function renderFrame() {
  */
 function updateBloom() {
   post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
+  // brilho desligado: libera os quatro alvos dele (voltam a ser criados se ligar de novo)
+  if (!post.bloom && post.b) { for (const k in post.b) post.b[k].dispose(); post.b = null; }
 }
 /** on: true/false = escolha do jogador; null = padrão da qualidade. */
 export function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }

@@ -67,3 +67,18 @@ export const Sfx = {
   hurt() { this.tone(160, 0.12, 'square', 0.04, 0.6); },
   coin() { this.seq([1300, 1750], 0.05, 0.1, 'square', 0.022); },
 };
+
+// aba em segundo plano: suspende o contexto de áudio (música e efeitos param e o
+// processamento sai da CPU); ao voltar, retoma só se ele estava rodando antes.
+let resumeOnShow = false;
+if (typeof document === 'object') document.addEventListener('visibilitychange', () => {
+  const c = Sfx.ctx;
+  if (!c) return;
+  if (document.hidden) {
+    resumeOnShow = c.state === 'running';
+    if (resumeOnShow) c.suspend().catch(() => {});
+  } else if (resumeOnShow) {
+    resumeOnShow = false;
+    c.resume().catch(() => {});
+  }
+});

@@ -50,6 +50,13 @@ function voronoi(pts, u, v, sx, sy) {
 
 // ---------- geração de texturas (cor + normal + opcional emissivo) ----------
 const TEXS = {};
+let aniso = 8;
+/** Filtro anisotrópico das texturas geradas (por qualidade); as já enviadas à GPU são reenviadas. */
+export function setTexAnisotropy(n) {
+  if (n === aniso) return;
+  aniso = n;
+  for (const k in TEXS) for (const t of [TEXS[k].map, TEXS[k].normalMap, TEXS[k].emissiveMap]) if (t) { t.anisotropy = n; t.needsUpdate = true; }
+}
 const hexRGB = (h) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
 /**
  * gen(u, v) → { h: altura 0..1, c: [r,g,b] 0..255, e: emissivo 0..1 (opcional), r: rugosidade }
@@ -81,7 +88,7 @@ export function makeTexSet(key, size, gen, opt) {
     c.getContext('2d').putImageData(new ImageData(data, N, N), 0, 0);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 8;
+    t.anisotropy = aniso;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
