@@ -24,6 +24,8 @@ import { genTower, TOWER_LAYOUTS } from '../world/towergen.js';
 import { genEden } from '../world/edengen.js';
 import { clearEden, spawnEden } from './eden.js';
 import { clearTower, spawnTowerEvents } from './tower.js';
+import { questEvent } from './quests.js';
+import { clearTelegraphs } from '../engine/telegraph.js';
 
 /** A cidade é a única zona segura. */
 export function inSafe() { return G.zone === 'town'; }
@@ -45,6 +47,7 @@ export function clearWorld() {
   clearEffects();
   clearFx();
   clearCombatFx();
+  clearTelegraphs();
   clearEden();
   clearTower();
   resetFloatText();
@@ -52,7 +55,7 @@ export function clearWorld() {
 function placePlayer(L) {
   const p = G.player;
   p.x = L.start.x * TILE; p.z = L.start.z * TILE;
-  p.path = null; p.target = null; p.dash = null; p.shove = null;
+  p.path = null; p.target = null; p.dash = null; p.shove = null; p.dodge = null;
   if (p.model) p.model.root.position.set(p.x, gy(p.x, p.z), p.z);
   camTarget.set(p.x, 0, p.z);
   if (G.pet) { G.pet.x = p.x - 1.5; G.pet.z = p.z + 1; }
@@ -102,8 +105,8 @@ export function enterDungeon(biome, floor) {
     pack++;
   });
   G.L.breakables.forEach((b) => spawnBreakable(b.x * TILE, b.z * TILE, biome));
-  setZoneText(B.name + ' · Andar ' + floor, 'Monstros nv ' + lvl + '–' + (lvl + 6) + ' · seed ' + R.hex(seed));
-  log('Você entrou em ' + B.name + ', andar ' + floor + '. Seed pública ' + R.hex(seed) + '.', 'sys');
+  setZoneText(B.name + ' · Andar ' + floor, 'Monstros nv ' + lvl + '–' + (lvl + 6));
+  log('Você entrou em ' + B.name + ', andar ' + floor + '.', 'sys');
   toast(B.name, 'Andar ' + floor);
   persist();
 }
@@ -150,6 +153,7 @@ export function enterTower(floor) {
   setZoneText('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name + ' · monstros nv ' + lvl + '–' + (lvl + 6) + ' · recorde ' + G.ch.towerBest);
   log('Torre Infinita, andar ' + floor + ': ' + plan.name + ' (' + B.name + '). ' + plan.hint + ' Fique atento: emboscadas e invasões podem surgir a qualquer momento.', 'sys');
   toast('Torre Infinita · Andar ' + floor, plan.name + ' · ' + B.name);
+  questEvent('tower', floor);
   persist();
 }
 /**
@@ -170,7 +174,7 @@ export function enterEden() {
   placePlayer(G.L);
   spawnEden(G.L, entry);
   setZoneText(BIOMES.eden.name, 'Monstros nv ' + entry + '+ · Guardião do Éden nv ' + R.edenLevel(entry, 'boss'));
-  log('Você entrou no Éden (seed ' + R.hex(seed) + '). Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
+  log('Você entrou no Éden. Três caminhos levam ao Coração do Éden: Floresta, Raízes e Rio. O portal de Aldrena só reabre em 3 horas.', 'sys');
   toast('O Éden', 'Escolha um caminho: Floresta, Raízes ou Rio');
   persist();
 }

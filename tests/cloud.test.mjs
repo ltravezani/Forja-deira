@@ -66,3 +66,11 @@ test('loadSave aceita um save vindo da nuvem e persist avisa a nuvem', async () 
   SaveHooks.afterPersist = null;
   assert.equal(n, 1);
 });
+
+test('decideSync: personagens apagados de propósito aqui não voltam sozinhos da nuvem', async () => {
+  const { decideSync } = await load('core/cloudSync.js');
+  const cloud = { data: save(ch('A', 10)), rev: 5 };
+  assert.equal(decideSync({ local: save(), cloud, sync: { userId: 'u1', rev: 4, dirty: true }, userId: 'u1' }), 'conflict');
+  // sem mudança local (aparelho que só ficou para trás) continua baixando
+  assert.equal(decideSync({ local: save(), cloud, sync: { userId: 'u1', rev: 4, dirty: false }, userId: 'u1' }), 'download');
+});

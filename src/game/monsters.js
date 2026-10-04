@@ -5,10 +5,12 @@ import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
 import { R, rand } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
-import { emit, spawnRing } from '../engine/effects.js';
+import { emit } from '../engine/effects.js';
 import { shake, world } from '../engine/renderer.js';
+import { shockRing } from '../engine/combatfx.js';
+import { inCone, telegraphCircle, telegraphCone } from '../engine/telegraph.js';
 import { hurtPlayer } from './combat.js';
-import { AFFIX, MON } from './data.js';
+import { AFFIX, MON, monsterName } from './data.js';
 import { face, stepToward, turn } from './movement.js';
 import { spawnProjectile } from './projectiles.js';
 import { inView } from './world.js';
@@ -70,7 +72,7 @@ export function spawnMonster(kind, x, z, level, opt) {
   model.root.rotation.y = rand() * 6.28;
   world.add(model.root);
   const m = {
-    id: G.nextMonId++, kind, T, name: (affix ? affix.name + ' ' : '') + T.name, level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
+    id: G.nextMonId++, kind, T, name: monsterName(T, affix), level, maxHp: s.hp, hp: s.hp, dmg: s.dmg, def: s.def,
     x, z, homeX: x, homeZ: z, rot: model.root.rotation.y, model, speed: T.speed * (affix && affix.speed ? affix.speed : 1),
     range: T.range, atkT: T.atkT, atkCd: rand(), atkWind: 0, attackAnim: 0, aggro: false, pack: opt.pack || 0,
     elite: !!opt.elite, affix, boss: !!T.boss, mini: !!T.mini, dead: false, deadT: 0, hitFlash: 0, lastHit: -99, slowUntil: 0, riseUntil: 0,
@@ -157,10 +159,12 @@ function updateEngaged(m, dx, dz, d, dt, slow, p) {
   if (m.T.flee) { flee(m, dx, dz, d, dt, slow); return; }
   if (m.atkWind > 0) {
     m.atkWind -= dt;
+    // golpe pesado: o aviso no chão vem antes; a animação só começa perto do impacto
+    if (m.heavy && !m.attackAnim && m.atkWind <= 0.3) m.attackAnim = 0.001;
     if (m.atkWind <= 0) resolveAttack(m, dx, dz, d, p);
   } else if (d <= m.range + m.radius && (m.los || d < 2.5)) {
     face(m, p.x, p.z);
-    if (m.atkCd <= 0) { m.atkCd = m.atkT; m.atkWind = m.T.ranged ? 0.4 : 0.32; m.attackAnim = 0.001; }
+    if (m.atkCd <= 0) startAttack(m, p);
   } else {
     m.repath -= dt;
     if (m.los) { m.path = null; stepToward(m, p.x, p.z, m.speed * slow, dt, m.moveR); return; }
@@ -177,7 +181,46 @@ function flee(m, dx, dz, d, dt, slow) {
     if (walkableR(G.L, tx, tz, m.moveR) && lineClear(G.L, m.x, m.z, tx, tz, m.moveR)) { stepToward(m, tx, tz, m.speed * slow, dt, m.moveR); return; }
   }
 }
+/**
+ * Começa um ataque. Chefes e mini chefes corpo a corpo dão um golpe pesado em
+ * cone a cada `heavyEvery` ataques; elites corpo a corpo, uma pancada em área a
+ * cada `eliteSlamCd` s. Os dois avisam no chão e só acertam dentro da área marcada.
+ */
+function startAttack(m, p) {
+  const C = CONFIG.telegraph;
+  m.atkCd = m.atkT;
+  m.atkWind = m.T.ranged ? 0.4 : 0.32;
+  m.attackAnim = 0.001;
+  m.heavy = null;
+  if (m.T.ranged || m.T.flee) return;
+  if (m.boss || m.mini) {
+    m.swings = (m.swings || 0) + 1;
+    if (m.swings % C.heavyEvery) return;
+    const rot = Math.atan2(p.x - m.x, p.z - m.z), r = m.range + m.radius + 0.9;
+    m.heavy = { cone: true, x: m.x, z: m.z, rot, r, mult: C.heavyMult };
+    telegraphCone(m.x, m.z, rot, r, C.time, m);
+  } else if (m.elite && G.time >= (m.slamAt || 0)) {
+    m.slamAt = G.time + C.eliteSlamCd;
+    m.heavy = { cone: false, x: m.x, z: m.z, r: C.eliteSlamR, mult: C.eliteSlamMult };
+    telegraphCircle(m.x, m.z, C.eliteSlamR, C.time, m);
+  } else return;
+  m.atkWind = C.time;
+  m.attackAnim = 0;
+}
+/** Golpe pesado: efeito no chão e dano só se o herói ainda estiver na área marcada. */
+function resolveHeavy(m, h, p) {
+  if (h.cone) {
+    const k = h.r * 0.6;
+    emit(h.x + Math.sin(h.rot) * k, 0.3, h.z + Math.cos(h.rot) * k, { n: 40, color: 0xff5a2a, speed: 7, up: 0.8, life: 0.5, size: 1.2, spread: h.r * 0.6 });
+  } else emit(h.x, 0.3, h.z, { n: 30, color: 0xff6a3a, speed: 6, up: 0.8, life: 0.45, size: 1.1, spread: h.r });
+  shockRing(h.cone ? h.x + Math.sin(h.rot) * h.r * 0.5 : h.x, h.cone ? h.z + Math.cos(h.rot) * h.r * 0.5 : h.z, h.cone ? h.r * 0.6 : h.r, 0xff6a3a, 0.3);
+  shake(m.boss ? 0.6 : 0.3);
+  if (m.boss || m.mini) Sfx.boom();
+  const inside = h.cone ? inCone(h.x, h.z, h.rot, h.r, p.x, p.z, 0.4) : (p.x - h.x) ** 2 + (p.z - h.z) ** 2 < (h.r + 0.4) ** 2;
+  if (inside) hurtPlayer(m.dmg * h.mult, m);
+}
 function resolveAttack(m, dx, dz, d, p) {
+  if (m.heavy) { const h = m.heavy; m.heavy = null; resolveHeavy(m, h, p); return; }
   if (m.T.ranged) {
     const k = d || 1;
     spawnProjectile({ from: 'm', x: m.x, z: m.z, dx: dx / k, dz: dz / k, speed: m.T.ranged.speed, range: m.range + 4, dmg: m.dmg, src: m, color: m.T.ranged.color, arrow: m.T.ranged.arrow, size: 0.4 });
@@ -192,11 +235,10 @@ function updateBoss(m, d, dt, enrage, p) {
   m.special -= dt;
   if (m.special <= 0 && d < 16) {
     m.special = (m.mini ? 8 : 6.5) / enrage;
-    const tx = p.x, tz = p.z;
-    spawnRing(tx, tz, 3.4, 3.4, 0xff2a1a, 1.1, { hold: true, op: 0.55 });
-    spawnRing(tx, tz, 0.2, 3.4, 0xff2a1a, 1.1, { disc: true, op: 0.18 });
+    const tx = p.x, tz = p.z, wait = CONFIG.telegraph.time + 0.2;
+    telegraphCircle(tx, tz, 3.4, wait, m);
     m.attackAnim = 0.001;
-    G.delayed.push({ t: 1.1, fn: () => {
+    G.delayed.push({ t: wait, fn: () => {
       if (m.dead) return;
       emit(tx, 0.4, tz, { n: 60, color: 0xff5a2a, speed: 9, up: 1, life: 0.6, size: 1.4, spread: 2 });
       shake(0.9); Sfx.boom();

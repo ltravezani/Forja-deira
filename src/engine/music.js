@@ -17,6 +17,11 @@ export function musicLevel(settings) {
   const i = settings && settings.music;
   return Number.isInteger(i) && i >= 0 && i < MUSIC_LEVELS.length ? i : 2;
 }
+/** Volume da música em % (Opções, controle deslizante); saves antigos usam o nível de MUSIC_LEVELS. */
+export function musicVolume(settings) {
+  const v = settings && settings.musicVol;
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : Math.round(MUSIC_LEVELS[musicLevel(settings)].v * 100);
+}
 const MUSIC_BASE = 0.32;   // ganho máximo da música (os efeitos ficam por cima)
 const FADE = 2.5;          // s de crossfade entre temas
 const AHEAD = 0.4;         // s de antecedência do agendamento

@@ -10,7 +10,7 @@
 // mudaram, o jogador escolhe, e o lado descartado vira uma cópia de segurança.
 import { CONFIG } from './config.js';
 import { decideSync, hasChars } from './cloudSync.js';
-import { G, loadSave, S, SAVE_KEY, SaveHooks } from './state.js';
+import { G, loadSave, S, SAVE_KEY, saveBlocked, SaveGuard, SaveHooks } from './state.js';
 
 export const CLOUD_KEY = 'forjadeira.cloud.v1';
 export const BACKUP_KEY = 'forjadeira.save.backups';
@@ -44,7 +44,7 @@ function readMeta() {
   } catch { /* sem armazenamento: nuvem só nesta aba */ }
   Cloud.user = session ? session.user : null;
 }
-function writeMeta() { try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ session, sync })); } catch { /* ignora */ } }
+function writeMeta() { if (saveBlocked()) return; try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ session, sync })); } catch { /* ignora */ } }
 function setStatus(status, msg) { Cloud.status = status; Cloud.msg = msg || ''; if (hooks.onChange) hooks.onChange(); }
 
 // ---------- HTTP ----------
@@ -158,6 +158,10 @@ export async function signOut() {
 }
 /** "Apagar dados locais": esquece a conta neste aparelho (o save da nuvem não é apagado). */
 export function forgetCloudLocal() {
+  // encerra a sessão em memória antes do recarregamento: a gravação de saída
+  // (pagehide) não pode regravar o save nem reenviá-lo para a nuvem
+  SaveGuard.wiping = true;
+  session = null; sync = null; Cloud.user = null; pending = false;
   try { localStorage.removeItem(CLOUD_KEY); localStorage.removeItem(BACKUP_KEY); } catch { /* ignora */ }
 }
 
@@ -184,6 +188,7 @@ function fetchCloud() {
 }
 /** Grava o save local na nuvem sobre a revisão `baseRev` (0 = a conta ainda não tem save). false = alguém gravou antes. */
 async function upload(baseRev, keepalive) {
+  if (saveBlocked()) return false; // apagando dados ou outra aba é a dona do save
   const g = gen, id = uid();
   const data = JSON.parse(JSON.stringify(S));
   let rows;
@@ -200,6 +205,7 @@ async function upload(baseRev, keepalive) {
   return true;
 }
 function applyCloud(cloud) {
+  if (saveBlocked()) return;
   loadSave(cloud.data);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
   sync = { userId: uid(), rev: cloud.rev, dirty: false };
@@ -214,11 +220,12 @@ function handleError(e) {
 
 /** Compara com a nuvem e envia, baixa ou pede escolha. Baixar só acontece na tela de título. */
 export async function syncNow() {
-  if (!cloudEnabled() || !session || busy) return;
+  if (!cloudEnabled() || !session || busy || saveBlocked()) return;
   busy = true;
   setStatus('busy', 'Sincronizando…');
   try {
-    for (let tries = 0; tries < 3; tries++) {
+    let tries = 0;
+    for (; tries < 3; tries++) {
       const cloud = await fetchCloud();
       const d = decideSync({ local: S, cloud, sync, userId: uid() });
       if (d === 'same' || d === 'none') {
@@ -236,6 +243,8 @@ export async function syncNow() {
       showConflict();
       return;
     }
+    // as 3 tentativas esbarraram em gravações de outro aparelho: não é "synced"
+    if (tries >= 3) { retryAt = Date.now() + cfg().retryInterval * 1000; setStatus('error', 'A nuvem mudou durante o envio. Tentando de novo em instantes.'); return; }
     retryAt = 0;
     setStatus('synced', '');
   } catch (e) { handleError(e); }
@@ -250,7 +259,7 @@ function showConflict() {
 /** Escolha do jogador no conflito: 'local' (este aparelho vai para a nuvem) ou 'cloud'. */
 export async function resolveConflict(choice) {
   const cloud = Cloud.conflict;
-  if (!cloud || busy) return;
+  if (!cloud || busy || saveBlocked()) return;
   if (choice === 'cloud') {
     if (hasChars(S)) addBackup('Save deste aparelho, trocado pelo da nuvem', S);
     Cloud.conflict = null; conflictShown = false;
@@ -296,6 +305,7 @@ export function restoreBackup(i) {
   return true;
 }
 function persistLocal() {
+  if (saveBlocked()) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ }
   markDirty();
 }
@@ -307,7 +317,7 @@ function markDirty() {
 }
 /** Chamado a cada quadro: envia de tempos em tempos e, na tela de título, aplica o que ficou pendente. */
 export function cloudTick() {
-  if (!session || !cloudEnabled() || busy) return;
+  if (!session || !cloudEnabled() || busy || saveBlocked()) return;
   if (Cloud.conflict) { showConflict(); return; }
   if (Cloud.status === 'relogin') return;
   const need = pending || !sync || sync.userId !== uid() || sync.dirty;
@@ -319,7 +329,7 @@ export function cloudTick() {
 }
 /** Ao esconder/fechar a página: salva localmente e tenta um último envio. */
 function flushOnHide() {
-  if (!session || busy || Cloud.conflict || !sync || sync.userId !== uid()) return;
+  if (saveBlocked() || !session || busy || Cloud.conflict || !sync || sync.userId !== uid()) return;
   if (G.mode === 'play') { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* ignora */ } gen++; sync.dirty = true; writeMeta(); }
   if (!sync.dirty || !session.expires_at || session.expires_at * 1000 - 60000 < Date.now()) return;
   const keepalive = JSON.stringify(S).length < KEEPALIVE_MAX;

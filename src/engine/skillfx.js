@@ -1,11 +1,12 @@
 // ---------- efeitos de habilidade: malhas animadas (cortes, colunas, estilhaços, clarões) ----------
 // Cada efeito é uma malha aditiva com material próprio (a opacidade anima) e uma
 // função que a atualiza de 0 a 1 ao longo da duração; ao terminar o material é
-// liberado. As geometrias são compartilhadas e nunca liberadas.
+// devolvido a um pool (reaproveitado no próximo efeito). As geometrias são compartilhadas e nunca liberadas.
 import { GEO } from '../art/geometry.js';
 import { glowMat } from '../art/materials.js';
+import { CONFIG } from '../core/config.js';
 import { emit } from './effects.js';
-import { scene, world } from './renderer.js';
+import { activeLights, torchLights, world } from './renderer.js';
 import { gy } from '../world/grid.js';
 
 const FXG = {
@@ -40,8 +41,19 @@ function add(mesh, dur, upd, opts) {
   fx.push(f);
   return f;
 }
+// materiais aditivos reaproveitados entre efeitos (cada golpe criava e liberava os seus)
+const matPool = [];
 function glowMesh(geo, color, op) {
-  return new THREE.Mesh(geo, glowMat(color, op));
+  const m = matPool.pop();
+  if (!m) return new THREE.Mesh(geo, glowMat(color, op));
+  m.color.setHex(color);
+  if (op >= 0.8) m.color.multiplyScalar(CONFIG.style.glowCore); // mesma regra do glowMat
+  m.opacity = op;
+  return new THREE.Mesh(geo, m);
+}
+function freeMat(m) {
+  if (!m.vertexColors && matPool.length < 48) matPool.push(m);
+  else m.dispose();
 }
 
 /** Corte em arco no plano do chão, varrendo `sweep` radianos a partir de `rot`. */
@@ -162,21 +174,34 @@ export function fall(x, z, o) {
   }, o);
 }
 
-// ---------- clarões de luz (pool fixo: nunca muda o número de luzes da cena) ----------
-const LIGHTS = [];
-for (let i = 0; i < 2; i++) {
-  const l = new THREE.PointLight(0xffffff, 0, 14, 1.6);
-  scene.add(l);
-  LIGHTS.push({ l, t: 1, dur: 1, i0: 0 });
+// ---------- clarões de luz ----------
+// Usam as últimas luzes do conjunto de renderer.js (as mesmas das tochas): nunca mudam o
+// número de luzes da cena. Com poucas luzes (qualidades leves) o clarão toma a luz de uma
+// tocha por um instante (marcada `busy`; updateTorchLights a deixa em paz até ele apagar).
+const LIGHTS = [{ l: null, t: 1, dur: 1, i0: 0 }, { l: null, t: 1, dur: 1, i0: 0 }];
+const lit = (c) => c.l && c.t < c.dur;
+function release(s) {
+  const l = s.l;
+  s.l = null;
+  if (l && !LIGHTS.some((o) => o !== s && o.l === l && lit(o))) { l.userData.busy = false; l.intensity = 0; }
 }
 /** Ilumina o entorno por um instante (explosões, impactos pesados). */
 export function flash(x, y, z, color, intensity, dur) {
+  const n = activeLights();
+  if (!n) return;
   let s = LIGHTS[0];
-  for (const c of LIGHTS) if (c.t / c.dur > s.t / s.dur) s = c; // reaproveita o mais apagado
-  s.l.color.setHex(color);
-  s.l.position.set(x, y + gy(x, z), z);
+  for (const c of LIGHTS) if (!lit(c) || (lit(s) && c.t / c.dur > s.t / s.dur)) s = c; // reaproveita o livre ou o mais apagado
+  const other = LIGHTS.find((o) => o !== s && lit(o));
+  let l = torchLights[n - 1];
+  if (other && other.l === l && n > 1) l = torchLights[n - 2];
+  if (s.l !== l) release(s);
+  s.l = l;
+  l.userData.busy = true;
+  l.color.setHex(color);
+  l.distance = 14; l.decay = 1.6;
+  l.position.set(x, y + gy(x, z), z);
   s.t = 0; s.dur = dur || 0.35; s.i0 = intensity || 60;
-  s.l.intensity = s.i0;
+  l.intensity = s.i0;
 }
 
 export function updateFx(dt) {
@@ -187,19 +212,21 @@ export function updateFx(dt) {
     f.mesh.visible = true;
     const k = Math.min(1, f.t / f.dur);
     f.upd(k, ease(k), f.t);
-    if (k >= 1) { world.remove(f.mesh); f.mesh.material.dispose(); fx.splice(i, 1); }
+    if (k >= 1) { world.remove(f.mesh); freeMat(f.mesh.material); fx.splice(i, 1); }
   }
   for (const s of LIGHTS) {
-    if (s.t >= s.dur) continue;
+    if (!lit(s)) continue;
     s.t += dt;
     const k = Math.min(1, s.t / s.dur);
-    s.l.intensity = s.i0 * (1 - k) * (1 - k);
+    if (k >= 1) { release(s); continue; }
+    // o mais novo dos dois manda quando dividem a mesma luz
+    if (!LIGHTS.some((o) => o !== s && o.l === s.l && lit(o) && o.t < s.t)) s.l.intensity = s.i0 * (1 - k) * (1 - k);
   }
 }
 
 /** Remove todos os efeitos ativos (troca de zona). */
 export function clearFx() {
-  for (const f of fx) { world.remove(f.mesh); f.mesh.material.dispose(); }
+  for (const f of fx) { world.remove(f.mesh); freeMat(f.mesh.material); }
   fx.length = 0;
-  for (const s of LIGHTS) { s.t = s.dur; s.l.intensity = 0; }
+  for (const s of LIGHTS) { s.t = s.dur; release(s); }
 }

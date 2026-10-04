@@ -13,8 +13,8 @@ Excelentes, com masmorras procedurais.
 | ![Torre Infinita na cidade](docs/screenshots/torre-cidade.jpg) | ![Chefe da Torre Infinita](docs/screenshots/torre-chefe.jpg) |
 
 **Torre Infinita:** fale com o Guardião Varek, na parte de baixo da cidade, e suba andares sem fim.
-Cada andar é mais difícil, o bioma muda a cada 5 andares e só caem Gold e Jewels (10% por monstro);
-o chefe de cada andar tem 20% de chance de deixar Gold e Jewels. O recorde fica salvo.
+Cada andar é mais difícil, o bioma muda a cada 5 andares e só caem Ouro e Joias (10% por monstro);
+o chefe de cada andar tem 20% de chance de deixar Ouro e Joias. O recorde fica salvo.
 Cada andar sorteia uma planta diferente da anterior (Anel dos Sentinelas, Salões Entrelaçados, Claustros
 Concêntricos, Câmaras Suspensas ou Nave do Juramento) e esconde eventos: emboscadas que cercam o herói,
 uma invasão que abre uma fenda no meio do andar, círculos selados que só abrem depois de vencer os

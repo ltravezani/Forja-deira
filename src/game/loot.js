@@ -10,13 +10,14 @@ import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
 import { addToBag, autoEquipOn, BAG_SIZE, classOk } from './inventory.js';
 import { pathTo } from './movement.js';
+import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { glyph } from '../ui/icons.js';
 import { log } from '../ui/log.js';
 import { gy, walkable } from '../world/grid.js';
 
 function lootLabel(l) {
-  if (l.type === 'gold') return { text: fmt(l.amount) + ' Gold', color: '#f2cf7a' };
+  if (l.type === 'gold') return { text: fmt(l.amount) + ' de Ouro', color: '#f2cf7a' };
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
   if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: R.POTIONS[l.id].color || (l.id === 'hp' ? '#ff8a7a' : '#8ab8ff') };
   if (l.type === 'talisman') return { text: R.TALISMANS[l.id].name, color: R.TALISMANS[l.id].color };
@@ -63,6 +64,18 @@ export function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+  if (G.loot.length > CONFIG.loot.maxGround) trimLoot(G.loot.length - CONFIG.loot.maxGround);
+}
+/** Remove `n` objetos do chão: primeiro os de menor raridade, entre eles os mais antigos. */
+function trimLoot(n) {
+  const order = G.loot.slice().sort((a, b) => (a.ord || 0) - (b.ord || 0) || a.born - b.born);
+  for (let k = 0; k < n && k < order.length; k++) removeLoot(order[k]);
+}
+function removeLoot(l) {
+  removeLootVisual(l);
+  const i = G.loot.indexOf(l);
+  if (i >= 0) G.loot.splice(i, 1);
+  if (G.player && G.player.target && G.player.target.l === l) G.player.target = null;
 }
 /**
  * Espalha no chão um drop do Éden (R.rollEdenDrop): Gold, itens Ancestrais e
@@ -74,7 +87,7 @@ export function dropEdenRoll(x, z, drop, src) {
   for (const it of drop.items) {
     dropLoot(x, z, { type: 'item', item: it });
     G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: null, table: null, src, mf: G.st.mf, at: Date.now() });
-    log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot');
+    log('Drop raro: ' + R.itemName(it) + '.', 'loot');
     Sfx.loot(R.RARITY[it.rarity].order);
   }
   if (G.dropLog.length > 40) G.dropLog.length = 40;
@@ -119,7 +132,7 @@ function removeLootVisual(l) {
 export function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
-  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); }
+  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else {
@@ -134,8 +147,14 @@ export function pickup(l) {
   if (l.type !== 'gold') refreshPaneSoon();
   return true;
 }
-/** Arco ao cair + rotação e pulsar do feixe de raridade. */
+let expireT = 0;
+/** Arco ao cair + rotação e pulsar do feixe de raridade. Equipamentos Comuns/Mágicos somem depois de alguns minutos. */
 export function updateLootVisuals(dt) {
+  if ((expireT -= dt) <= 0) {
+    expireT = 1;
+    const ttl = CONFIG.loot.expireLow;
+    for (let i = G.loot.length - 1; i >= 0; i--) { const l = G.loot[i]; if (l.type === 'item' && l.ord <= 1 && G.time - l.born > ttl) removeLoot(l); }
+  }
   for (const l of G.loot) {
     const k = Math.min(1, (G.time - l.born) / 0.45);
     const x = l.fromX + (l.x - l.fromX) * k, z = l.fromZ + (l.z - l.fromZ) * k;

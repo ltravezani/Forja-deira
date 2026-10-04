@@ -1,6 +1,6 @@
 // ---------- barra de habilidades e HUD (orbes, EXP, chefe, buffs) ----------
 import { G } from '../core/state.js';
-import { $, esc, fmt, R } from '../core/util.js';
+import { $, dec, esc, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { potionCount, usePotion } from '../game/inventory.js';
 import { cdLeft, requestCast } from '../game/skills.js';
@@ -18,11 +18,12 @@ export function buildSlots() {
     const id = ch.skillBar[i];
     const sk = id && R.SKILLS[id];
     const el = document.createElement('button');
-    el.className = 'slot' + (i === G.selectedSlot ? ' sel' : '');
+    el.className = 'slot sk' + (i === G.selectedSlot ? ' sel' : '');
     el.dataset.slot = i;
     if (sk) { el.classList.add('has'); el.style.backgroundImage = 'url("' + skillIconURI(id) + '")'; }
     el.innerHTML = '<kbd>' + (i + 1) + '</kbd>' + (sk ? '<span class="sn">' + esc(sk.name) + '</span>' : '<span style="color:#5a506a">—</span>') + '<i class="cd"></i>';
     el.title = sk ? sk.name + ' · MP ' + sk.mp + ' · AG ' + sk.ag + (i === G.selectedSlot ? ' · botão direito' : '') : 'Vazio';
+    el.setAttribute('aria-label', sk ? sk.name : 'Habilidade ' + (i + 1) + ': vazio');
     el.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       Sfx.init();
@@ -35,6 +36,7 @@ export function buildSlots() {
   for (const id of ['hp', 'mp']) {
     const el = document.createElement('button');
     el.className = 'slot pot-' + id;
+    el.setAttribute('aria-label', id === 'hp' ? 'Poção de Vida' : 'Poção de Mana');
     el.style.backgroundImage = 'url("' + iconURI('potion', id === 'hp' ? '#e8483a' : '#3a78e8') + '"), radial-gradient(circle at 50% 45%, ' + (id === 'hp' ? '#4a1414' : '#14204a') + ', #0c0910 80%)';
     el.classList.add('has', 'pot');
     el.innerHTML = '<kbd>' + (id === 'hp' ? 'Q' : 'E') + '</kbd><span class="sn">' + (id === 'hp' ? 'Vida' : 'Mana') + '</span><span class="q num" data-pot="' + id + '"></span>';
@@ -71,12 +73,15 @@ export function hudTick() {
   setText('agTxt', 'AG ' + fmt(G.ag) + ' / ' + fmt(st.maxAg));
   const pct = ch.level >= R.RATES.maxLevel ? 100 : (ch.exp / R.expToNext(ch.level)) * 100;
   setStyle('expFill', 'width', pct.toFixed(2) + '%');
-  setText('expTxt', 'EXP ' + pct.toFixed(2) + '%' + (ch.points ? ' · ' + ch.points + ' pontos livres' : ''));
-  setHtml('lvlTxt', '<b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
+  setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
+  // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
+  setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
   setText('goldTxt', fmt(ch.gold));
   const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
   if (ig && ig.textContent !== gt) ig.textContent = gt;
-  setText('mfTxt', st.mf + '%');
+  setText('mfTxt', dec(st.mf) + '%');
+  const tb = ref('tbItems'), on = !!G.showAllLabels;
+  if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
   updateSlotStates(ch, st);
   updateBossBar();
   setHtml('buffs', G.buffs.map((x) => '<span class="buff' + (x.potion ? ' pot' : '') + '">' + esc(x.name) + ' ' + buffLeft(x.until - G.time) + '</span>').join('') +

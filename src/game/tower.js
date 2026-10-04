@@ -58,7 +58,7 @@ function spawnPack(size, at, opt) {
   }
   return out;
 }
-/** Prêmio de um evento vencido: um punhado de Gold (com o mesmo multiplicador da torre). */
+/** Prêmio de um evento vencido: um punhado de Ouro (com o mesmo multiplicador da torre). */
 function goldReward(x, z, src, piles) {
   for (let i = 0; i < piles; i++) {
     const amount = Math.floor(R.goldAmount(T.lvl, src, rand()) * R.TOWER.goldMult * (1 + G.st.goldPct / 100) / piles);
@@ -105,7 +105,7 @@ function triggerAmbush(a) {
   }, { aggro: true, puff: true, elite: rand() < 0.5 });
   spawnRing(p.x, p.z, 1, 7 * TILE, tint(), 0.8);
   toast('Emboscada!', AMBUSH_SAY[G.biome] || 'Você foi cercado!');
-  log('Emboscada! Derrote os atacantes para ganhar o Gold que eles guardavam.', 'warn');
+  log('Emboscada! Derrote os atacantes para ganhar o Ouro que eles guardavam.', 'warn');
   shake(0.5); Sfx.boom();
 }
 
@@ -285,13 +285,13 @@ export function onTowerKill(m) {
   if (T.thief && m === T.thief.m) {
     goldReward(m.x, m.z, 'boss', 6);
     toast('Ladrão de Ouro derrotado', 'O tesouro dele caiu no chão');
-    log('Você pegou o Ladrão de Ouro! O Gold que ele carregava se espalhou.', 'loot');
+    log('Você pegou o Ladrão de Ouro! O Ouro que ele carregava se espalhou.', 'loot');
     Sfx.loot(4);
   }
   for (const a of T.ambush) if (a.state === 1 && a.mons.every((o) => o.dead)) {
     a.state = 2;
     goldReward(m.x, m.z, 'elite', 2);
-    toast('Emboscada vencida', 'Os atacantes deixaram Gold para trás');
+    toast('Emboscada vencida', 'Os atacantes deixaram Ouro para trás');
   }
 }
 export function updateTower(dt) {

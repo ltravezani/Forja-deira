@@ -1,26 +1,27 @@
-// ---------- mochila, poções, Combat Points e auto-equipar ----------
+// ---------- mochila, poções, Pontos de Combate (CP) e auto-equipar ----------
 import { CONFIG } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
-import { fmt, R } from '../core/util.js';
+import { dec, fmt, R } from '../core/util.js';
+import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
 import { floatText } from '../engine/overlay.js';
 import { buildPlayerModel, recalc } from './player.js';
+import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 
 /** Capacidade da mochila (células). */
 export const BAG_SIZE = CONFIG.bag.size;
 
-// ---------- CP (Combat Points) e auto-equipar ----------
+// ---------- CP (Pontos de Combate) e auto-equipar ----------
 /** CP do personagem sem buffs temporários (valor estável para comparar equipamentos). */
 export function cpOf(ch) { return R.combatPower(R.deriveStats(ch, [])); }
-export function fmtCP(v) { return v >= 1e6 ? (v / 1e6).toFixed(1).replace('.0', '') + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v); }
+export function fmtCP(v) { return v >= 1e6 ? dec(Math.round(v / 1e5) / 10) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? dec(Math.round(v / 100) / 10) + 'k' : String(v); }
 /** Pode ser usado por esta classe (independe de requisito de atributo). */
 export function classOk(it) { return R.canUse(G.ch.cls, it); }
+/** Requisito cumprido (mesma regra do cálculo de atributos: todos os itens e buffs, sem o bônus do próprio item). */
 export function reqOk(it) {
-  const req = R.itemReq(it);
-  if (!req) return true;
-  return req.stat === 'level' ? G.ch.level >= req.value : G.st.total[req.stat] >= req.value;
+  return R.itemActive(G.ch, it, G.buffs.map((b) => b.stats));
 }
 /** CP que o personagem teria com `it` no lugar do item atual do mesmo slot. */
 export function cpWith(it) {
@@ -42,11 +43,12 @@ export function equipFromBag(idx, quiet) {
   ch.equip[it.slot] = it;
   if (!quiet) {
     UI.sel = { where: 'eq', slot: it.slot };
-    const req = R.itemReq(it);
-    if (req && (req.stat === 'level' ? ch.level < req.value : ch.stats[req.stat] < req.value)) log('Requisito não atendido: o item fica equipado mas inativo.', 'warn');
+    if (!reqOk(it)) log('Requisito não atendido: o item fica equipado mas inativo.', 'warn');
     const before = G.cp;
     recalc(); buildPlayerModel();
     const d = G.cp - before;
+    Sfx.loot(1);
+    log('Equipou ' + R.itemName(it) + (d ? ' (' + (d > 0 ? '+' : '') + fmt(d) + ' CP)' : '') + '.', 'loot');
     if (d) floatText(G.player.x, 3, G.player.z, (d > 0 ? '+' : '') + fmt(d) + ' CP', d > 0 ? 'heal' : 'info');
   }
   return true;
@@ -122,16 +124,23 @@ function drinkBuff(id, D) {
 export function potionCount(id) { const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id); return p ? p.qty : 0; }
 /** Bebe uma poção (Q/E); pequena recarga para não gastar várias num clique duplo. */
 export function usePotion(id) {
+  if (!G.player || !G.player.alive) return; // caído: a tela de queda cuida (nada de "Sem poções")
   const p = G.ch.bag.find((b) => b.kind === 'potion' && b.id === id);
-  if (!p || !G.player.alive) { floatText(G.player.x, 2.6, G.player.z, 'Sem poções', 'info'); return; }
+  // aviso com pausa curta: segurar Q/E não enche a tela de textos
+  const say = (t) => { if ((G.potMsgT || 0) <= G.time) { G.potMsgT = G.time + 0.6; floatText(G.player.x, 2.6, G.player.z, t, 'info'); } };
+  if (!p) { say('Sem poções'); return; }
   if (G.potCd > G.time) return;
-  G.potCd = G.time + 0.5;
   const D = R.POTIONS[id];
   if (D.revive) { log('A Poção da Ressurreição é usada na tela de queda.', 'sys'); return; }
-  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); return; }
+  // vida/mana cheias: não gasta a poção
+  if (id === 'hp' && G.hp >= G.st.maxHp) { say('HP cheio'); return; }
+  if (id === 'mp' && G.mp >= G.st.maxMp) { say('MP cheio'); return; }
+  G.potCd = G.time + 0.5;
+  if (D.buff) { drinkBuff(id, D); p.qty--; if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1); questEvent('potion', id); return; }
   if (id === 'hp') { const a = G.st.maxHp * D.pct + D.flat; G.hp = Math.min(G.st.maxHp, G.hp + a); floatText(G.player.x, 2.6, G.player.z, '+' + fmt(a), 'heal'); }
   else G.mp = Math.min(G.st.maxMp, G.mp + G.st.maxMp * D.pct + D.flat);
   emit(G.player.x, 1, G.player.z, { n: 14, color: id === 'hp' ? 0xff5a4a : 0x5a9aff, speed: 2, up: 2, life: 0.6, size: 0.8, grav: 2 });
   p.qty--;
   if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1);
+  questEvent('potion', id);
 }

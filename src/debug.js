@@ -5,7 +5,7 @@ import { cloudDebug } from './core/cloud.js';
 import { CONFIG } from './core/config.js';
 import { G, S } from './core/state.js';
 import { R } from './core/util.js';
-import { CAM, camera, camTarget, renderer, scene, world } from './engine/renderer.js';
+import { activeLights, applyQuality, CAM, camera, camTarget, currentQuality, dynResScale, renderer, scene, warming, world } from './engine/renderer.js';
 import { hurtPlayer, killMonster } from './game/combat.js';
 import { MON } from './game/data.js';
 import { followPath, pathTo } from './game/movement.js';
@@ -17,6 +17,11 @@ import { townLifeCount } from './game/townlife.js';
 import { updateWorld } from './game/world.js';
 import { enterDungeon, enterEden, enterTower, enterTown, inSafe } from './game/zones.js';
 import { edenState } from './game/eden.js';
+import { spawnAlly } from './game/allies.js';
+import { tryDodge } from './game/dodge.js';
+import { questEvent } from './game/quests.js';
+import { openQuestBoard } from './ui/questUi.js';
+import { telegraphCircle, telegraphCone } from './engine/telegraph.js';
 import { towerState } from './game/tower.js';
 import { glyph, skillIconURI } from './ui/icons.js';
 import { drawWeaponIcons } from './art/weaponIcons.js';
@@ -31,5 +36,7 @@ export function installDebugHook(loopStats) {
     castSkill, castSlot, killMonster, hurtPlayer, recalc, buildPlayerModel, dropLoot, loopStats, openNpc, closeModal,
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
     enterEden, edenState, towerState, lineClear, gltfHit, gltfRise,
+    tryDodge, questEvent, openQuestBoard, spawnAlly, telegraphCircle, telegraphCone,
+    warming, applyQuality, currentQuality, dynResScale, activeLights,
   };
 }

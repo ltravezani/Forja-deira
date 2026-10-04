@@ -52,26 +52,58 @@ function b64ToBuffer(s) {
   for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
   return u.buffer;
 }
-/** Carrega os modelos embutidos (assíncrono: as texturas viram imagens). Resolve true se deu certo. */
+/** base64 → bytes pelo caminho nativo mais rápido disponível (fromBase64, fetch de data:, atob). */
+function decodeB64(s) {
+  if (typeof Uint8Array.fromBase64 === 'function') {
+    try { return Promise.resolve(Uint8Array.fromBase64(s).buffer); } catch { /* segue */ }
+  }
+  if (typeof fetch === 'function') {
+    return fetch('data:application/octet-stream;base64,' + s).then((r) => r.arrayBuffer()).catch(() => b64ToBuffer(s));
+  }
+  return Promise.resolve(b64ToBuffer(s));
+}
+/**
+ * Modelos embutidos: no arquivo único vêm em <script type="application/octet-stream" data-glb>
+ * (texto que o navegador não interpreta como JavaScript); no dist/dev.html, em window.__FORJA_GLB.
+ */
+function glbSources() {
+  const out = {};
+  if (window.__FORJA_GLB) for (const k in window.__FORJA_GLB) out[k] = window.__FORJA_GLB[k];
+  for (const el of document.querySelectorAll('script[data-glb]')) out[el.dataset.glb] = el;
+  return out;
+}
+/** Só aparecem nas masmorras (e em invocações): carregam depois da tela de título. */
+const LAZY = ['Skeleton_Warrior', 'Skeleton_Rogue', 'Skeleton_Blade', 'Skeleton_Crossbow', 'Skeleton_Shield_Small_A'];
+function parseGlb(loader, name, src) {
+  const text = typeof src === 'string' ? src : src.textContent;
+  if (typeof src !== 'string') src.remove(); // o texto base64 não fica no DOM
+  LIB.bytes += text.length * 0.75;
+  return decodeB64(text).then((buf) => new Promise((res, rej) => loader.parse(buf, '', (g) => res([name, g]), rej)));
+}
+function addLoaded(list) {
+  const chars = Object.values(CHAR);
+  for (const [name, g] of list) {
+    // geometrias e texturas são dos modelos-base: os clones nunca as liberam
+    g.scene.traverse((o) => { if (o.geometry) o.geometry.userData.shared = true; });
+    if (name === 'anims' || name === 'anims_extra') for (const c of g.animations) LIB.clips[c.name] = c;
+    else if (chars.includes(name)) LIB.chars[name] = g.scene;
+    else LIB.props[name] = g.scene;
+  }
+}
+/**
+ * Carrega os modelos embutidos (assíncrono: as texturas viram imagens). Resolve true se deu certo.
+ * Os esqueletos (só das masmorras) ficam para logo depois: até chegarem, quem os pedir usa o
+ * modelo procedural (hasGltf devolve false), então nada quebra se uma masmorra abrir antes.
+ */
 export function loadGltfModels() {
-  const src = window.__FORJA_GLB, L = window.THREE_GLTF;
-  if (!src || !L) return Promise.resolve(false);
+  const src = glbSources(), L = window.THREE_GLTF;
+  delete window.__FORJA_GLB; // as referências ficam só aqui até o fim da carga
+  if (!L || !src.Knight) return Promise.resolve(false);
   const t0 = performance.now();
   const loader = new L.GLTFLoader();
-  const names = Object.keys(src);
-  const jobs = names.map((name) => new Promise((res, rej) => {
-    LIB.bytes += src[name].length * 0.75;
-    loader.parse(b64ToBuffer(src[name]), '', (g) => res([name, g]), rej);
-  }));
-  return Promise.all(jobs).then((list) => {
-    const chars = Object.values(CHAR);
-    for (const [name, g] of list) {
-      // geometrias e texturas são dos modelos-base: os clones nunca as liberam
-      g.scene.traverse((o) => { if (o.geometry) o.geometry.userData.shared = true; });
-      if (name === 'anims' || name === 'anims_extra') for (const c of g.animations) LIB.clips[c.name] = c;
-      else if (chars.includes(name)) LIB.chars[name] = g.scene;
-      else LIB.props[name] = g.scene;
-    }
+  const names = Object.keys(src), now = names.filter((n) => !LAZY.includes(n)), later = names.filter((n) => LAZY.includes(n));
+  return Promise.all(now.map((n) => parseGlb(loader, n, src[n]))).then((list) => {
+    addLoaded(list);
     // altura de referência: corpo do cavaleiro sem acessórios (todos usam o mesmo rig)
     const box = new THREE.Box3();
     LIB.chars.Knight.updateMatrixWorld(true);
@@ -79,7 +111,12 @@ export function loadGltfModels() {
     LIB.H = box.max.y - box.min.y || 1;
     LIB.ready = true;
     LIB.loadMs = performance.now() - t0;
-    delete window.__FORJA_GLB; // o texto base64 não é mais necessário
+    if (later.length) setTimeout(() => {
+      const t1 = performance.now();
+      Promise.all(later.map((n) => parseGlb(loader, n, src[n]).catch(() => null)))
+        .then((l) => { addLoaded(l.filter(Boolean)); LIB.lazyMs = performance.now() - t1; LIB.lazyDone = true; });
+    }, 0);
+    else LIB.lazyDone = true;
     return true;
   }).catch((e) => { console.warn('Personagens animados indisponíveis; usando os modelos simples.', e); return false; });
 }
@@ -91,7 +128,7 @@ export function applyCharSetting(st) { LIB.on = st.animChars != null ? !!st.anim
 export function gltfProp(name) { return LIB.ready ? LIB.props[name] || null : null; }
 export function gltfEnabled() { return LIB.ready && LIB.on; }
 /** Estatísticas para a ferramenta de medição (tempo de carga e tamanho embutido). */
-export function gltfStats() { return { ready: LIB.ready, on: LIB.on, loadMs: Math.round(LIB.loadMs), kb: Math.round(LIB.bytes / 1024) }; }
+export function gltfStats() { return { ready: LIB.ready, on: LIB.on, loadMs: Math.round(LIB.loadMs), kb: Math.round(LIB.bytes / 1024), lazyDone: !!LIB.lazyDone, lazyMs: Math.round(LIB.lazyMs || 0) }; }
 /** true se este visual tem um modelo animado disponível agora. */
 export function hasGltf(o) { return !!(o && o.gltf && gltfEnabled() && LIB.chars[CHAR[o.gltf]]); }
 

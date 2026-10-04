@@ -3,7 +3,7 @@ import { gltfHit } from '../art/gltfModels.js';
 import { flashModel } from '../art/models.js';
 import { CONFIG } from '../core/config.js';
 import { G, persist } from '../core/state.js';
-import { fmt, R, rand } from '../core/util.js';
+import { fmt, R, rand, touchUI } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { impactStar, shockRing, slashArc } from '../engine/combatfx.js';
 import { emit, spawnRing } from '../engine/effects.js';
@@ -14,6 +14,7 @@ import { autoEquipOn, potionCount } from './inventory.js';
 import { dropEdenRoll, dropLoot } from './loot.js';
 import { onEdenBossKilled, onEdenKill, onMiniKilled, openChest } from './eden.js';
 import { onTowerKill } from './tower.js';
+import { questEvent, questKill } from './quests.js';
 import { aggroPack, QUERY_PAD, queryMonsters } from './monsters.js';
 import { face } from './movement.js';
 import { makePortal } from './npcs.js';
@@ -30,21 +31,24 @@ import { walkableR } from '../world/grid.js';
 const RANGE = { dk: 2.3, dw: 13, elf: 15, de: 2.4, nc: 12 };
 export function attackRange(m) { return RANGE[G.ch.cls] + (m ? m.radius : 0); }
 
-/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain}. Devolve o dano. */
+/** Aplica um golpe do jogador (ou aliado) a um monstro. opts: {slow, kb, fromX, fromZ, drain, ally}. Devolve o dano. */
 export function hitMonster(m, mult, skillId, opts) {
   if (!m || m.dead) return 0;
   opts = opts || {};
   const r = R.rollDamage(G.st, rand, mult, skillId, m.def);
   if (!Number.isFinite(r.dmg)) return 0;
   m.hp -= r.dmg;
-  if (r.type !== 'normal') hitStop(CONFIG.feel.hitStop * 0.5);
+  // micro-pausa só nos golpes do herói (aliados não deixam o jogo em câmera lenta)
+  if (r.type !== 'normal' && !opts.ally) hitStop(CONFIG.feel.hitStop * 0.5);
+  m.lastHitAlly = !!opts.ally;
   m.hitFlash = 0.12;
   gltfHit(m.model);
   m.lastHit = G.time;
   aggroPack(m);
   const h = m.model.height;
   floatText(m.x, h + 0.3, m.z, fmt(r.dmg), r.type === 'exc' ? 'exc' : r.type === 'crit' ? 'crit' : '');
-  if (G.st.lifeSteal) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
+  // roubo de vida: só golpes do próprio herói, e nunca com ele caído
+  if (G.st.lifeSteal && !opts.ally && G.player.alive) G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * G.st.lifeSteal / 100);
   // drenagem das habilidades (Necromancer): cura uma fração do dano e o sangue voa até o herói
   if (opts.drain && G.player.alive) {
     G.hp = Math.min(G.st.maxHp, G.hp + r.dmg * opts.drain / 100);
@@ -160,7 +164,7 @@ export function killMonster(m) {
   m.dead = true; m.deadT = 0; m.hp = 0;
   const src = m.boss ? 'boss' : m.mini ? 'mini' : m.elite ? 'elite' : 'normal';
   grantKillRewards(m);
-  if (m.elite || m.boss) hitStop(CONFIG.feel.hitStop);
+  if ((m.elite || m.boss) && !m.lastHitAlly) hitStop(CONFIG.feel.hitStop);
   emit(m.x, 1, m.z, { n: m.boss ? 80 : 18, color: m.boss ? 0xffa040 : 0xc8b8ff, speed: m.boss ? 9 : 5, life: 0.7, size: 1, grav: -4 });
   if (m.affix && m.affix.explode) scheduleExplosion(m);
   dropMonsterLoot(m, src);
@@ -168,6 +172,7 @@ export function killMonster(m) {
   else if (m.mini) onMiniKilled(m);
   if (G.zone === 'eden') onEdenKill(m);
   else if (G.zone === 'tower') onTowerKill(m);
+  questKill(m);
 }
 function grantKillRewards(m) {
   const ch = G.ch;
@@ -200,20 +205,20 @@ function dropMonsterLoot(m, src) {
     dropLoot(m.x, m.z, { type: 'item', item: it });
     const ord = R.RARITY[it.rarity].order;
     G.dropLog.unshift({ name: R.itemName(it), rarity: it.rarity, seed: it.seed, roll: it.rolls[0] ? it.rolls[0].roll : null, table: it.rolls[0] ? it.rolls[0].table : null, src, mf: G.st.mf, at: Date.now() });
-    if (ord >= 2) { log('Drop ' + R.RARITY[it.rarity].name + ': ' + R.itemName(it) + ' (seed ' + it.seed + ')', 'loot'); Sfx.loot(ord); }
+    if (ord >= 2) { log('Drop raro: ' + R.itemName(it) + '.', 'loot'); Sfx.loot(ord); }
   }
   if (G.dropLog.length > 40) G.dropLog.length = 40;
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   for (const pt of drop.potions) dropLoot(m.x, m.z, { type: 'potion', id: pt });
 }
-/** Torre Infinita: só Gold (em dobro) e Jewels; o chefe tem 20% de chance de soltar o tesouro. */
+/** Torre Infinita: só Ouro (em dobro) e Joias; o chefe tem 20% de chance de soltar o tesouro. */
 function dropTowerLoot(m, src, seed) {
   const drop = R.rollTowerDrop({ seed, mLevel: m.level, src });
   const gold = drop.gold ? Math.floor(drop.gold * (1 + G.st.goldPct / 100)) : 0;
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   if (src !== 'boss') return;
-  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' Gold e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Jewels.' : ' Jewel.'), 'loot'); Sfx.loot(3); }
+  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
   else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
 }
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */
@@ -245,6 +250,7 @@ function onBossKilled(m) {
 function onTowerBossKilled(m) {
   const ch = G.ch, next = G.floor + 1;
   ch.towerBest = Math.max(ch.towerBest || 1, next);
+  questEvent('floor');
   toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
   const climb = () => enterTower(next);
   G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {
@@ -277,7 +283,7 @@ export function unlockSkills() {
     const sk = R.SKILLS[id];
     if (sk.lvl <= ch.level && sk.tier <= ch.tier && ch.skillBar.indexOf(id) < 0 && ch.skillBar.length < 6) {
       ch.skillBar.push(id);
-      log('Nova habilidade: ' + sk.name + ' (tecla ' + ch.skillBar.length + ').', 'sys');
+      log('Nova habilidade: ' + sk.name + (touchUI() ? ' (já na barra de habilidades).' : ' (tecla ' + ch.skillBar.length + ').'), 'sys');
     }
   });
 }
@@ -343,7 +349,7 @@ export function breakBarrel(b) {
   const lvl = zoneLevel();
   const goldMult = G.zone === 'tower' ? R.TOWER.goldMult : 1;
   if (rand() < 0.5) dropLoot(b.x, b.z, { type: 'gold', amount: Math.floor((lvl * (8 + rand() * 12) + 10) * goldMult) });
-  if (G.zone === 'tower') return; // na torre só cai Gold
+  if (G.zone === 'tower') return; // na torre só cai Ouro
   if (rand() < 0.15) dropLoot(b.x, b.z, { type: 'potion', id: rand() < 0.6 ? 'hp' : 'mp' });
   if (rand() < 0.06) dropLoot(b.x, b.z, { type: 'item', item: R.makeEquip(R.hash32(G.L.seed, 'barrel', b.x, b.z), lvl, null, G.ch.cls, G.st.mf, 'normal') });
 }

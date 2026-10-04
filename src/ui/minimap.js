@@ -1,6 +1,7 @@
 // ---------- minimapa ----------
 import { allPortals, G } from '../core/state.js';
 import { $, R, TILE } from '../core/util.js';
+import { questTargetPos } from './questUi.js';
 
 const MM = 10;
 let mmBase = document.createElement('canvas');
@@ -23,6 +24,35 @@ export function paintMinimapTile(L, x, z) {
     return;
   }
   c.fillRect(x * MM, z * MM, MM, MM);
+}
+/**
+ * Alvo da missão atual: "!" dourado sobre o NPC; se estiver fora do círculo,
+ * uma seta na borda apontando para ele. Mesma rotação de 45° do mapa.
+ */
+function drawQuestMarker(c, W, p) {
+  const t = questTargetPos();
+  if (!t) return;
+  const dx = ((t.x - p.x) / TILE) * MM, dz = ((t.z - p.z) / TILE) * MM;
+  const k = Math.SQRT1_2, sx = (dx - dz) * k, sy = (dx + dz) * k;
+  const d = Math.hypot(sx, sy), lim = W / 2 - 22;
+  const pulse = 1 + Math.sin(performance.now() / 180) * 0.12;
+  c.save();
+  c.translate(W / 2, W / 2);
+  if (d > lim) {
+    const a = Math.atan2(sy, sx);
+    c.rotate(a);
+    c.translate(lim + 6, 0);
+    c.fillStyle = '#f2cf7a'; c.strokeStyle = 'rgba(20,12,4,.9)'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(14 * pulse, 0); c.lineTo(-8, -11); c.lineTo(-8, 11); c.closePath(); c.stroke(); c.fill();
+  } else {
+    c.translate(sx, sy);
+    c.fillStyle = 'rgba(20,12,4,.85)';
+    c.beginPath(); c.arc(0, 0, 15 * pulse, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#f2cf7a'; c.lineWidth = 3; c.stroke();
+    c.fillStyle = '#f2cf7a'; c.font = 'bold 22px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('!', 0, 1);
+  }
+  c.restore();
 }
 export function drawMinimap() {
   const cv = $('#minimap'), c = cv.getContext('2d');
@@ -47,6 +77,7 @@ export function drawMinimap() {
   G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
   if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
   c.restore();
+  drawQuestMarker(c, W, p);
   // jogador no centro
   c.fillStyle = '#fff';
   c.beginPath(); c.arc(W / 2, W / 2, 6, 0, Math.PI * 2); c.fill();

@@ -3,13 +3,18 @@
 // centésimos de segundo (o render continua), realçando o impacto. Intensidade
 // e desligamento em CONFIG.feel (Opções e "reduzir movimento").
 
-const feel = { stop: 0 };
+const feel = { stop: 0, gap: 0 };
+/** s mínimos entre o fim de uma micro-pausa e o começo da próxima (muitos críticos não viram câmera lenta). */
+const MIN_GAP = 0.25;
 
 export function hitStop(seconds) {
-  if (seconds > 0) feel.stop = Math.max(feel.stop, Math.min(0.12, seconds));
+  if (seconds <= 0 || feel.gap > 0) return;
+  feel.stop = Math.min(0.12, seconds);
+  feel.gap = feel.stop + MIN_GAP;
 }
 /** Converte o delta real no delta da simulação (quase parado durante a micro-pausa). */
 export function simDelta(dt) {
+  if (feel.gap > 0) feel.gap -= dt;
   if (feel.stop <= 0) return dt;
   feel.stop -= dt;
   return dt * 0.08;

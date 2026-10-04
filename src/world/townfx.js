@@ -147,7 +147,10 @@ function updateSmoke(S, dt, h) {
   }
   const g = S.pts.geometry;
   g.setDrawRange(0, n);
-  g.attributes.position.needsUpdate = g.attributes.size.needsUpdate = g.attributes.alpha.needsUpdate = true;
+  if (!n && !S.drawn) return;
+  S.drawn = n;
+  // só as vivas sobem para a GPU
+  for (const a of [g.attributes.position, g.attributes.size, g.attributes.alpha]) { a.clearUpdateRanges(); if (n) { a.addUpdateRange(0, n * a.itemSize); a.needsUpdate = true; } }
 }
 
 /**

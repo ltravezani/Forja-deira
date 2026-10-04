@@ -81,8 +81,15 @@ export function clickWorld(sx, sy, fromHold) {
 }
 
 /** Atualiza o monstro sob o cursor (1× por quadro, não a cada pointermove) e o cursor de ataque. */
+// toque não tem cursor pairando: a busca de monstro sob o último toque roda a ~4 vezes por segundo
+let touchOnly = false, touchT = 0;
+if (typeof window === 'object') {
+  window.addEventListener('pointerdown', (e) => { touchOnly = e.pointerType === 'touch'; }, { capture: true, passive: true });
+  window.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') touchOnly = false; }, { capture: true, passive: true });
+}
 export function updateHover() {
   if (G.paused) return;
+  if (touchOnly) { const now = performance.now(); if (now - touchT < 250) return; touchT = now; }
   const m = pickMonster(mouse.x, mouse.y);
   if (m === mouse.hover) return;
   mouse.hover = m;

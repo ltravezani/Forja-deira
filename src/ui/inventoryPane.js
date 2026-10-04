@@ -4,12 +4,12 @@
 // equipamento muda. Seleção, tooltip e menu de contexto ficam em itemTooltip.js.
 import { refineColor } from '../art/items.js';
 import { G, UI } from '../core/state.js';
-import { esc, fmt, R } from '../core/util.js';
+import { esc, fmt, R, touchUI } from '../core/util.js';
 import { autoEquipOn, BAG_SIZE, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
 import { petSellable } from '../game/allies.js';
 import { CharPreview } from './charPreview.js';
 import { glyph, iconHtml, iconURI } from './icons.js';
-import { ItemTooltip } from './itemTooltip.js';
+import { ItemTooltip, selBagIdx } from './itemTooltip.js';
 
 /** Slots em volta do herói: coluna esquerda e direita (de cima para baixo). */
 const EQ_LEFT = ['helm', 'armor', 'gloves', 'boots'];
@@ -34,6 +34,8 @@ export const InventoryFilter = {
 // ---------- InventoryItem / EquipmentSlot ----------
 /** Brilho discreto para Excelente ou melhor, joias e talismãs. */
 const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+/** Cadeado dos itens trancados (nunca vendidos nem descartados). */
+const LOCK_SVG = '<span class="lk" title="Trancado" style="position:absolute;right:2px;bottom:13px;width:10px;height:11px;line-height:0;filter:drop-shadow(0 1px 1px #000)"><svg viewBox="0 0 10 11" width="10" height="11" aria-hidden="true"><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#e8d9a8" stroke-width="1.4"/><rect x="1" y="5" width="8" height="6" rx="1" fill="#e8d9a8"/></svg></span>';
 /** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
 export function InventoryItem(it, attrs, ctx) {
   if (!it) return '<div class="cell empty"' + attrs + '></div>';
@@ -55,7 +57,7 @@ export function InventoryItem(it, attrs, ctx) {
   const pl = it.plus || 0, rf = pl >= 10 ? '#' + refineColor(pl).toString(16).padStart(6, '0') : '';
   return '<button class="cell' + (isRare(it) ? ' rare' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + 'aa;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + (it.locked ? LOCK_SVG : '') + '</button>';
 }
 export function EquipmentSlot(s, it, cls) {
   if (it) return InventoryItem(it, ' data-act="seleq" data-slot="' + s + '"').replace('class="cell', 'class="cell eq');
@@ -125,14 +127,14 @@ export const InventoryUI = {
   root: null,
   skeleton() {
     return '<div class="inv" id="invRoot">' +
-      '<h3 class="inv-h">Inventário <span class="cpbadge" id="invCP" title="Combat Points: poder total do personagem"></span></h3>' +
+      '<h3 class="inv-h">Inventário <span class="cpbadge" id="invCP" title="Pontos de Combate (CP): poder total do personagem"></span></h3>' +
       '<div class="inv-cols"><section class="inv-char" aria-label="Personagem e equipamento">' + EquipmentPanel.skeleton() + '</section>' +
       '<section class="inv-bag" aria-label="Mochila">' +
-      '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> Gold</span><span class="ups" id="bagUps"></span></div>' +
+      '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> de Ouro</span><span class="ups" id="bagUps"></span></div>' +
       '<div class="btabs" id="bagFilters" role="group" aria-label="Filtrar mochila"></div>' +
       '<div class="bag" id="bagGrid"></div>' +
       '<div class="row invtools" id="invTools"></div>' +
-      '<p class="note tip">Toque/clique seleciona · duplo equipa ou usa · botão direito ou toque longo abre o menu · arraste para equipar ou guardar.</p>' +
+      '<p class="note tip">' + (touchUI() ? 'Toque seleciona · toque duplo equipa ou usa · toque longo abre o menu · arraste para equipar ou guardar.' : 'Clique seleciona · duplo clique equipa ou usa · botão direito abre o menu · arraste para equipar ou guardar.') + '</p>' +
       '</section></div></div>';
   },
   mount(pane) {
@@ -189,7 +191,7 @@ export const InventoryUI = {
   /** Destaque do item selecionado (classe aplicada sem redesenhar a célula). */
   markSelection() {
     const s = UI.sel;
-    const want = !s ? null : s.where === 'eq' ? this.root.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : this.root.querySelector('#bagGrid [data-i="' + s.idx + '"]');
+    const want = !s ? null : s.where === 'eq' ? this.root.querySelector('#paper [data-act="seleq"][data-slot="' + s.slot + '"]') : this.root.querySelector('#bagGrid [data-i="' + selBagIdx() + '"]');
     this.root.querySelectorAll('.cell.sel').forEach((n) => { if (n !== want) n.classList.remove('sel'); });
     if (want) want.classList.add('sel');
   },

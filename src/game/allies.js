@@ -1,7 +1,7 @@
 // ---------- aliados (pet e invocações) ----------
 import { gltfRise } from '../art/gltfModels.js';
 import { animateModel, buildBeast, buildHumanoid, disposeModel } from '../art/models.js';
-import { G } from '../core/state.js';
+import { G, UI } from '../core/state.js';
 import { dist2, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
@@ -9,6 +9,7 @@ import { slashArc } from '../engine/combatfx.js';
 import { world } from '../engine/renderer.js';
 import { hitMonster } from './combat.js';
 import { face, stepToward, turn } from './movement.js';
+import { summonOverflow } from './summonCap.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 import { gy } from '../world/grid.js';
@@ -20,6 +21,8 @@ const UNDEAD = {
 };
 export function spawnAlly(kind, x, z, dur) {
   const U = UNDEAD[kind];
+  // limite por tipo (5 esqueletos, 2 cavaleiros): o novo substitui o mais antigo
+  for (const old of summonOverflow(G.allies, kind)) dismissAlly(old);
   const model = kind === 'pet'
     ? buildBeast({ fur: 0xe8883a, dark: 0x3a2a22, eye: 0x1a1a1a, tailColor: 0xfff0e0, bushy: true, scale: 0.62 })
     : U ? buildHumanoid(U.o)
@@ -34,8 +37,8 @@ export function spawnAlly(kind, x, z, dur) {
   if (kind === 'pet') G.pet = a;
   return a;
 }
-/** Itens que o pet leva para vender: todo equipamento, menos Lendários (joias e poções ficam). */
-export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && !it.locked;
+/** Itens que o pet leva para vender: todo equipamento, menos Lendários, asas e itens trancados (joias e poções ficam). */
+export const petSellable = (it) => !!it.slot && it.rarity !== 'lendario' && it.slot !== 'wings' && !it.locked;
 /** Manda o pet vender na cidade tudo que `petSellable` aceita (ou o filtro dado, na venda automática). */
 export function sendPetToSell(filter) {
   const pet = G.pet;
@@ -45,8 +48,13 @@ export function sendPetToSell(filter) {
   if (!sell.length) { log('Nada para vender: o pet não leva joias, poções nem itens Lendários.', 'warn'); return false; }
   let total = 0;
   sell.forEach((it) => { total += Math.floor(R.itemValue(it) * 0.5); G.ch.bag.splice(G.ch.bag.indexOf(it), 1); });
+  // o Gold entra na hora (sair ou fechar a página não perde nada); a volta do pet é só visual
+  G.ch.gold += total;
   pet.away = G.time + 18;
   pet.gold = total;
+  // item selecionado foi junto: tira a seleção (e os detalhes) em vez de apontar para outro item
+  if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !G.ch.bag.includes(UI.sel.it)) { UI.sel = null; UI.tipOpen = false; }
+  if (UI.itemConfirm && !G.ch.bag.includes(UI.itemConfirm.it)) UI.itemConfirm = null;
   pet.model.root.visible = false;
   emit(pet.x, 0.5, pet.z, { n: 30, color: 0xffd24a, speed: 3, up: 2, life: 0.8, size: 1 });
   log('Pet partiu para a cidade com ' + sell.length + ' itens' + (typeof filter === 'function' ? ' (venda automática)' : '') + '. Volta em 18s.', 'sys');
@@ -61,8 +69,7 @@ export function updateAllies(dt) {
     if (a.kind === 'pet' && a.away) {
       if (a.away > G.time) continue;
       a.away = 0; a.model.root.visible = true; a.x = p.x - 1; a.z = p.z + 1;
-      G.ch.gold += a.gold;
-      log('Pet voltou com ' + fmt(a.gold) + ' Gold.', 'loot');
+      log('Pet voltou com ' + fmt(a.gold) + ' de Ouro.', 'loot');
       emit(a.x, 0.5, a.z, { n: 20, color: 0xffd24a, speed: 3, up: 2, life: 0.7, size: 0.9 });
       Sfx.coin();
     }
@@ -86,7 +93,7 @@ export function updateAllies(dt) {
         const k = a.kind === 'pet' ? 0.3 : UNDEAD[a.kind] ? UNDEAD[a.kind].k : 0.9;
         if (UNDEAD[a.kind]) slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), a.kind === 'deathknight' ? 0xff5a7a : 0xb0ffd0, { radius: 1.5, dur: 0.15 });
         if (a.kind === 'pet') slashArc(a.x, a.z, Math.atan2(a.target.x - a.x, a.target.z - a.z), 0xffd8a0, { radius: 1.2, y: 0.55, dur: 0.15 });
-        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z });
+        hitMonster(a.target, k, null, { fromX: a.x, fromZ: a.z, ally: true });
       }
     } else {
       const d = Math.hypot(p.x - a.x, p.z - a.z);
@@ -105,6 +112,14 @@ export function updateAllies(dt) {
   }
 }
 
+/** Desfaz um aliado antes do tempo (some em fumaça). */
+function dismissAlly(a) {
+  const i = G.allies.indexOf(a);
+  if (i < 0) return;
+  emit(a.x, 0.6, a.z, { n: 20, color: UNDEAD[a.kind] ? 0xd8e8d0 : 0x8affb0, speed: 3, life: 0.5, size: 0.9 });
+  removeAlly(a);
+  G.allies.splice(i, 1);
+}
 function removeAlly(a) {
   world.remove(a.model.root);
   disposeModel(a.model);

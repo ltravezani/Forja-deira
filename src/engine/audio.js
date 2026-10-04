@@ -12,8 +12,14 @@ function allowVoice() {
   return voices++ < CONFIG.audio.maxVoicesPerFrame;
 }
 
+/** Volume dos efeitos em % (Opções); padrão 100. */
+export function sfxVolume(settings) {
+  const v = settings && settings.sfxVol;
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 100;
+}
+
 export const Sfx = {
-  ctx: null, on: true,
+  ctx: null, on: true, vol: 1,
   /** Cria o contexto de áudio (precisa de um gesto do usuário nos navegadores). */
   init() {
     try {
@@ -22,18 +28,18 @@ export const Sfx = {
     } catch { this.ctx = null; }
   },
   tone(f, d, type, vol, slide) {
-    if (!this.on || !this.ctx || !allowVoice()) return;
+    if (!this.on || !this.vol || !this.ctx || !allowVoice()) return;
     const c = this.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
     o.type = type || 'sine';
     o.frequency.setValueAtTime(f, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f * slide), t + d);
-    g.gain.setValueAtTime(vol || 0.08, t);
+    g.gain.setValueAtTime((vol || 0.08) * this.vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + d);
     o.connect(g); g.connect(c.destination);
     o.start(t); o.stop(t + d);
   },
   noise(d, vol, f) {
-    if (!this.on || !this.ctx || !allowVoice()) return;
+    if (!this.on || !this.vol || !this.ctx || !allowVoice()) return;
     const c = this.ctx;
     let b = noiseCache.get(d);
     if (!b) {
@@ -43,13 +49,14 @@ export const Sfx = {
     }
     const s = c.createBufferSource(), g = c.createGain(), fl = c.createBiquadFilter();
     fl.type = 'lowpass'; fl.frequency.value = f || 1200;
-    s.buffer = b; g.gain.value = vol || 0.1;
+    s.buffer = b; g.gain.value = (vol || 0.1) * this.vol;
     s.connect(fl); fl.connect(g); g.connect(c.destination); s.start();
   },
   /** Sequência curta de notas agendada no relógio do áudio (sem setTimeout). */
   seq(freqs, step, d, type, vol) {
-    if (!this.on || !this.ctx) return;
+    if (!this.on || !this.vol || !this.ctx) return;
     const c = this.ctx, t0 = c.currentTime;
+    vol *= this.vol;
     freqs.forEach((f, i) => {
       const o = c.createOscillator(), g = c.createGain(), t = t0 + i * step;
       o.type = type; o.frequency.setValueAtTime(f, t);
@@ -67,3 +74,18 @@ export const Sfx = {
   hurt() { this.tone(160, 0.12, 'square', 0.04, 0.6); },
   coin() { this.seq([1300, 1750], 0.05, 0.1, 'square', 0.022); },
 };
+
+// aba em segundo plano: suspende o contexto de áudio (música e efeitos param e o
+// processamento sai da CPU); ao voltar, retoma só se ele estava rodando antes.
+let resumeOnShow = false;
+if (typeof document === 'object') document.addEventListener('visibilitychange', () => {
+  const c = Sfx.ctx;
+  if (!c) return;
+  if (document.hidden) {
+    resumeOnShow = c.state === 'running';
+    if (resumeOnShow) c.suspend().catch(() => {});
+  } else if (resumeOnShow) {
+    resumeOnShow = false;
+    c.resume().catch(() => {});
+  }
+});
