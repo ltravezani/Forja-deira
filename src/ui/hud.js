@@ -111,6 +111,7 @@ export function hudTick() {
   const pct = ch.level >= R.RATES.maxLevel ? 100 : (ch.exp / R.expToNext(ch.level)) * 100;
   setStyle('expFill', 'width', pct.toFixed(2) + '%');
   setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
+  setText('rateTxt', 'EXP ' + R.expRate(ch.resets) + 'x');
   // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
   setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
   const ig = document.getElementById('invGold'), gt = fmt(ch.gold);

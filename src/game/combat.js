@@ -176,7 +176,7 @@ export function killMonster(m) {
 }
 function grantKillRewards(m) {
   const ch = G.ch;
-  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
+  const exp = R.monsterExp(m.level, ch.level, R.expRate(ch.resets)) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
   const before = ch.level;
   if (R.gainExp(ch, Math.floor(exp))) onLevelUp(before);
   if (G.st.lifeKill) G.hp = Math.min(G.st.maxHp, G.hp + G.st.maxHp / 8);

@@ -18,6 +18,7 @@ import { updateTelegraphs } from './engine/telegraph.js';
 import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
+import { initBigMap } from './ui/minimap.js';
 import { updatePlayScene } from './scenes/playScene.js';
 import { updateTitleScene } from './scenes/titleScene.js';
 import { initAccount, openAccount, refreshAccountUi, showConflictDialog } from './ui/account.js';
@@ -102,6 +103,7 @@ function boot() {
   window.addEventListener('resize', resize);
   initCursor();
   initInput();
+  initBigMap();
   initDrawer();
   initDialogs();
   initPaneActions();

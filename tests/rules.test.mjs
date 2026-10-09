@@ -256,3 +256,13 @@ test('maestria: 1 ponto a cada 20 níveis, 1 por reset, 2 por evolução; últim
     for (const id of R.skillsFor(c)) if (R.SKILLS[id].lvl === 300) assert.ok(R.SKILLS[id].tier <= 1, id);
   }
 });
+
+test('EXP regressiva: 1500x sem reset, cai a cada reset e para no piso de 150x', () => {
+  assert.equal(R.expRate(0), 1500);
+  assert.equal(R.expRate(1), 1380);
+  assert.equal(R.expRate(10), 650);
+  for (let r = 1; r <= R.RATES.maxResets; r++) assert.ok(R.expRate(r) <= R.expRate(r - 1), 'reset ' + r);
+  assert.equal(R.expRate(30), 150);
+  assert.equal(R.expRate(R.RATES.maxResets), 150);
+  assert.equal(R.monsterExp(50, 50, R.expRate(10)) < R.monsterExp(50, 50, R.expRate(0)), true);
+});
