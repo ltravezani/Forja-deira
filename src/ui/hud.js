@@ -83,6 +83,21 @@ export function resetHudCache() { last.clear(); }
 
 /** Tempo de buff: "42s" ou "9:58" (poções de reforço duram 10 minutos). */
 const buffLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : Math.ceil(s) + 's');
+const SHRINE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#4a3a18"/><stop offset="1" stop-color="#140e06"/></radialGradient></defs>' +
+  '<rect width="64" height="64" fill="url(#g)"/><path d="M32 8l6 16 17 1-13 11 5 17-15-10-15 10 5-17L9 25l17-1z" fill="#f2cf7a" stroke="#6a4a14" stroke-width="2" stroke-linejoin="round"/></svg>');
+const PET_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="#e8d08a"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg>');
+/** Ícone do buff: habilidade, poção de reforço, santuário (Éden/Torre) ou pet. */
+function buffIcon(b) {
+  if (b.id === 'pet') return ['pet', PET_ICON];
+  if (R.SKILLS[b.id]) return ['', skillIconURI(b.id)];
+  const pot = b.id && b.id.indexOf('pot:') === 0 && R.POTIONS[b.id.slice(4)];
+  if (pot) return ['pot', iconURI('potion', pot.color)];
+  return ['shrine', SHRINE_ICON];
+}
+function buffHtml(b, left) {
+  const [cls, uri] = buffIcon(b), t = buffLeft(left);
+  return '<span class="buff ' + cls + (left < 10 ? ' end' : '') + '" style="background-image:url(&quot;' + uri + '&quot;)" title="' + esc(b.name) + '" role="img" aria-label="' + esc(b.name) + ' ' + t + '"><b>' + t + '</b></span>';
+}
 export function hudTick() {
   const ch = G.ch, st = G.st;
   if (!ch || !st) return;
@@ -98,16 +113,14 @@ export function hudTick() {
   setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
   // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
   setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
-  setText('goldTxt', fmt(ch.gold));
   const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
   if (ig && ig.textContent !== gt) ig.textContent = gt;
-  setText('mfTxt', dec(st.mf) + '%');
   const tb = ref('tbItems'), on = !!G.showAllLabels;
   if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
   updateSlotStates(ch, st);
   updateBossBar();
-  setHtml('buffs', G.buffs.map((x) => '<span class="buff' + (x.potion ? ' pot' : '') + '">' + esc(x.name) + ' ' + buffLeft(x.until - G.time) + '</span>').join('') +
-    (G.pet && G.pet.away > G.time ? '<span class="buff">Pet vendendo ' + Math.ceil(G.pet.away - G.time) + 's</span>' : ''));
+  setHtml('buffs', G.buffs.map((x) => buffHtml(x, x.until - G.time)).join('') +
+    (G.pet && G.pet.away > G.time ? buffHtml({ id: 'pet', name: 'Pet vendendo' }, G.pet.away - G.time) : ''));
   updateLowHp(hpFrac, G.player.alive);
 }
 function updateSlotStates(ch, st) {

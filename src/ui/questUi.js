@@ -8,6 +8,8 @@ import { claimQuest, questPoll, rewardText } from '../game/quests.js';
 import { currentOnboard, DAILY_BONUS, dailyText, ONBOARD } from '../game/questLogic.js';
 import { inSafe } from '../game/zones.js';
 
+/** Pergaminho do rastreador recolhido. */
+const QUEST_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4"/><path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10"/><path d="M7 4a2 2 0 0 0-2 2v11"/><path d="M8.5 9h4.5M8.5 12.5h4.5"/></g></svg>';
 const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null };
 
 // ---------- alvo da missão (minimapa e rótulo) ----------
@@ -49,7 +51,9 @@ function trackerHtml(ch) {
     if (!ready) hint = 'Toque para ver o Quadro de Missões.';
   }
   if (ready) hint = '<b class="qt-ready">' + ready + (ready > 1 ? ' recompensas prontas' : ' recompensa pronta') + '</b> · resgate no Quadro de Missões' + (inSafe() ? '' : ', em Aldrena');
-  return { fold, ready, html: '<span class="qt-title">' + esc(title) + '</span>' + (fold ? '' : '<span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '')) };
+  // recolhido: só o ícone de pergaminho (o título "Missões diárias 0/3" some)
+  if (fold) return { fold, ready, title, html: '' };
+  return { fold, ready, title, html: '<span class="qt-title">' + esc(title) + '</span><span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '') };
 }
 function renderTracker() {
   const ch = G.ch;
@@ -62,7 +66,9 @@ function renderTracker() {
   UIQ.track.classList.toggle('fold', t.fold);
   UIQ.track.classList.toggle('ready', t.ready > 0);
   UIQ.head.setAttribute('aria-expanded', String(!t.fold));
-  UIQ.head.textContent = t.fold ? '▸' : '▾';
+  UIQ.head.setAttribute('aria-label', t.fold ? 'Abrir rastreador de missão: ' + t.title : 'Recolher rastreador de missão');
+  UIQ.head.title = t.fold ? t.title + (t.ready ? ' · recompensa pronta' : '') : 'Recolher';
+  UIQ.head.innerHTML = t.fold ? QUEST_ICON : '▾';
 }
 
 // ---------- Quadro de Missões ----------
