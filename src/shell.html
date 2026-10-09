@@ -125,14 +125,12 @@ input, select { font-family: inherit; }
 .zone h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.05; color: var(--gold); text-shadow: 0 2px 4px #000; }
 .nw { white-space: nowrap; } /* partes "Andar 1", "Torre Infinita" etc. não quebram por dentro */
 .zone .sub { font-size: 13px; color: var(--muted); text-shadow: 0 1px 2px #000; }
-#minimap { width: 172px; height: 172px; border: 1px solid var(--edge); border-radius: 50%; background: rgba(8,6,12,.72); box-shadow: 0 0 0 3px rgba(0,0,0,.35); }
+#minimap { width: 172px; height: 172px; border-radius: 50%; filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); }
 
 .topright {
   position: absolute; left: 16px; top: calc(12px + env(safe-area-inset-top, 0px));
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
 }
-.wallet-chip { display: flex; gap: 10px; padding: 6px 10px; background: rgba(15,11,22,.8); border: 1px solid var(--edge); border-radius: 4px; font-size: 14px; }
-.wallet-chip span b { color: var(--gold); font-weight: 600; }
 .menu { display: flex; flex-wrap: wrap; gap: 5px; max-width: 360px; }
 .menu button {
   position: relative; width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
@@ -157,10 +155,17 @@ html.touch .menu-fold svg { transition: transform .15s; }
 html.touch .menu.fold > button:not(.menu-fold) { display: none; }
 html.touch .menu.fold .menu-fold svg { transform: rotate(180deg); }
 .menu:not(.fold) .menu-fold.alert::before { display: none; }
-.buffs { display: flex; gap: 4px; }
-.buff { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(40,30,60,.85); border: 1px solid #5c4a7a; }
-.buff.pot { background: rgba(20,52,30,.88); border-color: #6ac87a; color: #d8ffd0; }
-.buffs { flex-wrap: wrap; max-width: 520px; }
+.buffs { display: flex; flex-wrap: wrap; gap: 4px; max-width: 360px; }
+.buffs:empty { display: none; }
+/* buff = ícone + tempo (nome completo no title/aria-label) */
+.buff { position: relative; width: 34px; height: 34px; border-radius: 4px; border: 1px solid #8a72b8; background: #17121f center / cover no-repeat; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.buff.pot { border-color: #6ac87a; background-size: 86%; background-color: #102016; }
+.buff.shrine { border-color: var(--gold); }
+.buff.pet { border-color: #c8a46a; background-size: 78%; }
+.buff b { position: absolute; left: -1px; right: -1px; bottom: -1px; padding: 0 1px; font: 600 10px/13px var(--f-ui); text-align: center; color: #fff; background: rgba(6,4,10,.78); border-radius: 0 0 4px 4px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 1px #000; }
+.buff.end b { color: #ffb27a; }
+html.touch .buffs { max-width: 196px; gap: 3px; }
+html.touch .buff { width: 30px; height: 30px; }
 
 .bossbar { position: absolute; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 420px)); min-width: 220px; text-align: center; }
 .bossbar h3 { margin: 0 0 4px; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: #ffb27a; text-shadow: 0 2px 3px #000; }
@@ -607,7 +612,6 @@ html.touch .menu button::after { display: none; }
   html.touch .menu { max-width: 196px; gap: 4px; }
   html.touch .menu button { width: 44px; height: 44px; }
   html.touch .menu button svg { width: 22px; height: 22px; }
-  html.touch .wallet-chip { font-size: 12px; gap: 8px; padding: 5px 8px; }
   html.touch .log { bottom: calc(8px + 64px + 8px + 2 * (var(--ts) + var(--tg)) + 6px + env(safe-area-inset-bottom, 0px)); max-height: 66px; font-size: 12px; }
   html.touch .castbar { bottom: calc(8px + 64px + 8px + 2 * (var(--ts) + var(--tg)) + 76px); }
   .zone h2 { font-size: 14px; }
@@ -617,7 +621,6 @@ html.touch .menu button::after { display: none; }
   .dlg-x { display: block; position: sticky; top: -18px; float: right; z-index: 3; margin: -6px -8px 0 8px; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
 }
 @media (max-width: 760px) and (min-height: 501px) {
-  html.touch .wallet-chip { flex-direction: column; gap: 0; line-height: 1.3; }
   .zone { max-width: min(170px, 44vw); }
 }
 /* retrato: chefe abaixo do minimapa e dos botões do topo, sem cobrir nada */
@@ -682,7 +685,21 @@ html.touch .menu button::after { display: none; }
 .qt-line b { color: var(--gold); font-weight: 600; }
 .qt-hint { color: var(--muted); font-size: 11.5px; }
 .qt-ready { color: var(--ok); font-weight: 600; }
-.qtrack.fold .qt-body { padding-bottom: 2px; }
+.qtrack.fold { padding: 0; border: 0; background: none; }
+.qtrack.fold .qt-body { display: none; }
+.qtrack.fold .qt-fold {
+  position: relative; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 4px;
+  background: radial-gradient(circle at 50% 35%, #33284a, #17121f 75%); border: 1px solid var(--edge); color: #d9c38a;
+  box-shadow: inset 0 1px 0 rgba(242,207,122,.12), 0 2px 6px rgba(0,0,0,.5);
+}
+.qtrack.fold .qt-fold svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 1px #000); }
+.qtrack.fold.ready { box-shadow: none; }
+.qtrack.fold.ready .qt-fold { border-color: var(--gold); color: var(--gold); }
+.qtrack.fold.ready .qt-fold::before {
+  content: '!'; position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; display: grid; place-items: center;
+  border-radius: 50%; background: #c8402e; border: 1px solid #ffd2a0; color: #fff; font: 700 11px/1 var(--f-ui); box-shadow: 0 1px 3px rgba(0,0,0,.6);
+}
+html.touch .qtrack.fold .qt-fold { width: 44px; height: 44px; }
 .label.npc.board { color: #e8d8b0; }
 .label.npc.qmark { border-color: var(--gold); box-shadow: 0 0 10px rgba(242,207,122,.45); }
 .label.npc.qmark::before { content: '!'; position: absolute; left: 50%; top: -26px; transform: translateX(-50%); width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: #2a1c08; border: 2px solid var(--gold); color: var(--gold); font: 700 14px/1 var(--f-ui); animation: qbob 1.1s ease-in-out infinite; }
@@ -711,6 +728,10 @@ html.touch .menu button::after { display: none; }
 /* paisagem: a legenda do menu vira um quadro central com rolagem (não empurra o rastreador nem cobre o HUD) */
 @media (max-height: 500px) {
   .qtrack { max-width: 200px; font-size: 11px; padding: 3px 8px 4px 4px; }
+  /* celular deitado: buffs e rastreador ao lado do menu, longe das poções e do registro */
+  html.touch .topright { display: grid; grid-template-columns: auto auto; align-items: start; column-gap: 8px; row-gap: 6px; }
+  html.touch .topright > .menu { grid-row: 1 / span 3; }
+  html.touch .topright > .buffs, html.touch .topright > .qtrack { grid-column: 2; }
   .qt-hint { display: none; }
   .menu-legend { position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); max-height: calc(100% - 24px); overflow-y: auto; }
 }
@@ -732,10 +753,6 @@ html.touch .menu button::after { display: none; }
     </div>
     <div class="bossbar" id="bossbar" hidden><h3 id="bossName"></h3><div class="bar"><i id="bossFill"></i></div></div>
     <div class="topright">
-      <div class="wallet-chip">
-        <span>Ouro <b class="num" id="goldTxt">0</b></span>
-        <span title="Encontrar Magia: aumenta a chance de itens raros">Encontrar Magia <b class="num" id="mfTxt">0%</b></span>
-      </div>
       <nav class="menu" aria-label="Menu do jogo">
         <button id="menuFold" class="menu-fold" type="button" aria-expanded="true" aria-label="Recolher menu"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></g></svg></button>
         <button data-tab="char" data-tip="Personagem (C)" aria-label="Personagem (C)"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11a7 7 0 0 1 14 0v6h-4v-5H9v5H5z"/><path d="M12 4v7M9 14h6"/></g></svg></button>
