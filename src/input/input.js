@@ -14,6 +14,7 @@ import { KEYS, mouse } from './inputState.js';
 import { clickWorld, pickMonster, screenToGround } from './picking.js';
 import { closeDrawer, openTab } from '../ui/drawer.js';
 import { closeItemPopups } from '../ui/itemTooltip.js';
+import { closeBigMap, toggleBigMap } from '../ui/minimap.js';
 import { closeModal } from '../ui/npcDialogs.js';
 import { togglePause } from '../ui/pause.js';
 
@@ -30,6 +31,7 @@ const ACTIONS = {
   k: () => openTab('skills'),
   l: () => openTab('loot'),
   o: () => openTab('opts'),
+  m: toggleBigMap,
   home: resetCamera,
 };
 
@@ -77,6 +79,7 @@ function onEscape() {
   // herói caído: a tela de queda só fecha pelos botões (Renascer/Ressurreição)
   if (!$('#modal').hidden) { if (G.player && G.player.alive) closeModal(); }
   else if (closeItemPopups()) { /* Esc fecha primeiro o menu ou os detalhes do item */ }
+  else if (closeBigMap()) { /* depois o mapa ampliado */ }
   else if (!$('#drawer').hidden) closeDrawer();
   else togglePause();
 }

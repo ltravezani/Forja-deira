@@ -1,7 +1,7 @@
 // ---------- sessão: entrar no jogo com um personagem e voltar à tela de título ----------
 import { disposeModel } from '../art/models.js';
 import { G, persist, S, sanitizeCharacter, UI } from '../core/state.js';
-import { $ } from '../core/util.js';
+import { $, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { resetCamera, world } from '../engine/renderer.js';
 import { clearAllies, spawnAlly } from './allies.js';
@@ -13,6 +13,7 @@ import { closeDrawer } from '../ui/drawer.js';
 import { updateLowHp } from '../ui/feedback.js';
 import { buildSlots, hudTick, resetHudCache } from '../ui/hud.js';
 import { clearLog, log } from '../ui/log.js';
+import { closeBigMap } from '../ui/minimap.js';
 import { closeModal } from '../ui/npcDialogs.js';
 import { setPaused } from '../ui/pause.js';
 import { renderTitle, titlePreview } from '../ui/title.js';
@@ -79,7 +80,7 @@ export function startGame(i) {
   resetHudCache();
   buildSlots();
   hudTick();
-  log('Bem-vindo, ' + ch.name + '. Fale com a Guardiã Nyx para abrir um portal. EXP 1500x.', 'sys');
+  log('Bem-vindo, ' + ch.name + '. Fale com a Guardiã Nyx para abrir um portal. EXP ' + R.expRate(ch.resets) + 'x.', 'sys');
 }
 
 /** Salva e volta à tela de título sem recarregar a página (limpa mundo, aliados, HUD e diálogos). */
@@ -90,6 +91,7 @@ export function returnToTitle() {
   updateLowHp(1, false);
   closeModal();
   closeDrawer();
+  closeBigMap();
   clearAllies(false);
   removePlayerModel();
   G.ch = null;

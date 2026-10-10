@@ -5,7 +5,7 @@ import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
 import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
-import { addToBag, potionCount } from '../game/inventory.js';
+import { addToBag, classOk, fmtCP, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
 import { questEvent } from '../game/quests.js';
@@ -95,8 +95,44 @@ function wingUpSection(sel, cnt, useT, tal) {
   h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
   return h;
 }
-/** Equipamentos que o Ferreiro aceita: os equipados e os da mochila. */
-const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
+/** Equipamentos que o Ferreiro aceita: os equipados (na ordem dos slots) e os da mochila. */
+const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot).sort(smithOrder));
+/** Mochila no Ferreiro: por tipo de peça, depois tier, raridade e +nível (maiores primeiro). */
+const smithOrder = (a, b) => R.SLOTS.indexOf(a.slot) - R.SLOTS.indexOf(b.slot) || b.tier - a.tier ||
+  R.RARITY[b.rarity].order - R.RARITY[a.rarity].order || (b.plus || 0) - (a.plus || 0);
+const SMITH_VIEW = { all: 'Todos', eq: 'Equipados', bag: 'Na mochila' };
+const isEquipped = (ch, it) => ch.equip[it.slot] === it;
+/** Nome sem o "+N" do final (o +nível aparece num selo sobre o ícone). */
+const baseName = (it) => R.itemName(it).replace(/ \+\d+$/, '');
+const tierTxt = (it) => 'Tier ' + (it.tier + 1);
+/** Cartão de item da lista do Ferreiro: ícone com +nível, nome na cor da raridade, tier, tipo e selo de equipado. */
+function smithCard(ch, x, i, sel) {
+  const eq = isEquipped(ch, x), pl = x.plus || 0, other = !classOk(x);
+  return '<button class="sm-it' + (x === sel ? ' on' : '') + (eq ? ' eq' : '') + (other ? ' other' : '') + '" data-npc="smithsel" data-i="' + i + '" style="--rc:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' +
+    '<span class="ic">' + iconHtml(glyph(x)) + (pl ? '<b class="pl">+' + pl + '</b>' : '') + '</span>' +
+    '<span class="tx"><span class="nm">' + esc(baseName(x)) + '</span><span class="mt"><b class="tr">T' + (x.tier + 1) + '</b>' +
+    (eq ? '<span class="tag eq">Equipado</span> ' : other ? '<span class="tag ot">Outra classe</span> ' : '') + R.SLOT_LABEL[x.slot] + ' · ' + R.RARITY[x.rarity].name + '</span></span></button>';
+}
+/** Cabeçalho do item escolhido: ícone grande, tier, raridade, onde está, CP e opções especiais. */
+function smithSelHtml(ch, it) {
+  const eq = isEquipped(ch, it), pl = it.plus || 0, col = R.RARITY[it.rarity].color, cur = ch.equip[it.slot];
+  const opts = [];
+  if (it.luck) opts.push('Sorte');
+  if (it.skill) opts.push('Habilidade');
+  if (it.addOpt) opts.push('Opção adicional +' + it.addOpt);
+  const nx = R.excOpts(it).length;
+  if (nx) opts.push(nx + (nx === 1 ? ' opção excelente' : ' opções excelentes'));
+  if (it.anc) opts.push('Ancestral');
+  if (it.legend) opts.push('Lendário');
+  let h = '<div class="sm-sel" style="--rc:' + col + '"><span class="ic">' + iconHtml(glyph(it)) + '</span><div class="tx">' +
+    '<div class="nm">' + esc(R.itemName(it)) + '</div>' +
+    '<div class="mt">' + R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · <b class="tr">' + tierTxt(it) + '</b> de 10 · <b class="pl">+' + pl + '</b> · CP ' + fmtCP(R.itemCP(it)) + '</div>' +
+    '<div class="mt">' + (eq ? '<span class="tag eq">Equipado</span>' : '<span class="tag bag">Na mochila</span>') +
+    (!classOk(it) ? ' <span class="tag ot">Exclusivo de ' + esc(R.itemUsers(it).join(', ')) + '</span>' : '') + '</div>' +
+    (!eq && classOk(it) ? '<div class="mt">' + (cur ? 'Equipado no slot: <b style="color:' + R.RARITY[cur.rarity].color + '">' + esc(R.itemName(cur)) + '</b> (' + tierTxt(cur) + ')' : 'Slot de ' + R.SLOT_LABEL[it.slot].toLowerCase() + ' vazio') + '</div>' : '') +
+    (opts.length ? '<div class="mt op">' + opts.join(' · ') + '</div>' : '') + '</div></div>';
+  return h;
+}
 /** O item escolhido no Ferreiro ainda é do herói (equipado ou na mochila)? */
 const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
@@ -146,20 +182,27 @@ export function openNpc(id) {
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
       '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
   } else if (id === 'smith') {
-    const items = smithList(ch);
+    const all = smithList(ch);
+    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
+    // filtros: onde está (todos/equipados/mochila) e tipo de peça (só os tipos que o herói tem)
+    const view = SMITH_VIEW[UI.smithView] ? UI.smithView : 'all';
+    const kinds = R.SLOTS.filter((s) => all.some((x) => x.slot === s));
+    const kind = kinds.includes(UI.smithSlot) ? UI.smithSlot : 'all';
+    const vcnt = { all: all.length, eq: nEq, bag: all.length - nEq };
+    const items = all.filter((x) => (view === 'all' || (view === 'eq') === isEquipped(ch, x)) && (kind === 'all' || x.slot === kind));
     smithItems = items;
     const sel = items.find((x) => x === UI.smithSel) || items[0];
     UI.smithSel = sel;
     const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
-    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
-    h += '<p class="note">' + items.length + ' equipamento' + (items.length === 1 ? '' : 's') + ' (' + nEq + ' equipado' + (nEq === 1 ? '' : 's') + ', ' + (items.length - nEq) + ' na mochila). Escolha um para aprimorar.</p>';
-    h += '<div class="smithlist">' + items.map((x, i) => '<button class="btn sm' + (x === sel ? ' gold' : '') + '" data-npc="smithsel" data-i="' + i + '" style="color:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' + (i < nEq ? '<small>Equipado</small>' : '') + esc(R.itemName(x)) + '</button>').join('') + '</div>';
+    h += '<div class="btabs">' + Object.keys(SMITH_VIEW).map((k) => '<button class="btab' + (view === k ? ' on' : '') + '" data-npc="smithview" data-k="' + k + '">' + SMITH_VIEW[k] + ' <span>' + vcnt[k] + '</span></button>').join('') + '</div>';
+    if (kinds.length > 1) h += '<div class="sm-kinds">' + ['all'].concat(kinds).map((s) => '<button class="chip' + (kind === s ? ' on' : '') + '" data-npc="smithslot" data-k="' + s + '">' + (s === 'all' ? 'Todos os tipos' : R.SLOT_LABEL[s]) + '</button>').join('') + '</div>';
+    h += '<div class="smithlist">' + (items.length ? items.map((x, i) => smithCard(ch, x, i, sel)).join('') : '<p class="note">Nenhum equipamento neste filtro.</p>') + '</div>';
     if (sel) {
       const tal = talismanCount();
       if (!tal) UI.smithTalisman = false;
       const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
-      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4>';
-      h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
+      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar</h4>';
+      h += smithSelHtml(ch, sel);
       // Talismã da Sorte: liga/desliga; protege a fusão do Caos (a única que volta o item a +0)
       const tg = { kind: 'talisman', id: 'luck' };
       h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão do Caos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão do Caos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
@@ -173,7 +216,7 @@ export function openNpc(id) {
       });
       h += '</div>';
       if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
-    } else h += '<p class="note">Você não tem equipamentos.</p>';
+    } else if (!all.length) h += '<p class="note">Você não tem equipamentos.</p>';
   } else if (id === 'merchant') {
     const junk = ch.bag.filter(junkSellable);
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
@@ -189,7 +232,7 @@ export function openNpc(id) {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
     h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP' + (R.skillsFor(ch.cls).some((k) => R.SKILLS[k].tier === ch.tier + 1) ? ', nova habilidade' : '') + ' e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A taxa de EXP cai de ' + R.expRate(ch.resets) + 'x para ' + R.expRate(ch.resets + 1) + 'x. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
       (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
         : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
         : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
@@ -225,6 +268,8 @@ function npcAction(e) {
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
+    case 'smithview': UI.smithView = b.dataset.k; break;
+    case 'smithslot': UI.smithSlot = b.dataset.k; break;
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);

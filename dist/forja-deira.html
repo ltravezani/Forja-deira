@@ -125,7 +125,33 @@ input, select { font-family: inherit; }
 .zone h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.05; color: var(--gold); text-shadow: 0 2px 4px #000; }
 .nw { white-space: nowrap; } /* partes "Andar 1", "Torre Infinita" etc. não quebram por dentro */
 .zone .sub { font-size: 13px; color: var(--muted); text-shadow: 0 1px 2px #000; }
-#minimap { width: 172px; height: 172px; border-radius: 50%; filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); }
+#minimap { width: 172px; height: 172px; border-radius: 50%; filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); cursor: zoom-in; }
+#minimap:hover { filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)) drop-shadow(0 0 6px rgba(242,207,122,.5)); }
+/* mapa ampliado: planta da região com névoa no que falta explorar */
+.bigmap { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: max(10px, env(safe-area-inset-top, 0px)) 10px 10px; background: rgba(5,3,8,.6); backdrop-filter: blur(2px); cursor: zoom-out; }
+.bm-card { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; width: min(820px, 100%); height: min(820px, 100%); padding: 12px 14px; box-sizing: border-box;
+  background: radial-gradient(ellipse at 50% 45%, rgba(26,20,38,.96), rgba(8,6,12,.97)); border: 1px solid var(--gold); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.7), inset 0 0 0 3px rgba(20,14,8,.9), inset 0 0 0 4px rgba(242,207,122,.25); }
+.bm-head { display: flex; align-items: center; gap: 12px; }
+.bm-head > div:first-child { flex: 1; min-width: 0; }
+.bm-head h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: var(--gold); line-height: 1.1; }
+.bm-head .sub { font-size: 12.5px; color: var(--muted); }
+.bm-pct { display: grid; gap: 4px; justify-items: end; font-size: 13px; color: var(--text); white-space: nowrap; }
+.bm-bar { display: block; width: 130px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.bm-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #b8924a, #f2cf7a); }
+.bm-x { font-size: 18px; line-height: 1; padding: 4px 10px; }
+#bigmapCv { width: 100%; height: 100%; min-height: 0; display: block; }
+.bm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.bm-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.bm-legend .lg { display: inline-grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.8); font-style: normal; }
+.lg.hero { background: #fff; border-radius: 2px; transform: rotate(45deg) scale(.8); }
+.lg.portal { background: #b9a4ff; border-color: #fff; }
+.lg.npc { background: #f2cf7a; border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.lg.quest { width: 14px; height: 14px; background: rgba(20,12,4,.9); border-color: #f2cf7a; color: #f2cf7a; font-weight: 700; font-size: 10px; }
+.lg.boss { background: #ff8a3a; border-color: #ffe0b0; }
+.lg.fog { border-radius: 2px; border-color: rgba(170,150,220,.4); background: repeating-linear-gradient(135deg, rgba(12,8,22,.9) 0 3px, rgba(170,150,220,.3) 3px 4px); }
+.bm-hint { margin-left: auto; font-style: normal; }
+html.touch .bm-hint .kb { display: none; }
+@media (orientation: portrait) { .bm-card { height: auto; } #bigmapCv { height: auto; aspect-ratio: 1; } }
 
 .topright {
   position: absolute; left: 16px; top: calc(12px + env(safe-area-inset-top, 0px));
@@ -451,9 +477,40 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 .tag-rec { font-family: var(--f-ui); font-size: 11px; font-weight: 700; color: #0d1a10; background: #6fe08a; border-radius: 3px; padding: 1px 6px; vertical-align: 3px; }
 .btn.risk-deadly { border-color: #e0503a; } .btn.risk-hard { border-color: #e0b33a; }
 /* Ferreiro: todos os equipamentos numa grade com rolagem */
-.smithlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; max-height: 196px; overflow-y: auto; padding: 2px 2px 2px 0; margin-top: 4px; }
-.smithlist .btn { text-align: left; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
-.smithlist .btn small { display: block; font-size: 10px; color: var(--muted); letter-spacing: .04em; }
+/* Ferreiro: lista de equipamentos em cartões (ícone, +nível, tier, tipo, selo de equipado) */
+.smithlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 5px; max-height: 236px; overflow-y: auto; padding: 2px 2px 2px 0; margin-top: 4px; }
+.sm-kinds { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.sm-kinds .chip { flex: none; font: inherit; font-size: 11.5px; padding: 2px 9px; border-radius: 999px; background: #120e19; color: var(--muted); border: 1px solid #3a2f48; cursor: pointer; }
+.sm-kinds .chip.on { color: var(--text); border-color: #8a7aa8; background: #241c34; }
+.sm-it { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 7px 5px 5px; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 9%, #120e19), #120e19 70%); border: 1px solid #3a2f48; border-left: 3px solid var(--rc); border-radius: 4px; }
+.sm-it:hover { border-color: color-mix(in srgb, var(--rc) 60%, #3a2f48); border-left-color: var(--rc); }
+.sm-it.on { border-color: var(--gold); border-left-color: var(--rc); box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(242,207,122,.25); background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 16%, #1c1526), #1c1526 70%); }
+.sm-it.eq { background: linear-gradient(90deg, rgba(242,207,122,.14), #120e19 75%); }
+.sm-it.other .ic { opacity: .5; filter: grayscale(.6); }
+.sm-it .ic, .sm-sel .ic { position: relative; flex: none; width: 38px; height: 38px; }
+.sm-sel .ic { width: 54px; height: 54px; }
+.sm-it .gl, .sm-sel .gl { position: absolute; inset: 0; border-radius: 4px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--bg) 100%, #fff 12%) 0%, var(--bg) 55%, #0b0810 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 55%, transparent); }
+.sm-it .gl img, .sm-sel .gl img { position: absolute; inset: 10%; width: 80%; height: 80%; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.7)); }
+.sm-it .gl.d3 img, .sm-sel .gl.d3 img { inset: 4%; width: 92%; height: 92%; }
+.sm-it .pl { position: absolute; right: -3px; bottom: -3px; padding: 0 3px; font-family: var(--f-num); font-size: 10.5px; line-height: 14px; color: #fff4d0; background: #2a1c0c; border: 1px solid #b8924a; border-radius: 3px; }
+.sm-it .tx { display: grid; min-width: 0; flex: 1; gap: 1px; }
+.sm-it .nm { color: var(--rc); font-size: 12.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-it .mt { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr { display: inline-block; margin-right: 5px; padding: 0 4px; font-family: var(--f-num); font-size: 10.5px; font-weight: 700; color: #1a1208; background: #d8c48a; border-radius: 2px; }
+.sm-sel .tr { margin: 0; font-size: 11.5px; }
+.tag { flex: none; font-size: 9.5px; font-style: normal; letter-spacing: .06em; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.sm-it .tag { margin-right: 4px; }
+.tag.eq { color: #1a1208; background: var(--gold); font-weight: 700; }
+.tag.bag { color: var(--muted); border: 1px solid #3a2f48; }
+.tag.ot { color: #ffb0a0; background: rgba(120,20,20,.5); }
+.sm-sel { display: flex; gap: 12px; align-items: flex-start; padding: 10px; margin-bottom: 8px; border: 1px solid #3a2f48; border-left: 3px solid var(--rc); border-radius: 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 10%, #150f1d), #150f1d 70%); }
+.sm-sel .tx { display: grid; gap: 4px; min-width: 0; }
+.sm-sel .nm { color: var(--rc); font-family: var(--f-display); font-size: 18px; line-height: 1.15; }
+.sm-sel .mt { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.sm-sel .mt .pl { color: #fff4d0; font-family: var(--f-num); }
+.sm-sel .mt.op { color: #4be07a; }
+.sm-sel .tag { display: inline-block; }
 .techbtn { margin-top: 10px; }
 .techlink { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
 .optrange { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3.4em; align-items: center; gap: 10px; margin: 8px 0; font-size: 14px; }
@@ -749,7 +806,7 @@ html.touch .qtrack.fold .qt-fold { width: 44px; height: 44px; }
     <div class="zone">
       <h2 id="zoneName">Refúgio de Aldrena</h2>
       <div class="sub" id="zoneSub">Cidade segura</div>
-      <canvas id="minimap" width="344" height="344"></canvas>
+      <canvas id="minimap" width="344" height="344" title="Abrir mapa (M)" role="button" aria-label="Abrir mapa (M)"></canvas>
     </div>
     <div class="bossbar" id="bossbar" hidden><h3 id="bossName"></h3><div class="bar"><i id="bossFill"></i></div></div>
     <div class="topright">
@@ -802,6 +859,21 @@ html.touch .qtrack.fold .qt-fold { width: 44px; height: 44px; }
   <div class="itemtip" id="itemTip" role="dialog" aria-label="Detalhes do item" hidden></div>
   <div class="ctxmenu" id="ctxMenu" role="menu" hidden></div>
 
+  <div class="bigmap" id="bigmap" hidden role="dialog" aria-label="Mapa da região">
+    <div class="bm-card">
+      <header class="bm-head">
+        <div><h3 id="bigmapZone"></h3><span class="sub" id="bigmapSub"></span></div>
+        <div class="bm-pct"><b id="bigmapPct"></b><span class="bm-bar"><i id="bigmapBar"></i></span></div>
+        <button class="btn sm bm-x" type="button" aria-label="Fechar mapa">×</button>
+      </header>
+      <canvas id="bigmapCv"></canvas>
+      <footer class="bm-legend">
+        <span><i class="lg hero"></i>Você</span><span><i class="lg portal"></i>Portal</span><span><i class="lg npc"></i>NPC</span>
+        <span><i class="lg quest">!</i>Missão</span><span><i class="lg boss"></i>Chefe</span><span><i class="lg fog"></i>Falta explorar</span>
+        <em class="bm-hint">Toque para fechar<span class="kb"> · <kbd>M</kbd> ou <kbd>Esc</kbd></span></em>
+      </footer>
+    </div>
+  </div>
   <div class="heldnote" id="heldNote" hidden role="status">Jogo pausado enquanto o painel está aberto</div>
   <div class="pause" id="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
     <div class="pause-card">
@@ -5674,7 +5746,9 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
   // Taxas do servidor
   // ---------------------------------------------------------------------------
   const RATES = {
-    exp: 1500,
+    exp: 1500,                  // taxa de EXP sem reset
+    expResetFactor: 0.92,       // cada reset multiplica a taxa por este fator
+    expMin: 150,                // piso da taxa de EXP regressiva
     maxLevel: 1000,
     resetLevel: 400,            // nível mínimo para reset
     resetPoints: 300,           // pontos livres concedidos por reset acumulado
@@ -5721,6 +5795,15 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
       e += (x + 9) * x * x * 100;
     }
     return e;
+  }
+  /**
+   * Taxa de EXP regressiva: 1500x sem reset, cai 8% a cada reset e nunca fica
+   * abaixo de 150x. Arredondada a múltiplos de 10 para ficar legível na HUD.
+   */
+  function expRate(resets) {
+    const r = Math.max(0, resets | 0);
+    const v = RATES.exp * Math.pow(RATES.expResetFactor, r);
+    return Math.max(RATES.expMin, Math.round(v / 10) * 10);
   }
   /** EXP por monstro: fórmula clássica com penalidade quando o monstro é muito mais fraco. */
   function monsterExp(mLevel, pLevel, rate) {
@@ -6695,7 +6778,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
   }
   return {
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
-    expToNext, monsterExp, partyShare,
+    expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
@@ -8521,7 +8604,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, smithView: 'all', smithSlot: 'all', confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -13289,6 +13372,7 @@ function hudTick() {
   const pct = ch.level >= R.RATES.maxLevel ? 100 : (ch.exp / R.expToNext(ch.level)) * 100;
   setStyle('expFill', 'width', pct.toFixed(2) + '%');
   setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
+  setText('rateTxt', 'EXP ' + R.expRate(ch.resets) + 'x');
   // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
   setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
   const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
@@ -13457,8 +13541,44 @@ function wingUpSection(sel, cnt, useT, tal) {
   h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
   return h;
 }
-/** Equipamentos que o Ferreiro aceita: os equipados e os da mochila. */
-const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot));
+/** Equipamentos que o Ferreiro aceita: os equipados (na ordem dos slots) e os da mochila. */
+const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot).sort(smithOrder));
+/** Mochila no Ferreiro: por tipo de peça, depois tier, raridade e +nível (maiores primeiro). */
+const smithOrder = (a, b) => R.SLOTS.indexOf(a.slot) - R.SLOTS.indexOf(b.slot) || b.tier - a.tier ||
+  R.RARITY[b.rarity].order - R.RARITY[a.rarity].order || (b.plus || 0) - (a.plus || 0);
+const SMITH_VIEW = { all: 'Todos', eq: 'Equipados', bag: 'Na mochila' };
+const isEquipped = (ch, it) => ch.equip[it.slot] === it;
+/** Nome sem o "+N" do final (o +nível aparece num selo sobre o ícone). */
+const baseName = (it) => R.itemName(it).replace(/ \+\d+$/, '');
+const tierTxt = (it) => 'Tier ' + (it.tier + 1);
+/** Cartão de item da lista do Ferreiro: ícone com +nível, nome na cor da raridade, tier, tipo e selo de equipado. */
+function smithCard(ch, x, i, sel) {
+  const eq = isEquipped(ch, x), pl = x.plus || 0, other = !classOk(x);
+  return '<button class="sm-it' + (x === sel ? ' on' : '') + (eq ? ' eq' : '') + (other ? ' other' : '') + '" data-npc="smithsel" data-i="' + i + '" style="--rc:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' +
+    '<span class="ic">' + iconHtml(glyph(x)) + (pl ? '<b class="pl">+' + pl + '</b>' : '') + '</span>' +
+    '<span class="tx"><span class="nm">' + esc(baseName(x)) + '</span><span class="mt"><b class="tr">T' + (x.tier + 1) + '</b>' +
+    (eq ? '<span class="tag eq">Equipado</span> ' : other ? '<span class="tag ot">Outra classe</span> ' : '') + R.SLOT_LABEL[x.slot] + ' · ' + R.RARITY[x.rarity].name + '</span></span></button>';
+}
+/** Cabeçalho do item escolhido: ícone grande, tier, raridade, onde está, CP e opções especiais. */
+function smithSelHtml(ch, it) {
+  const eq = isEquipped(ch, it), pl = it.plus || 0, col = R.RARITY[it.rarity].color, cur = ch.equip[it.slot];
+  const opts = [];
+  if (it.luck) opts.push('Sorte');
+  if (it.skill) opts.push('Habilidade');
+  if (it.addOpt) opts.push('Opção adicional +' + it.addOpt);
+  const nx = R.excOpts(it).length;
+  if (nx) opts.push(nx + (nx === 1 ? ' opção excelente' : ' opções excelentes'));
+  if (it.anc) opts.push('Ancestral');
+  if (it.legend) opts.push('Lendário');
+  let h = '<div class="sm-sel" style="--rc:' + col + '"><span class="ic">' + iconHtml(glyph(it)) + '</span><div class="tx">' +
+    '<div class="nm">' + esc(R.itemName(it)) + '</div>' +
+    '<div class="mt">' + R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · <b class="tr">' + tierTxt(it) + '</b> de 10 · <b class="pl">+' + pl + '</b> · CP ' + fmtCP(R.itemCP(it)) + '</div>' +
+    '<div class="mt">' + (eq ? '<span class="tag eq">Equipado</span>' : '<span class="tag bag">Na mochila</span>') +
+    (!classOk(it) ? ' <span class="tag ot">Exclusivo de ' + esc(R.itemUsers(it).join(', ')) + '</span>' : '') + '</div>' +
+    (!eq && classOk(it) ? '<div class="mt">' + (cur ? 'Equipado no slot: <b style="color:' + R.RARITY[cur.rarity].color + '">' + esc(R.itemName(cur)) + '</b> (' + tierTxt(cur) + ')' : 'Slot de ' + R.SLOT_LABEL[it.slot].toLowerCase() + ' vazio') + '</div>' : '') +
+    (opts.length ? '<div class="mt op">' + opts.join(' · ') + '</div>' : '') + '</div></div>';
+  return h;
+}
 /** O item escolhido no Ferreiro ainda é do herói (equipado ou na mochila)? */
 const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
 function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
@@ -13508,20 +13628,27 @@ function openNpc(id) {
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
       '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
   } else if (id === 'smith') {
-    const items = smithList(ch);
+    const all = smithList(ch);
+    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
+    // filtros: onde está (todos/equipados/mochila) e tipo de peça (só os tipos que o herói tem)
+    const view = SMITH_VIEW[UI.smithView] ? UI.smithView : 'all';
+    const kinds = R.SLOTS.filter((s) => all.some((x) => x.slot === s));
+    const kind = kinds.includes(UI.smithSlot) ? UI.smithSlot : 'all';
+    const vcnt = { all: all.length, eq: nEq, bag: all.length - nEq };
+    const items = all.filter((x) => (view === 'all' || (view === 'eq') === isEquipped(ch, x)) && (kind === 'all' || x.slot === kind));
     smithItems = items;
     const sel = items.find((x) => x === UI.smithSel) || items[0];
     UI.smithSel = sel;
     const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
-    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
-    h += '<p class="note">' + items.length + ' equipamento' + (items.length === 1 ? '' : 's') + ' (' + nEq + ' equipado' + (nEq === 1 ? '' : 's') + ', ' + (items.length - nEq) + ' na mochila). Escolha um para aprimorar.</p>';
-    h += '<div class="smithlist">' + items.map((x, i) => '<button class="btn sm' + (x === sel ? ' gold' : '') + '" data-npc="smithsel" data-i="' + i + '" style="color:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' + (i < nEq ? '<small>Equipado</small>' : '') + esc(R.itemName(x)) + '</button>').join('') + '</div>';
+    h += '<div class="btabs">' + Object.keys(SMITH_VIEW).map((k) => '<button class="btab' + (view === k ? ' on' : '') + '" data-npc="smithview" data-k="' + k + '">' + SMITH_VIEW[k] + ' <span>' + vcnt[k] + '</span></button>').join('') + '</div>';
+    if (kinds.length > 1) h += '<div class="sm-kinds">' + ['all'].concat(kinds).map((s) => '<button class="chip' + (kind === s ? ' on' : '') + '" data-npc="smithslot" data-k="' + s + '">' + (s === 'all' ? 'Todos os tipos' : R.SLOT_LABEL[s]) + '</button>').join('') + '</div>';
+    h += '<div class="smithlist">' + (items.length ? items.map((x, i) => smithCard(ch, x, i, sel)).join('') : '<p class="note">Nenhum equipamento neste filtro.</p>') + '</div>';
     if (sel) {
       const tal = talismanCount();
       if (!tal) UI.smithTalisman = false;
       const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
-      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar ' + esc(R.itemName(sel)) + '</h4>';
-      h += '<p class="note">Agora: <b>+' + pl + '</b>' + (sel.luck ? ' · com Sorte' : '') + (sel.addOpt ? ' · opção adicional +' + sel.addOpt : '') + '</p>';
+      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar</h4>';
+      h += smithSelHtml(ch, sel);
       // Talismã da Sorte: liga/desliga; protege a fusão do Caos (a única que volta o item a +0)
       const tg = { kind: 'talisman', id: 'luck' };
       h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão do Caos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão do Caos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
@@ -13535,7 +13662,7 @@ function openNpc(id) {
       });
       h += '</div>';
       if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
-    } else h += '<p class="note">Você não tem equipamentos.</p>';
+    } else if (!all.length) h += '<p class="note">Você não tem equipamentos.</p>';
   } else if (id === 'merchant') {
     const junk = ch.bag.filter(junkSellable);
     const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
@@ -13551,7 +13678,7 @@ function openNpc(id) {
     const ev = R.canEvolve(ch), rs = R.canReset(ch);
     h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
     h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP' + (R.skillsFor(ch.cls).some((k) => R.SKILLS[k].tier === ch.tier + 1) ? ', nova habilidade' : '') + ' e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A taxa de EXP cai de ' + R.expRate(ch.resets) + 'x para ' + R.expRate(ch.resets + 1) + 'x. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
       (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
         : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
         : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
@@ -13587,6 +13714,8 @@ function npcAction(e) {
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
+    case 'smithview': UI.smithView = b.dataset.k; break;
+    case 'smithslot': UI.smithSlot = b.dataset.k; break;
     case 'up': {
       const it = UI.smithSel, j = b.dataset.j;
       const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
@@ -16140,7 +16269,7 @@ return { clearTower, onTowerKill, spawnTowerEvents, towerState, updateTower };
 })();
 
 // ---- ui/minimap.js ----
-const { drawMinimap, paintMinimapTile, resetMinimap } = (() => {
+const { closeBigMap, drawBigMap, drawMinimap, exploredPct, initBigMap, isBigMapOpen, openBigMap, paintMinimapTile, resetMinimap, toggleBigMap } = (() => {
 // ---------- minimapa ----------
 
 const MM = 10;
@@ -16160,16 +16289,19 @@ function resetMinimap(L) {
   mmBase.width = L.W * MM; mmBase.height = L.H * MM;
   const c = mmBase.getContext('2d');
   c.clearRect(0, 0, mmBase.width, mmBase.height);
+  big.L = null; // nova região: o mapa ampliado refaz a planta completa
+  if (isBigMapOpen()) drawBigMap();
 }
 function paintMinimapTile(L, x, z) {
-  const c = mmBase.getContext('2d');
+  paintTile(mmBase.getContext('2d'), L, x, z);
+  big.fogDirty = true;
+}
+function paintTile(c, L, x, z) {
   const at = (xx, zz) => (xx < 0 || zz < 0 || xx >= L.W || zz >= L.H ? 0 : L.grid[zz * L.W + xx]);
   const v = at(x, z), P = pal(L), X = x * MM, Z = z * MM;
   if (!v) {
     // parede: só a pedra que encosta no chão aparece (o resto é escuridão)
-    let near = false;
-    for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, z + dz)) { near = true; break; }
-    if (!near) return;
+    if (!nearFloor(L, x, z)) return;
     c.fillStyle = P[2];
     c.fillRect(X, Z, MM, MM);
     return;
@@ -16186,6 +16318,13 @@ function paintMinimapTile(L, x, z) {
   if (!at(x, z + 1)) c.fillRect(X, Z + MM - 2, MM, 2);
   if (!at(x - 1, z)) c.fillRect(X, Z, 2, MM);
   if (!at(x + 1, z)) c.fillRect(X + MM - 2, Z, 2, MM);
+}
+function nearFloor(L, x, z) {
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const xx = x + dx, zz = z + dz;
+    if (xx >= 0 && zz >= 0 && xx < L.W && zz < L.H && L.grid[zz * L.W + xx]) return true;
+  }
+  return false;
 }
 /**
  * Alvo da missão atual: "!" dourado sobre o NPC; se estiver fora do círculo,
@@ -16244,6 +16383,42 @@ function frameCanvas(W) {
   }
   return frame;
 }
+/** Marcadores (loot, portais, NPCs, aliados, monstros vistos); u escala o tamanho. */
+function drawMarkers(c, u, now) {
+  const pos = (x, z) => [(x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2];
+  const dot = (x, z, r, col, ring) => {
+    const [px, pz] = pos(x, z);
+    c.fillStyle = col; c.beginPath(); c.arc(px, pz, r, 0, Math.PI * 2); c.fill();
+    c.lineWidth = 1.6 * u; c.strokeStyle = ring || 'rgba(0,0,0,.75)'; c.stroke();
+  };
+  const diamond = (x, z, r, col) => {
+    const [px, pz] = pos(x, z);
+    c.save(); c.translate(px, pz); c.rotate(-Math.PI / 4);
+    c.fillStyle = col; c.strokeStyle = 'rgba(20,12,4,.9)'; c.lineWidth = 2 * u;
+    c.beginPath(); c.moveTo(0, -r); c.lineTo(r, 0); c.lineTo(0, r); c.lineTo(-r, 0); c.closePath(); c.fill(); c.stroke();
+    c.restore();
+  };
+  const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
+  G.loot.forEach((l) => { if (l.ord >= 2) diamond(l.x, l.z, 4.5 * u, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
+  // portais: anel pulsante
+  allPortals().forEach((pt) => {
+    const [px, pz] = pos(pt.x, pt.z), col = pt === G.edenPortal || pt === G.hubPortal ? '#8affb0' : '#b9a4ff';
+    const k = (now * 0.9) % 1;
+    c.strokeStyle = col; c.globalAlpha = 1 - k; c.lineWidth = 2 * u; c.beginPath(); c.arc(px, pz, (7 + k * 9) * u, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = 1; dot(pt.x, pt.z, 7 * u, col, '#fff');
+  });
+  G.npcs.forEach((n) => diamond(n.x, n.z, 6.5 * u, '#f2cf7a'));
+  G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4 * u, '#8affb0'); });
+  G.monsters.forEach((m) => {
+    if (m.dead || !seen(m.x, m.z)) return;
+    if (m.boss) {
+      const [px, pz] = pos(m.x, m.z);
+      c.strokeStyle = 'rgba(255,138,58,.6)'; c.lineWidth = 2 * u; c.beginPath(); c.arc(px, pz, (13 + Math.sin(now * 5) * 2) * u, 0, Math.PI * 2); c.stroke();
+      dot(m.x, m.z, 9 * u, '#ff8a3a', '#ffe0b0');
+    } else dot(m.x, m.z, (m.mini ? 7 : m.elite ? 6 : 4) * u, m.mini ? '#8aff6a' : m.elite ? '#6aa0ff' : '#e0453a');
+  });
+  if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3 * u, '#fff'); }
+}
 function drawMinimap() {
   const cv = $('#minimap'), c = cv.getContext('2d');
   const W = cv.width, p = G.player, now = performance.now() / 1000;
@@ -16258,46 +16433,21 @@ function drawMinimap() {
   c.rotate(Math.PI / 4);
   c.translate(-(p.x / TILE) * MM - MM / 2, -(p.z / TILE) * MM - MM / 2);
   c.drawImage(mmBase, 0, 0);
-  const pos = (x, z) => [(x / TILE) * MM + MM / 2, (z / TILE) * MM + MM / 2];
-  const dot = (x, z, r, col, ring) => {
-    const [px, pz] = pos(x, z);
-    c.fillStyle = col; c.beginPath(); c.arc(px, pz, r, 0, Math.PI * 2); c.fill();
-    c.lineWidth = 1.6; c.strokeStyle = ring || 'rgba(0,0,0,.75)'; c.stroke();
-  };
-  const diamond = (x, z, r, col) => {
-    const [px, pz] = pos(x, z);
-    c.save(); c.translate(px, pz); c.rotate(-Math.PI / 4);
-    c.fillStyle = col; c.strokeStyle = 'rgba(20,12,4,.9)'; c.lineWidth = 2;
-    c.beginPath(); c.moveTo(0, -r); c.lineTo(r, 0); c.lineTo(0, r); c.lineTo(-r, 0); c.closePath(); c.fill(); c.stroke();
-    c.restore();
-  };
-  const seen = (x, z) => G.explored[Math.round(z / TILE) * G.L.W + Math.round(x / TILE)];
-  G.loot.forEach((l) => { if (l.ord >= 2) diamond(l.x, l.z, 4.5, R.RARITY[l.item ? l.item.rarity : 'ancestral'].color); });
-  // portais: anel pulsante
-  allPortals().forEach((pt) => {
-    const [px, pz] = pos(pt.x, pt.z), col = pt === G.edenPortal || pt === G.hubPortal ? '#8affb0' : '#b9a4ff';
-    const k = (now * 0.9) % 1;
-    c.strokeStyle = col; c.globalAlpha = 1 - k; c.lineWidth = 2; c.beginPath(); c.arc(px, pz, 7 + k * 9, 0, Math.PI * 2); c.stroke();
-    c.globalAlpha = 1; dot(pt.x, pt.z, 7, col, '#fff');
-  });
-  G.npcs.forEach((n) => diamond(n.x, n.z, 6.5, '#f2cf7a'));
-  G.allies.forEach((a) => { if (!a.away) dot(a.x, a.z, 4, '#8affb0'); });
-  G.monsters.forEach((m) => {
-    if (m.dead || !seen(m.x, m.z)) return;
-    if (m.boss) {
-      const [px, pz] = pos(m.x, m.z);
-      c.strokeStyle = 'rgba(255,138,58,.6)'; c.lineWidth = 2; c.beginPath(); c.arc(px, pz, 13 + Math.sin(now * 5) * 2, 0, Math.PI * 2); c.stroke();
-      dot(m.x, m.z, 9, '#ff8a3a', '#ffe0b0');
-    } else dot(m.x, m.z, m.mini ? 7 : m.elite ? 6 : 4, m.mini ? '#8aff6a' : m.elite ? '#6aa0ff' : '#e0453a');
-  });
-  if (G.L.boss && G.zone !== 'town' && G.boss) { const b = G.L.boss; if (seen(b.x * TILE, b.z * TILE)) dot(b.x * TILE, b.z * TILE, 3, '#fff'); }
+  drawMarkers(c, 1, now);
   c.restore();
   drawQuestMarker(c, W, p);
   // jogador no centro: seta para onde o herói olha, com brilho
+  drawHero(c, W / 2, W / 2, 1, p);
+  c.drawImage(frameCanvas(W), 0, 0);
+  if (isBigMapOpen()) drawBigMap();
+}
+/** Seta do herói (em coordenadas de tela, já girada para a câmera isométrica). */
+function drawHero(c, x, y, u, p) {
   const fx = Math.sin(p.rot || 0), fz = Math.cos(p.rot || 0), k = Math.SQRT1_2;
   const ang = Math.atan2((fx + fz) * k, (fx - fz) * k);
   c.save();
-  c.translate(W / 2, W / 2);
+  c.translate(x, y);
+  c.scale(u, u);
   const glow = c.createRadialGradient(0, 0, 0, 0, 0, 22);
   glow.addColorStop(0, 'rgba(255,240,190,.55)'); glow.addColorStop(1, 'rgba(255,240,190,0)');
   c.fillStyle = glow; c.beginPath(); c.arc(0, 0, 22, 0, Math.PI * 2); c.fill();
@@ -16305,9 +16455,128 @@ function drawMinimap() {
   c.fillStyle = '#fff'; c.strokeStyle = '#1a1208'; c.lineWidth = 3; c.lineJoin = 'round';
   c.beginPath(); c.moveTo(13, 0); c.lineTo(-8, -9); c.lineTo(-4, 0); c.lineTo(-8, 9); c.closePath(); c.stroke(); c.fill();
   c.restore();
-  c.drawImage(frameCanvas(W), 0, 0);
 }
-return { drawMinimap, paintMinimapTile, resetMinimap };
+
+// ---------- mapa ampliado (clique/toque no minimapa ou tecla M) ----------
+/**
+ * Planta completa da região: o que já foi explorado aparece nítido; o resto
+ * fica sob névoa hachurada, mostrando o que ainda falta percorrer.
+ */
+const big = { L: null, full: null, fog: null, fogDirty: true, box: null, floor: 0, seen: 0 };
+let hatch = null;
+function hatchPattern(c) {
+  if (!hatch) {
+    hatch = document.createElement('canvas');
+    hatch.width = hatch.height = 8;
+    const h = hatch.getContext('2d');
+    h.strokeStyle = 'rgba(170,150,220,.22)'; h.lineWidth = 1.2;
+    h.beginPath(); h.moveTo(0, 8); h.lineTo(8, 0); h.moveTo(-2, 2); h.lineTo(2, -2); h.moveTo(6, 10); h.lineTo(10, 6); h.stroke();
+  }
+  return c.createPattern(hatch, 'repeat');
+}
+function buildFull(L) {
+  big.L = L;
+  big.full = big.full || document.createElement('canvas');
+  big.full.width = L.W * MM; big.full.height = L.H * MM;
+  const c = big.full.getContext('2d');
+  c.clearRect(0, 0, big.full.width, big.full.height);
+  let x0 = L.W, z0 = L.H, x1 = 0, z1 = 0, floor = 0;
+  for (let z = 0; z < L.H; z++) for (let x = 0; x < L.W; x++) {
+    paintTile(c, L, x, z);
+    if (!L.grid[z * L.W + x]) continue;
+    floor++;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  big.floor = floor;
+  big.box = floor ? { x0: x0 - 1, z0: z0 - 1, x1: x1 + 2, z1: z1 + 2 } : { x0: 0, z0: 0, x1: L.W, z1: L.H };
+  big.fogDirty = true;
+}
+function buildFog(L) {
+  big.fog = big.fog || document.createElement('canvas');
+  big.fog.width = L.W * MM; big.fog.height = L.H * MM;
+  const c = big.fog.getContext('2d');
+  c.clearRect(0, 0, big.fog.width, big.fog.height);
+  c.fillStyle = 'rgba(12,8,22,.8)';
+  let seen = 0;
+  for (let z = 0; z < L.H; z++) for (let x = 0; x < L.W; x++) {
+    const i = z * L.W + x, v = L.grid[i];
+    if (G.explored[i]) { if (v) seen++; continue; }
+    if (v || nearFloor(L, x, z)) c.fillRect(x * MM, z * MM, MM, MM);
+  }
+  c.globalCompositeOperation = 'source-atop';
+  c.fillStyle = hatchPattern(c);
+  c.fillRect(0, 0, big.fog.width, big.fog.height);
+  c.globalCompositeOperation = 'source-over';
+  big.seen = seen;
+  big.fogDirty = false;
+}
+function isBigMapOpen() { const el = document.getElementById('bigmap'); return !!el && !el.hidden; }
+function exploredPct() {
+  if (!G.L || !G.explored) return 0;
+  if (big.L !== G.L) buildFull(G.L);
+  if (big.fogDirty) buildFog(G.L);
+  return big.floor ? Math.min(100, Math.round((big.seen / big.floor) * 100)) : 100;
+}
+function openBigMap() {
+  if (G.mode !== 'play' || !G.L) return;
+  $('#bigmap').hidden = false;
+  drawBigMap();
+}
+function closeBigMap() {
+  const el = document.getElementById('bigmap');
+  if (!el || el.hidden) return false;
+  el.hidden = true;
+  return true;
+}
+function toggleBigMap() { if (!closeBigMap()) openBigMap(); }
+function drawBigMap() {
+  const L = G.L, p = G.player;
+  if (!L || !G.explored || !p) return;
+  const pct = exploredPct();
+  const cv = $('#bigmapCv'), d = Math.min(2, window.devicePixelRatio || 1);
+  const cw = Math.max(1, Math.round(cv.clientWidth * d)), chh = Math.max(1, Math.round(cv.clientHeight * d));
+  if (cv.width !== cw || cv.height !== chh) { cv.width = cw; cv.height = chh; }
+  const c = cv.getContext('2d'), now = performance.now() / 1000;
+  c.clearRect(0, 0, cw, chh);
+  // encaixa a planta girada 45° (mesma orientação do minimapa e da câmera)
+  const b = big.box, w = (b.x1 - b.x0) * MM, h = (b.z1 - b.z0) * MM;
+  const ext = (w + h) * Math.SQRT1_2, s = (Math.min(cw, chh) * 0.96) / ext;
+  c.save();
+  c.translate(cw / 2, chh / 2);
+  c.scale(s, s);
+  c.rotate(Math.PI / 4);
+  c.translate(-(b.x0 * MM + w / 2), -(b.z0 * MM + h / 2));
+  c.drawImage(big.full, 0, 0);
+  c.drawImage(big.fog, 0, 0);
+  const u = (0.75 * d) / s;
+  drawMarkers(c, u, now);
+  const t = questTargetPos();
+  if (t) {
+    const qx = (t.x / TILE) * MM + MM / 2, qz = (t.z / TILE) * MM + MM / 2, r = 13 * u;
+    c.save(); c.translate(qx, qz); c.rotate(-Math.PI / 4);
+    c.fillStyle = 'rgba(20,12,4,.85)'; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#f2cf7a'; c.lineWidth = 2.5 * u; c.stroke();
+    c.fillStyle = '#f2cf7a'; c.font = 'bold ' + Math.round(19 * u) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('!', 0, u);
+    c.restore();
+  }
+  // posição do herói na tela (mesma transformação, sem rotação da seta)
+  const hp = c.getTransform().transformPoint(new DOMPoint((p.x / TILE) * MM + MM / 2, (p.z / TILE) * MM + MM / 2));
+  c.restore();
+  drawHero(c, hp.x, hp.y, 0.75 * d * 1.2, p);
+  const zn = $('#bigmapZone'), zs = $('#bigmapSub'), pe = $('#bigmapPct');
+  const name = $('#zoneName').textContent, sub = $('#zoneSub').textContent, pt = pct + '% explorado';
+  if (zn.textContent !== name) zn.textContent = name;
+  if (zs.textContent !== sub) zs.textContent = sub;
+  if (pe.textContent !== pt) pe.textContent = pt;
+  $('#bigmapBar').style.width = pct + '%';
+}
+function initBigMap() {
+  $('#minimap').addEventListener('click', openBigMap);
+  $('#bigmap').addEventListener('click', closeBigMap);
+  window.addEventListener('resize', () => { if (isBigMapOpen()) drawBigMap(); });
+}
+return { closeBigMap, drawBigMap, drawMinimap, exploredPct, initBigMap, isBigMapOpen, openBigMap, paintMinimapTile, resetMinimap, toggleBigMap };
 })();
 
 // ---- world/biomeTextures.js ----
@@ -21116,7 +21385,7 @@ function killMonster(m) {
 }
 function grantKillRewards(m) {
   const ch = G.ch;
-  const exp = R.monsterExp(m.level, ch.level) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
+  const exp = R.monsterExp(m.level, ch.level, R.expRate(ch.resets)) * (m.boss ? 8 : m.mini ? 5 : m.elite ? 2.5 : 1);
   const before = ch.level;
   if (R.gainExp(ch, Math.floor(exp))) onLevelUp(before);
   if (G.st.lifeKill) G.hp = Math.min(G.st.maxHp, G.hp + G.st.maxHp / 8);
@@ -21529,7 +21798,7 @@ function startGame(i) {
   resetHudCache();
   buildSlots();
   hudTick();
-  log('Bem-vindo, ' + ch.name + '. Fale com a Guardiã Nyx para abrir um portal. EXP 1500x.', 'sys');
+  log('Bem-vindo, ' + ch.name + '. Fale com a Guardiã Nyx para abrir um portal. EXP ' + R.expRate(ch.resets) + 'x.', 'sys');
 }
 
 /** Salva e volta à tela de título sem recarregar a página (limpa mundo, aliados, HUD e diálogos). */
@@ -21540,6 +21809,7 @@ function returnToTitle() {
   updateLowHp(1, false);
   closeModal();
   closeDrawer();
+  closeBigMap();
   clearAllies(false);
   removePlayerModel();
   G.ch = null;
@@ -21575,6 +21845,7 @@ const ACTIONS = {
   k: () => openTab('skills'),
   l: () => openTab('loot'),
   o: () => openTab('opts'),
+  m: toggleBigMap,
   home: resetCamera,
 };
 
@@ -21622,6 +21893,7 @@ function onEscape() {
   // herói caído: a tela de queda só fecha pelos botões (Renascer/Ressurreição)
   if (!$('#modal').hidden) { if (G.player && G.player.alive) closeModal(); }
   else if (closeItemPopups()) { /* Esc fecha primeiro o menu ou os detalhes do item */ }
+  else if (closeBigMap()) { /* depois o mapa ampliado */ }
   else if (!$('#drawer').hidden) closeDrawer();
   else togglePause();
 }
@@ -21886,7 +22158,7 @@ function applyUiScale(settings) {
  */
 function panelHold() {
   if (!touchUI() || G.mode !== 'play' || G.zone === 'town' || !G.player || !G.player.alive) return false;
-  return !$('#drawer').hidden || !$('#modal').hidden;
+  return !$('#drawer').hidden || !$('#modal').hidden || !$('#bigmap').hidden;
 }
 let heldShown = false;
 /** Mostra/esconde o aviso "Jogo pausado" enquanto o painel segura a simulação. */
@@ -21967,7 +22239,7 @@ function updatePlayScene(dt) {
   if (G.paused) { guard('rótulos', updateOverlay); return 0; }
   // toque fora da cidade: painel ou diálogo aberto segura a simulação (o herói não apanha sem ver)
   const held = panelHold();
-  showHeld(held);
+  showHeld(held && $('#bigmap').hidden); // o mapa ampliado já ocupa a tela: sem o aviso por cima da legenda
   if (held) { guard('rótulos', updateOverlay); if ((T.hud -= dt) <= 0) { T.hud = L.hudInterval; guard('hud', hudTick); } return 0; }
   guard('seleção', updateHover);
   const sim = simDelta(dt);
@@ -22482,6 +22754,7 @@ function boot() {
   window.addEventListener('resize', resize);
   initCursor();
   initInput();
+  initBigMap();
   initDrawer();
   initDialogs();
   initPaneActions();

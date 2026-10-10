@@ -22,7 +22,7 @@ export function applyUiScale(settings) {
  */
 export function panelHold() {
   if (!touchUI() || G.mode !== 'play' || G.zone === 'town' || !G.player || !G.player.alive) return false;
-  return !$('#drawer').hidden || !$('#modal').hidden;
+  return !$('#drawer').hidden || !$('#modal').hidden || !$('#bigmap').hidden;
 }
 let heldShown = false;
 /** Mostra/esconde o aviso "Jogo pausado" enquanto o painel segura a simulação. */

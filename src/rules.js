@@ -20,7 +20,9 @@
   // Taxas do servidor
   // ---------------------------------------------------------------------------
   const RATES = {
-    exp: 1500,
+    exp: 1500,                  // taxa de EXP sem reset
+    expResetFactor: 0.92,       // cada reset multiplica a taxa por este fator
+    expMin: 150,                // piso da taxa de EXP regressiva
     maxLevel: 1000,
     resetLevel: 400,            // nível mínimo para reset
     resetPoints: 300,           // pontos livres concedidos por reset acumulado
@@ -67,6 +69,15 @@
       e += (x + 9) * x * x * 100;
     }
     return e;
+  }
+  /**
+   * Taxa de EXP regressiva: 1500x sem reset, cai 8% a cada reset e nunca fica
+   * abaixo de 150x. Arredondada a múltiplos de 10 para ficar legível na HUD.
+   */
+  function expRate(resets) {
+    const r = Math.max(0, resets | 0);
+    const v = RATES.exp * Math.pow(RATES.expResetFactor, r);
+    return Math.max(RATES.expMin, Math.round(v / 10) * 10);
   }
   /** EXP por monstro: fórmula clássica com penalidade quando o monstro é muito mais fraco. */
   function monsterExp(mLevel, pLevel, rate) {
@@ -1041,7 +1052,7 @@
   }
   return {
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
-    expToNext, monsterExp, partyShare,
+    expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
     DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
