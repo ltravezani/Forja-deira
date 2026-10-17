@@ -23,11 +23,12 @@ function takeTicket(biome) {
   return true;
 }
 /** Compra na Mercadora: devolve false sem Ouro ou sem espaço na mochila. */
-export function buyTicket(biome) {
+export function buyTicket(biome, n = 1) {
   const ch = G.ch;
-  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE) return false;
-  if (!addToBag({ kind: 'ticket', id: biome, qty: 1, uid: 'k' + biome })) return false;
-  ch.gold -= R.TICKET_PRICE;
+  n = Math.max(1, Math.floor(n) || 1);
+  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE * n) return false;
+  if (!addToBag({ kind: 'ticket', id: biome, qty: n, uid: 'k' + biome })) return false;
+  ch.gold -= R.TICKET_PRICE * n;
   return true;
 }
 

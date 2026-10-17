@@ -79,10 +79,11 @@ function ticketSection(ch) {
   const P = R.TICKET_PRICE;
   let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
   R.TICKET_IDS.forEach((k) => {
-    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k;
+    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k, cn = UI.tkN || 1;
+    const btn = (n) => '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + n + '"' + (ch.gold >= P * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(P * n) + '</button>';
     const a = cf
-      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-ok="1">Confirmar · ' + fmt(P) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
-      : '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '"' + (ch.gold >= P ? '' : ' disabled') + '>×1 · ' + fmt(P) + '</button>';
+      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + cn + '" data-ok="1">Confirmar ×' + cn + ' · ' + fmt(P * cn) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : btn(1) + btn(10);
     h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
   });
   return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
@@ -242,7 +243,7 @@ export function openNpc(id) {
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
     const RZ = R.POTIONS.rez;
-    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
+    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row">' + [1, 10].map((n) => '<button class="btn sm gold" data-npc="buy" data-p="rez" data-n="' + n + '"' + (ch.gold >= RZ.price * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(RZ.price * n) + '</button>').join('') + '</span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
     h += '</div>' + ticketSection(ch) + '<div class="list">';
     h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
       ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
@@ -343,13 +344,13 @@ function npcAction(e) {
       break;
     }
     case 'buytk': {
-      const k = b.dataset.k;
+      const k = b.dataset.k, n = +b.dataset.n === 10 ? 10 : 1;
       if (!R.TICKETS[k]) break;
-      if (ch.gold < R.TICKET_PRICE) { log('Ouro insuficiente.', 'warn'); break; }
-      if (b.dataset.ok !== '1' || UI.tkSel !== k || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; break; }
-      if (!buyTicket(k)) break;
+      if (ch.gold < R.TICKET_PRICE * n) { log('Ouro insuficiente.', 'warn'); break; }
+      if (b.dataset.ok !== '1' || UI.tkSel !== k || UI.tkN !== n || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; UI.tkN = n; break; }
+      if (!buyTicket(k, n)) break;
       Sfx.coin();
-      log('Comprou ' + R.TICKETS[k].name + ' por ' + fmt(R.TICKET_PRICE) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
+      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(R.TICKET_PRICE * n) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
       break;
     }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;

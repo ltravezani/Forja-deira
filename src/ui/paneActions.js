@@ -6,6 +6,7 @@ import { G, persist, S, SAVE_KEY, SaveGuard, UI } from '../core/state.js';
 import { $, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { Music, MUSIC_LEVELS, musicLevel } from '../engine/music.js';
+import { applyWakeLock } from '../engine/wakeLock.js';
 import { log } from './log.js';
 import { applyUiScale } from './touch.js';
 import { applyQuality, bloomOn, resetCamera, setBloom, setOutline } from '../engine/renderer.js';
@@ -110,6 +111,12 @@ function paneAction(e) {
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
+    case 'toggleKeepAwake': {
+      S.settings.keepAwake = !S.settings.keepAwake;
+      // o pedido ao navegador é assíncrono: redesenha as Opções quando ele responder
+      Promise.resolve(applyWakeLock(S.settings)).then(() => { if (UI.tab === 'opts') renderPane(); });
+      break;
+    }
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
     case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } SaveGuard.wiping = true; try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } forgetCloudLocal(); location.reload(); return;
