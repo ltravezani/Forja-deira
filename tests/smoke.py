@@ -292,6 +292,10 @@ with sync_playwright() as p:
     check(ev('G.ch.gold') == 20e6 - 2 * ev('D.R.TICKET_PRICE') - 2 * ev('D.R.TOWER_TICKET_PRICE') and ev('D.R.TOWER_TICKET_PRICE') == 5000000, 'Ticket da Torre custa 5.000.000')
     f0 = ev("G.ch.unlockedFloors.forest || 1")
     check(ev("D.startAutoClear('forest')") and ev("G.zone === 'dungeon' && D.ticketCount('forest') === 1"), 'Auto-Limpeza da masmorra começa e gasta um ticket')
+    # drop que cai durante a limpeza, mais perto que o monstro: o herói pega na hora, sem esperar o fim do andar
+    ev("(function(){ const p = G.player, m = G.monsters.filter((x) => !x.dead && !x.boss).sort((a, b) => ((a.x - p.x) ** 2 + (a.z - p.z) ** 2) - ((b.x - p.x) ** 2 + (b.z - p.z) ** 2))[0]; G.auto.manualT = 0; p.target = { type: 'mon', m }; D.dropLoot((p.x * 2 + m.x) / 3, (p.z * 2 + m.z) / 3, { type: 'ticket', id: 'abyss' }); return 0; })()")
+    ev(step + "(20)")
+    check(ev("!!(G.player.target && G.player.target.type === 'loot' && G.player.target.l.id === 'abyss') || !G.loot.some((l) => l.id === 'abyss')"), 'masmorra: pega o drop mais perto que o próximo monstro no meio da limpeza')
     # um drop longe do herói (onde está um monstro, chão alcançável): precisa ser recolhido antes de descer
     k0 = ev("D.ticketCount('castle')")
     ev("(function(){ const p = G.player, far = G.monsters.filter((m) => !m.dead && !m.boss).sort((a, b) => ((b.x - p.x) ** 2 + (b.z - p.z) ** 2) - ((a.x - p.x) ** 2 + (a.z - p.z) ** 2))[0]; D.dropLoot(far.x, far.z, { type: 'ticket', id: 'castle' }); return 0; })()")

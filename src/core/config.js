@@ -105,7 +105,7 @@ export const CONFIG = {
   // Auto-Limpeza (tickets da Guardiã Nyx e da Torre): o herói limpa o andar e derrota o chefe sozinho
   autoClear: {
     think: 0.2,             // s entre decisões de alvo
-    lootRadius: 10,         // m: drops a essa distância são buscados no caminho entre um monstro e outro
+    lootRadius: 16,         // m: drops a essa distância são buscados logo, até no meio da briga se estiverem mais perto que o monstro
     hpPotionBelow: 0.5,     // bebe Poção de Vida abaixo desta fração do HP
     mpPotionBelow: 0.25,    // bebe Poção de Mana abaixo desta fração do MP
     reviveDelay: 1.4,       // s caído antes de usar a Poção da Ressurreição sozinho

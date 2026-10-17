@@ -94,18 +94,22 @@ function nearest(list, ok, maxD) {
   return best;
 }
 /**
- * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
- * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe todos os drops do andar
+ * Próximo alvo: o que estiver mais perto entre os drops e os monstros, para recolher tudo enquanto limpa
+ * (sem deixar drops para trás e voltar no fim). Monstros que já estão brigando por perto vêm antes de drops
+ * mais longe que eles; o chefe fica por último. Depois do chefe, recolhe o que sobrou no andar
  * (na masmorra sem caçar os monstros que sobraram, só se defendendo dos que vierem atrás dele).
  */
 function pickTarget(a) {
+  const p = G.player, R2 = CONFIG.autoClear.lootRadius ** 2;
+  const d2 = (o) => (o.x - p.x) ** 2 + (o.z - p.z) ** 2;
   const ok = (m) => !m.dead && !skipped(a, m);
+  const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), 1e4);
   const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
-  if (fighting) return { type: 'mon', m: fighting };
-  const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), a.bossDown ? 1e4 : CONFIG.autoClear.lootRadius);
-  if (l) return { type: 'loot', l };
+  if (fighting) return l && d2(l) < d2(fighting) ? { type: 'loot', l } : { type: 'mon', m: fighting };
+  if (l && (a.bossDown || d2(l) <= R2)) return { type: 'loot', l };
   if (a.bossDown && !isTower(a)) return null;
   const m = nearest(G.monsters, (x) => ok(x) && !x.boss, 1e4) || nearest(G.monsters, ok, 1e4);
+  if (l && (!m || d2(l) <= d2(m))) return { type: 'loot', l };
   return m ? { type: 'mon', m } : null;
 }
 function aim(p, t) {
@@ -180,6 +184,11 @@ export function updateAutoClear(dt) {
   // na masmorra, com o chefe caído, larga o monstro que estava perseguindo (a não ser que ele esteja atacando);
   // acabou o tempo, larga o drop também
   if (p.target && (late || (a.bossDown && !tower && p.target.type === 'mon' && !p.target.m.aggro))) { p.target = null; p.path = null; }
+  // indo atrás de um monstro que ainda não está brigando: um drop que caiu mais perto vem antes
+  if (validTarget(p.target) && p.target.type === 'mon' && !p.target.m.aggro && !late) {
+    const t = pickTarget(a);
+    if (t && t.type === 'loot') { a.nextT = 0; aim(p, t); return; }
+  }
   if (validTarget(p.target)) { watchStuck(a, p); return; }
   const t = late ? null : pickTarget(a);
   if (t) { a.nextT = 0; aim(p, t); return; }
