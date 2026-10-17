@@ -12417,6 +12417,65 @@ function iconHtml(g) {
 return { glyph, iconHtml, iconURI, skillIconURI };
 })();
 
+// ---- engine/wakeLock.js ----
+const { applyWakeLock, wakeLockState, wakeLockSupported } = (() => {
+/**
+ * "Não bloquear a tela" (Opções): pede ao navegador para manter a tela acesa
+ * enquanto o jogo está aberto (Screen Wake Lock API). O navegador solta o
+ * pedido sozinho quando a aba some (troca de app, tela desligada no botão);
+ * ao voltar, pedimos de novo.
+ */
+const WL = { want: false, sentinel: null, pending: false, error: '' };
+
+const wakeLockSupported = () => typeof navigator !== 'undefined' && !!navigator.wakeLock && typeof navigator.wakeLock.request === 'function';
+
+/** Estado para a tela de Opções: 'off' | 'on' | 'wait' | 'unsupported' | 'error'. */
+function wakeLockState() {
+  if (!WL.want) return 'off';
+  if (!wakeLockSupported()) return 'unsupported';
+  if (WL.sentinel && !WL.sentinel.released) return 'on';
+  return WL.error ? 'error' : 'wait';
+}
+
+async function acquire() {
+  if (!WL.want || !wakeLockSupported() || WL.pending || document.visibilityState !== 'visible') return;
+  if (WL.sentinel && !WL.sentinel.released) return;
+  WL.pending = true;
+  try {
+    const s = await navigator.wakeLock.request('screen');
+    WL.error = '';
+    if (!WL.want) { s.release().catch(() => {}); return; }
+    WL.sentinel = s;
+    s.addEventListener('release', () => { if (WL.sentinel === s) WL.sentinel = null; });
+  } catch (e) {
+    // sem HTTPS, bateria fraca/economia de energia ou política do navegador
+    WL.error = (e && e.name) || 'erro';
+  } finally { WL.pending = false; }
+}
+
+function release() {
+  const s = WL.sentinel;
+  WL.sentinel = null;
+  if (s && !s.released) s.release().catch(() => {});
+}
+
+let inited = false;
+/** Liga/desliga conforme a opção salva; seguro chamar várias vezes. */
+function applyWakeLock(settings) {
+  WL.want = !!(settings && settings.keepAwake);
+  if (!inited && typeof document !== 'undefined') {
+    inited = true;
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') acquire(); });
+    // alguns navegadores só liberam depois de um toque: tenta de novo no primeiro gesto
+    for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (WL.want && !WL.sentinel) acquire(); }, { capture: true, passive: true });
+  }
+  if (WL.want) return acquire();
+  WL.error = '';
+  release();
+}
+return { applyWakeLock, wakeLockState, wakeLockSupported };
+})();
+
 // ---- engine/telegraph.js ----
 const { CONE_HALF, clearTelegraphs, inCone, telegraphCircle, telegraphCone, updateTelegraphs } = (() => {
 // =============================================================================
@@ -12955,11 +13014,12 @@ function takeTicket(biome) {
   return true;
 }
 /** Compra na Mercadora: devolve false sem Ouro ou sem espaço na mochila. */
-function buyTicket(biome) {
+function buyTicket(biome, n = 1) {
   const ch = G.ch;
-  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE) return false;
-  if (!addToBag({ kind: 'ticket', id: biome, qty: 1, uid: 'k' + biome })) return false;
-  ch.gold -= R.TICKET_PRICE;
+  n = Math.max(1, Math.floor(n) || 1);
+  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE * n) return false;
+  if (!addToBag({ kind: 'ticket', id: biome, qty: n, uid: 'k' + biome })) return false;
+  ch.gold -= R.TICKET_PRICE * n;
   return true;
 }
 
@@ -13758,10 +13818,11 @@ function ticketSection(ch) {
   const P = R.TICKET_PRICE;
   let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
   R.TICKET_IDS.forEach((k) => {
-    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k;
+    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k, cn = UI.tkN || 1;
+    const btn = (n) => '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + n + '"' + (ch.gold >= P * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(P * n) + '</button>';
     const a = cf
-      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-ok="1">Confirmar · ' + fmt(P) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
-      : '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '"' + (ch.gold >= P ? '' : ' disabled') + '>×1 · ' + fmt(P) + '</button>';
+      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + cn + '" data-ok="1">Confirmar ×' + cn + ' · ' + fmt(P * cn) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : btn(1) + btn(10);
     h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
   });
   return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
@@ -13921,7 +13982,7 @@ function openNpc(id) {
     h += '<div class="list">';
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
     const RZ = R.POTIONS.rez;
-    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
+    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row">' + [1, 10].map((n) => '<button class="btn sm gold" data-npc="buy" data-p="rez" data-n="' + n + '"' + (ch.gold >= RZ.price * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(RZ.price * n) + '</button>').join('') + '</span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
     h += '</div>' + ticketSection(ch) + '<div class="list">';
     h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
       ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
@@ -14022,13 +14083,13 @@ function npcAction(e) {
       break;
     }
     case 'buytk': {
-      const k = b.dataset.k;
+      const k = b.dataset.k, n = +b.dataset.n === 10 ? 10 : 1;
       if (!R.TICKETS[k]) break;
-      if (ch.gold < R.TICKET_PRICE) { log('Ouro insuficiente.', 'warn'); break; }
-      if (b.dataset.ok !== '1' || UI.tkSel !== k || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; break; }
-      if (!buyTicket(k)) break;
+      if (ch.gold < R.TICKET_PRICE * n) { log('Ouro insuficiente.', 'warn'); break; }
+      if (b.dataset.ok !== '1' || UI.tkSel !== k || UI.tkN !== n || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; UI.tkN = n; break; }
+      if (!buyTicket(k, n)) break;
       Sfx.coin();
-      log('Comprou ' + R.TICKETS[k].name + ' por ' + fmt(R.TICKET_PRICE) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
+      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(R.TICKET_PRICE * n) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
       break;
     }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
@@ -19400,7 +19461,9 @@ function paneOpts() {
   h += '<h4>Jogabilidade</h4><div class="row">' +
     '<button class="btn" data-act="cycleShake">Tremor de tela: ' + ({ 0: 'desligado', 0.5: 'suave', 1: 'normal' }[shakeLv] || 'normal') + '</button>' +
     '<button class="btn" data-act="toggleHitStop">Pausa de impacto: ' + (s.hitStop === false ? 'desligada' : 'ligada') + '</button>' +
-    '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button></div>' +
+    '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button>' +
+    '<button class="btn" data-act="toggleKeepAwake">Não bloquear a tela: ' + (s.keepAwake ? 'ligado' : 'desligado') + '</button></div>' +
+    ({ on: '<p class="note">Tela sempre acesa enquanto o jogo estiver aberto (gasta mais bateria).</p>', wait: '<p class="note">Tela sempre acesa: pedindo ao navegador…</p>', unsupported: '<p class="note" style="color:var(--danger)">Este navegador não permite manter a tela acesa. No celular, use o Chrome, Edge ou Safari atualizado (iOS 16.4 ou mais novo).</p>', error: '<p class="note" style="color:var(--danger)">O navegador recusou manter a tela acesa agora (modo economia de bateria?). Tentaremos de novo ao tocar na tela.</p>' }[wakeLockState()] || '') +
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. ' + (touchUI() ? 'O botão de pausa fica no menu do topo; fora da cidade, abrir um painel pausa o jogo.' : 'Esc pausa o jogo.') + '</p>';
   h += '<h4>Câmera</h4><p class="note">' + (touchUI() ? 'Afaste ou junte dois dedos na tela para aproximar ou afastar a câmera.' : 'Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima.') + ' A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica' + (touchUI() ? '' : ' (Home)') + '</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
@@ -22845,6 +22908,12 @@ function paneAction(e) {
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
     case 'toggleHitStop': S.settings.hitStop = S.settings.hitStop === false; applyFeelSettings(S.settings); break;
     case 'toggleAutoPause': S.settings.autoPause = S.settings.autoPause === false; break;
+    case 'toggleKeepAwake': {
+      S.settings.keepAwake = !S.settings.keepAwake;
+      // o pedido ao navegador é assíncrono: redesenha as Opções quando ele responder
+      Promise.resolve(applyWakeLock(S.settings)).then(() => { if (UI.tab === 'opts') renderPane(); });
+      break;
+    }
     case 'camreset': resetCamera(); break;
     case 'quit': returnToTitle(); return;
     case 'wipe': if (!UI.confirmWipe) { UI.confirmWipe = true; break; } SaveGuard.wiping = true; try { localStorage.removeItem(SAVE_KEY); } catch { /* */ } forgetCloudLocal(); location.reload(); return;
@@ -23017,6 +23086,7 @@ function applySettings() {
   Sfx.vol = sfxVolume(S.settings) / 100;
   Music.setVolume(musicVolume(S.settings) / 100);
   applyUiScale(S.settings);
+  applyWakeLock(S.settings);
 }
 
 /** O save foi trocado pelo da nuvem (ou por uma cópia de segurança): redesenha a tela de título. */

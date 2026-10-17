@@ -16,6 +16,7 @@ import { Music, musicVolume } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
 import { updateTelegraphs } from './engine/telegraph.js';
 import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
+import { applyWakeLock } from './engine/wakeLock.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
 import { initBigMap } from './ui/minimap.js';
@@ -84,6 +85,7 @@ function applySettings() {
   Sfx.vol = sfxVolume(S.settings) / 100;
   Music.setVolume(musicVolume(S.settings) / 100);
   applyUiScale(S.settings);
+  applyWakeLock(S.settings);
 }
 
 /** O save foi trocado pelo da nuvem (ou por uma cópia de segurança): redesenha a tela de título. */

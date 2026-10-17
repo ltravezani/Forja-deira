@@ -7,6 +7,7 @@ import { dec, esc, fmt, R, touchUI } from '../core/util.js';
 import { sfxVolume } from '../engine/audio.js';
 import { musicVolume } from '../engine/music.js';
 import { bloomOn } from '../engine/renderer.js';
+import { wakeLockState } from '../engine/wakeLock.js';
 import { autoSkillAllowed, autoSkillOn } from '../game/automation.js';
 import { skillUnlocked } from '../game/skills.js';
 import { skillIconURI } from './icons.js';
@@ -120,7 +121,9 @@ export function paneOpts() {
   h += '<h4>Jogabilidade</h4><div class="row">' +
     '<button class="btn" data-act="cycleShake">Tremor de tela: ' + ({ 0: 'desligado', 0.5: 'suave', 1: 'normal' }[shakeLv] || 'normal') + '</button>' +
     '<button class="btn" data-act="toggleHitStop">Pausa de impacto: ' + (s.hitStop === false ? 'desligada' : 'ligada') + '</button>' +
-    '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button></div>' +
+    '<button class="btn" data-act="toggleAutoPause">Pausar ao sair da janela: ' + (s.autoPause === false ? 'não' : 'sim') + '</button>' +
+    '<button class="btn" data-act="toggleKeepAwake">Não bloquear a tela: ' + (s.keepAwake ? 'ligado' : 'desligado') + '</button></div>' +
+    ({ on: '<p class="note">Tela sempre acesa enquanto o jogo estiver aberto (gasta mais bateria).</p>', wait: '<p class="note">Tela sempre acesa: pedindo ao navegador…</p>', unsupported: '<p class="note" style="color:var(--danger)">Este navegador não permite manter a tela acesa. No celular, use o Chrome, Edge ou Safari atualizado (iOS 16.4 ou mais novo).</p>', error: '<p class="note" style="color:var(--danger)">O navegador recusou manter a tela acesa agora (modo economia de bateria?). Tentaremos de novo ao tocar na tela.</p>' }[wakeLockState()] || '') +
     '<p class="note">Com "reduzir movimento" ativo no sistema, o tremor fica limitado e a pausa de impacto desligada. ' + (touchUI() ? 'O botão de pausa fica no menu do topo; fora da cidade, abrir um painel pausa o jogo.' : 'Esc pausa o jogo.') + '</p>';
   h += '<h4>Câmera</h4><p class="note">' + (touchUI() ? 'Afaste ou junte dois dedos na tela para aproximar ou afastar a câmera.' : 'Botão do meio ou Ctrl + arrastar gira a câmera; roda do mouse aproxima.') + ' A visão isométrica fixa é a mais legível: as paredes baixas das masmorras são calculadas para ela.</p><div class="row"><button class="btn sm" data-act="camreset">Voltar à visão isométrica' + (touchUI() ? '' : ' (Home)') + '</button></div>';
   h += '<h4>Conta</h4><div class="row"><button class="btn" data-act="quit">Voltar à tela inicial</button><button class="btn" data-act="wipe">' + (UI.confirmWipe ? 'Confirmar: apagar tudo' : 'Apagar todos os dados locais') + '</button></div>';
