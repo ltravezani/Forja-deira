@@ -112,8 +112,8 @@ export const CONFIG = {
     manualPause: 2.5,       // s sem decidir depois que o jogador mexe no herói (teclado ou clique)
     stuckTime: 6,           // s sem andar nem ferir o alvo: desiste dele por um tempo
     skipTime: 30,           // s ignorando um alvo travado (atrás de parede, fora do caminho)
-    lootTimeout: 25,        // s no fim do andar da torre recolhendo o que sobrou no chão
-    bossLootTime: 4,        // s na masmorra depois do chefe pegando os drops por perto antes de descer
+    lootTimeout: 90,        // s no fim do andar (masmorra ou torre) recolhendo o que sobrou no chão: só uma rede de segurança
+    lootGiveUp: 20,         // s indo atrás do mesmo drop no fim do andar sem conseguir pegar: desiste dele nesse andar
     towerStuckTimeout: 120, // s depois do chefe da torre com monstro vivo inalcançável: sobe mesmo assim
     nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
