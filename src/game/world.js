@@ -14,6 +14,7 @@ import { updateTownLife } from './townlife.js';
 import { updateEden } from './eden.js';
 import { updateTower } from './tower.js';
 import { updateAutomation } from './automation.js';
+import { updateAutoClear } from './autoClear.js';
 import { paintMinimapTile } from '../ui/minimap.js';
 import { updateTorchLights } from '../world/level.js';
 
@@ -72,6 +73,7 @@ export function updateWorld(dt) {
   rebuildMonsterGrid();
   updatePlayer(dt);
   updateAutomation(dt);
+  updateAutoClear(dt);
   if (G.zone !== 'town') updateMonsters(dt);
   updateAllies(dt);
   updateProjectiles(dt);

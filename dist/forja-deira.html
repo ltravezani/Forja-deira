@@ -125,6 +125,16 @@ input, select { font-family: inherit; }
 .zone h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.05; color: var(--gold); text-shadow: 0 2px 4px #000; }
 .nw { white-space: nowrap; } /* partes "Andar 1", "Torre Infinita" etc. não quebram por dentro */
 .zone .sub { font-size: 13px; color: var(--muted); text-shadow: 0 1px 2px #000; }
+/* Auto-Limpeza em andamento: selo sob o minimapa com o botão Parar */
+.autoclr { display: grid; gap: 2px; width: min(200px, 46vw); box-sizing: border-box; padding: 6px 8px; text-align: left; background: rgba(12,9,18,.82); border: 1px solid var(--gold); border-radius: 4px; box-shadow: 0 0 10px rgba(242,207,122,.25); animation: acPulse 2.4s ease-in-out infinite; }
+.autoclr .ac-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.autoclr .ac-h b { font-family: var(--f-display); font-weight: 400; font-size: 16px; color: var(--gold); }
+.autoclr .ac-h .btn { padding: 2px 10px; }
+.autoclr .ac-s { font-size: 11.5px; color: var(--muted); }
+@keyframes acPulse { 50% { box-shadow: 0 0 16px rgba(242,207,122,.5); } }
+@media (max-width: 760px) { .autoclr { width: min(178px, 48vw); padding: 4px 6px; } .autoclr .ac-h b { font-size: 13px; white-space: nowrap; } .autoclr .ac-s { font-size: 10.5px; } .autoclr .ac-h .btn { padding: 1px 7px; font-size: 11px; } }
+.dg .tk { font-size: 12px; color: #e8d8b0; }
+.dg .row .btn.auto { min-width: 0; }
 #minimap { width: 172px; height: 172px; border-radius: 50%; filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); cursor: zoom-in; }
 #minimap:hover { filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)) drop-shadow(0 0 6px rgba(242,207,122,.5)); }
 /* mapa ampliado: planta da região com névoa no que falta explorar */
@@ -807,6 +817,7 @@ html.touch .qtrack.fold .qt-fold { width: 44px; height: 44px; }
       <h2 id="zoneName">Refúgio de Aldrena</h2>
       <div class="sub" id="zoneSub">Cidade segura</div>
       <canvas id="minimap" width="344" height="344" title="Abrir mapa (M)" role="button" aria-label="Abrir mapa (M)"></canvas>
+      <div class="autoclr" id="autoClr" role="status" hidden></div>
     </div>
     <div class="bossbar" id="bossbar" hidden><h3 id="bossName"></h3><div class="bar"><i id="bossFill"></i></div></div>
     <div class="topright">
@@ -6134,6 +6145,19 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
   const TALISMANS = {
     luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Joia do Caos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
+  /**
+   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx. Cada ticket limpa um
+   * andar inteiro sozinho (monstros e chefe). Vendidos pela Mercadora ou caem no Éden.
+   */
+  const TICKETS = {
+    forest: { name: 'Ticket da Floresta', color: '#8ae86a' },
+    caves: { name: 'Ticket das Cavernas', color: '#7ac8ff' },
+    ruins: { name: 'Ticket das Ruínas', color: '#e8c88a' },
+    castle: { name: 'Ticket do Castelo', color: '#ff7a7a' },
+    abyss: { name: 'Ticket do Abismo', color: '#ff9a4a' },
+  };
+  const TICKET_IDS = Object.keys(TICKETS);
+  const TICKET_PRICE = 1000000;
 
   /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
   function wingBonus(it) {
@@ -6147,6 +6171,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     if (it.kind === 'jewel') return JEWELS[it.id].name;
     if (it.kind === 'potion') return POTIONS[it.id].name;
     if (it.kind === 'talisman') return TALISMANS[it.id].name;
+    if (it.kind === 'ticket') return TICKETS[it.id].name;
     let base;
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
@@ -6232,6 +6257,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
+    if (it.kind === 'ticket') return TICKET_PRICE * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
@@ -6420,6 +6446,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     bossRareRolls: 2,
     legend: { mini: 0.05, boss: 0.05 },     // item Lendário (só mini chefes e chefe final)
     talisman: 0.07,                          // Talismã da Sorte (sempre no chefe final)
+    ticket: 0.03,                            // Ticket de Auto-Limpeza de uma masmorra aleatória (qualquer monstro)
     buffPotion: { normal: 0.15, elite: 0.15, mini: 0.15, boss: 0.15, chest: 0.4, secret: 0.6 },
   };
   /** Milissegundos que faltam para poder entrar de novo (0 = liberado). */
@@ -6442,12 +6469,13 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
    * Drop do Éden (determinístico pela seed). src: normal|elite|mini|boss|chest|secret.
    * Joia ou item Ancestral (10%, mais em mini chefes e no chefe), Lendário só em mini
    * chefes e no chefe (5%), Talismã da Sorte (7%, sempre no chefe), poções de reforço (15%),
+   * Ticket de Auto-Limpeza de uma masmorra aleatória (3%),
    * além de Gold e poções de vida/mana como numa masmorra.
    */
   function rollEdenDrop(opts) {
     const { seed, mLevel, src, mf, favorCls } = opts;
     const rnd = mulberry32(seed);
-    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, log: [] };
+    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, tickets: [], log: [] };
     const boss = src === 'boss', mini = src === 'mini', chest = src === 'chest' || src === 'secret';
     const equipSrc = boss ? 'boss' : mini || chest ? 'elite' : src;
     if (rnd() < DROP_CHANCE.gold || boss || mini || chest) {
@@ -6469,6 +6497,10 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     const rb = rnd();
     if (rb < (EDEN.buffPotion[src] || 0)) out.potions.push(BUFF_POTIONS[Math.floor(rnd() * BUFF_POTIONS.length)]);
     if (!boss && rnd() < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    // por último, para não mudar os sorteios anteriores da mesma seed
+    const rk = rnd();
+    out.log.push({ what: 'ticket', roll: rk, threshold: EDEN.ticket });
+    if (rk < EDEN.ticket) out.tickets.push(TICKET_IDS[Math.floor(rnd() * TICKET_IDS.length)]);
     return out;
   }
 
@@ -6780,7 +6812,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
@@ -6901,6 +6933,19 @@ const CONFIG = {
     skillReach: 10,         // m: alcance usado por habilidades sem alcance próprio (buffs, cura, invocações)
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
     scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
+  },
+  // Auto-Limpeza (tickets da Guardiã Nyx): o herói limpa o andar e derrota o chefe sozinho
+  autoClear: {
+    think: 0.2,             // s entre decisões de alvo
+    lootRadius: 10,         // m: drops a essa distância são buscados no caminho entre um monstro e outro
+    hpPotionBelow: 0.5,     // bebe Poção de Vida abaixo desta fração do HP
+    mpPotionBelow: 0.25,    // bebe Poção de Mana abaixo desta fração do MP
+    reviveDelay: 1.4,       // s caído antes de usar a Poção da Ressurreição sozinho
+    manualPause: 2.5,       // s sem decidir depois que o jogador mexe no herói (teclado ou clique)
+    stuckTime: 6,           // s sem andar nem ferir o alvo: desiste dele por um tempo
+    skipTime: 30,           // s ignorando um alvo travado (atrás de parede, fora do caminho)
+    lootTimeout: 25,        // s no fim do andar recolhendo o que sobrou no chão
+    nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
@@ -8277,7 +8322,7 @@ function monsterName(T, affix) {
 }
 const NPCS = {
   smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Joias e evolução de asas', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'A Bênção leva até +6 sem falhar. A Alma é sorte. O Caos… o Caos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
-  merchant: { name: 'Lira', role: 'Mercadora · vende poções; compra joias, poções e equipamentos Comuns e Mágicos', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas! E se o seu pet estiver ocupado, eu compro suas joias, poções e os equipamentos Comuns e Mágicos.' },
+  merchant: { name: 'Lira', role: 'Mercadora · vende poções e tickets de Auto-Limpeza; compra joias, poções e equipamentos Comuns e Mágicos', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas e tickets para a Guardiã Nyx! E se o seu pet estiver ocupado, eu compro suas joias, poções e os equipamentos Comuns e Mágicos.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
   tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { gltf: 'knight', skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra Ouro e Joias. Derrote o guardião de cada andar e suba o quanto aguentar.' },
@@ -8641,7 +8686,7 @@ function sanitizeCharacter(ch) {
   ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
-  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
+  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]) || (it.kind === 'ticket' && R.TICKETS[it.id]));
   // evolução: inteiro dentro das formas da classe
   ch.tier = Math.min(R.CLASSES[ch.cls].tiers.length - 1, Math.floor(ch.tier));
   sanitizeTree(ch, R);
@@ -10951,6 +10996,14 @@ function buildItemModel(kind, o) {
     for (const [x, y] of [[0, 0.09], [0, -0.09], [0.09, 0], [-0.09, 0]]) part(GEO.sphS, gem, 0.12, 0.12, 0.05, x, y, 0.045, h, false);
     part(GEO.torusF, gold, 0.16, 0.16, 0.3, 0, 0.29, 0, h).rotation.y = Math.PI / 2;
     part(GEO.sphS, halo, 0.75, 0.75, 0.4, 0, 0, 0, h, false);
+  } else if (kind === 'ticket') {
+    // bilhete de pergaminho em pé, com o selo da masmorra brilhando
+    h.position.y = 0.3; h.rotation.y = 0.4;
+    part(GEO.box, toon(0xe8d8b0, 0, 0, { rough: 0.85 }), 0.62, 0.36, 0.03, 0, 0, 0, h);
+    part(GEO.box, toon(0x8a6a3a, 0, 0, { rough: 0.9 }), 0.64, 0.04, 0.035, 0, 0.17, 0, h, false);
+    part(GEO.box, toon(0x8a6a3a, 0, 0, { rough: 0.9 }), 0.64, 0.04, 0.035, 0, -0.17, 0, h, false);
+    part(GEO.cyl, gem, 0.17, 0.04, 0.17, 0.12, 0, 0.02, h, false).rotation.x = Math.PI / 2;
+    part(GEO.sphS, halo, 0.7, 0.5, 0.35, 0, 0, 0, h, false);
   } else if (kind === 'gold') {
     const coin = toon(0xffd24a, 0xaa7a00, 0.35, { metal: 0.9, rough: 0.3, env: 1.2 });
     const n = Math.min(7, 2 + (o.amount || 1));
@@ -12317,10 +12370,12 @@ const ICON_SHAPE = {
   jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
   // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
   talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
+  // Ticket de Auto-Limpeza: bilhete de pergaminho com a borda picotada e o selo da masmorra
+  ticket: '<path d="M8 18 L56 18 L56 27 Q51 32 56 37 L56 46 L8 46 L8 37 Q13 32 8 27 Z" fill="#e8d8b0" stroke="#0009" stroke-width="1.4"/><path d="M19 19 L19 45" stroke="#8a6a3a" stroke-width="1.3" stroke-dasharray="2.5 2"/><circle class="m" cx="38" cy="32" r="8.5"/><path d="M34 32 L37 35 L42.5 28.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 24 L16 24 M11 32 L16 32 M11 40 L16 40" stroke="#8a6a3a" stroke-width="1.5"/>',
   potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
 };
 /** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
+const ICON_BG = { ticket: '#3a2c18', talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
 const _iconCache = {};
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -12331,6 +12386,7 @@ function iconKind(it) {
   if (it.kind === 'jewel') return 'jewel';
   if (it.kind === 'potion') return 'potion';
   if (it.kind === 'talisman') return 'talisman';
+  if (it.kind === 'ticket') return 'ticket';
   if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
   if (it.slot === 'wings' && it.stage) return 'wings2';
   return it.slot;
@@ -12349,7 +12405,7 @@ function iconURI(kind, col) {
 function glyph(it) {
   const kind = iconKind(it);
   const P = it.kind === 'potion' && R.POTIONS[it.id];
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : it.kind === 'ticket' ? R.TICKETS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
   const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
   // armas: ícone 3D (KayKit Fantasy Weapons Bits); sem ele, o desenho SVG
   const d3 = weaponIconURI(it);
@@ -12832,6 +12888,235 @@ function animateCritter(m, s) {
 return { animateCritter, buildCritter, buildVillager, mergeModelParts };
 })();
 
+// ---- input/inputState.js ----
+const { KEYS, mouse } = (() => {
+// ---------- estado bruto da entrada (compartilhado entre entrada e simulação) ----------
+
+const mouse = { x: 0, y: 0, down: false, moved: false, lastRepath: 0, hover: null, orbit: null };
+const KEYS = { w: false, a: false, s: false, d: false, any() { return this.w || this.a || this.s || this.d; } };
+return { KEYS, mouse };
+})();
+
+// ---- ui/log.js ----
+const { clearLog, log, setZoneText, toast } = (() => {
+// ---------- registro de mensagens, avisos centrais e nome da zona ----------
+
+const MAX_LINES = 9;
+const el = {};
+function dom(id) { return el[id] || (el[id] = $('#' + id)); }
+
+/** Adiciona uma linha ao registro (as antigas esmaecem via CSS, sem timers). */
+function log(text, cls) {
+  const box = dom('log');
+  const p = document.createElement('p');
+  p.className = cls || '';
+  p.textContent = text;
+  box.appendChild(p);
+  while (box.children.length > MAX_LINES) box.firstChild.remove();
+}
+/** Aviso grande no centro da tela (troca de andar, chefe derrotado, evolução). */
+/** Partes curtas separadas por " · " ("Andar 1", "nv 20–26") não quebram por dentro; nomes longos podem quebrar. */
+function partsHtml(text) { return String(text).split(' · ').map((p) => (p.length <= 14 ? '<span class="nw">' + esc(p) + '</span>' : esc(p))).join(' · '); }
+function toast(big, small) {
+  const t = dom('toast');
+  dom('toastBig').innerHTML = partsHtml(big);
+  dom('toastSmall').textContent = small || '';
+  t.classList.remove('show');
+  void t.offsetWidth; // reinicia a animação CSS (1 reflow, só neste evento raro)
+  t.classList.add('show');
+}
+/** Subtítulo da zona: a parte "Monstros nv …" ganha a classe zmon (o celular a esconde para poupar espaço). */
+function subHtml(text) {
+  const parts = String(text).split(' · ');
+  const keep = parts.filter((p) => !/^monstros nv/i.test(p)), mon = parts.filter((p) => /^monstros nv/i.test(p));
+  if (!mon.length) return partsHtml(text);
+  const m = partsHtml(mon.join(' · '));
+  return keep.length ? partsHtml(keep.join(' · ')) + '<span class="zmon"> · ' + m + '</span>' : '<span class="zmon">' + m + '</span>';
+}
+function setZoneText(a, b) { dom('zoneName').innerHTML = partsHtml(a); dom('zoneSub').innerHTML = subHtml(b); }
+/** Limpa o registro de mensagens (ao voltar para a tela de título). */
+function clearLog() { dom('log').textContent = ''; }
+return { clearLog, log, setZoneText, toast };
+})();
+
+// ---- game/autoClear.js ----
+const { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud } = (() => {
+// ---------- Auto-Limpeza: tickets da Guardiã Nyx limpam andares de masmorra sozinhos ----------
+
+/** Tickets de Auto-Limpeza da masmorra na mochila. */
+function ticketCount(biome) {
+  const t = G.ch && G.ch.bag.find((b) => b.kind === 'ticket' && b.id === biome);
+  return t ? t.qty : 0;
+}
+function takeTicket(biome) {
+  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'ticket' && b.id === biome);
+  if (!t) return false;
+  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
+  return true;
+}
+/** Compra na Mercadora: devolve false sem Ouro ou sem espaço na mochila. */
+function buyTicket(biome) {
+  const ch = G.ch;
+  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE) return false;
+  if (!addToBag({ kind: 'ticket', id: biome, qty: 1, uid: 'k' + biome })) return false;
+  ch.gold -= R.TICKET_PRICE;
+  return true;
+}
+
+const autoClearOn = () => !!G.auto;
+/** A Auto-Limpeza decide os alvos agora (não está pausada pelo jogador)? */
+const autoSteering = () => !!G.auto && G.time >= G.auto.manualT;
+
+/**
+ * Começa na masmorra escolhida, no andar mais fundo liberado. Cada andar gasta um
+ * ticket ao entrar; com tickets sobrando, o herói desce sozinho depois do chefe.
+ */
+function startAutoClear(biome) {
+  const ch = G.ch;
+  if (DUNGEON_ORDER.indexOf(biome) < 0 || !takeTicket(biome)) return false;
+  const floor = ch.unlockedFloors[biome] || 1;
+  G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, endT: 0, nextT: 0, skip: new Map(), tgt: null };
+  enterDungeon(biome, floor);
+  toast('Auto-Limpeza', BIOMES[biome].name + ' · andar ' + floor);
+  log('Auto-Limpeza: ' + BIOMES[biome].name + ', andar ' + floor + ' (nv ' + floorLevel(biome, floor) + '). O herói limpa o andar e enfrenta o chefe sozinho; mexer nele pausa a automação por um instante.', 'sys');
+  return true;
+}
+function stopAutoClear(msg, done) {
+  const a = G.auto;
+  if (!a) return;
+  G.auto = null;
+  const p = G.player;
+  if (p && p.alive) { p.target = null; p.path = null; }
+  const n = a.done;
+  const cleared = n + (n === 1 ? ' andar limpo' : ' andares limpos');
+  log('Auto-Limpeza ' + (done ? 'concluída' : 'encerrada') + (msg ? ': ' + msg : '') + '. ' + cleared + '.', 'sys');
+  toast(done ? 'Auto-Limpeza concluída' : 'Auto-Limpeza encerrada', done ? cleared : msg || cleared);
+  persist();
+}
+/** Chefe do andar caiu (combat.js): termina o que sobrou e segue para o próximo. */
+function autoBossDown() { if (G.auto) G.auto.bossDown = true; }
+
+const skipped = (a, ref) => (a.skip.get(ref) || 0) > G.time;
+function validTarget(t) {
+  if (!t) return false;
+  if (t.type === 'mon') return !t.m.dead;
+  if (t.type === 'loot') return G.loot.indexOf(t.l) >= 0;
+  return false;
+}
+/** Drops que valem a viagem: itens só com espaço na mochila. */
+const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < BAG_SIZE;
+const lootOk = (l) => G.time - l.born > 0.6 && lootOk2(l);
+function nearest(list, ok, maxD) {
+  const p = G.player;
+  let best = null, bd = maxD * maxD;
+  for (const o of list) {
+    if (!ok(o)) continue;
+    const d = (o.x - p.x) ** 2 + (o.z - p.z) ** 2;
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+/**
+ * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
+ * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão.
+ */
+function pickTarget(a) {
+  const ok = (m) => !m.dead && !skipped(a, m);
+  const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
+  if (fighting) return { type: 'mon', m: fighting };
+  const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), a.bossDown ? 1e4 : CONFIG.autoClear.lootRadius);
+  if (l) return { type: 'loot', l };
+  const m = nearest(G.monsters, (x) => ok(x) && !x.boss, 1e4) || nearest(G.monsters, ok, 1e4);
+  return m ? { type: 'mon', m } : null;
+}
+function aim(p, t) {
+  p.target = t;
+  if (t.type === 'mon') p.path = null; else pathTo(t.l.x, t.l.z);
+}
+/** Sem andar nem ferir o alvo por alguns segundos: deixa ele de lado por um tempo. */
+function watchStuck(a, p) {
+  const C = CONFIG.autoClear, t = p.target, ref = t.type === 'mon' ? t.m : t.l;
+  let s = a.tgt;
+  if (!s || s.ref !== ref) s = a.tgt = { ref, x: p.x, z: p.z, hp: t.type === 'mon' ? t.m.hp : 0, at: G.time };
+  const hp = t.type === 'mon' ? t.m.hp : 0;
+  if (Math.hypot(p.x - s.x, p.z - s.z) > 1.5 || hp < s.hp) { s.x = p.x; s.z = p.z; s.hp = hp; s.at = G.time; return; }
+  if (G.time - s.at > C.stuckTime) {
+    a.skip.set(ref, G.time + C.skipTime);
+    a.tgt = null; p.target = null; p.path = null;
+  }
+}
+function drinkPotions() {
+  const C = CONFIG.autoClear, st = G.st;
+  if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
+  else if (G.mp < st.maxMp * C.mpPotionBelow && potionCount('mp')) usePotion('mp');
+}
+function nextFloor(a) {
+  a.done++;
+  if (!takeTicket(a.biome)) {
+    stopAutoClear('os tickets acabaram', true);
+    return;
+  }
+  a.used++;
+  a.floor++;
+  a.bossDown = false; a.endT = 0; a.nextT = 0; a.tgt = null; a.skip.clear();
+  enterDungeon(a.biome, a.floor);
+  log('Auto-Limpeza: descendo para o andar ' + a.floor + ' (' + ticketCount(a.biome) + ' tickets restantes).', 'sys');
+}
+
+function updateAutoClear(dt) {
+  const a = G.auto, p = G.player, C = CONFIG.autoClear;
+  if (!a || !p || !G.ch) return;
+  // saiu da masmorra (portal para a cidade, renasceu em Aldrena, outra zona): fim
+  if (G.zone !== 'dungeon' || G.biome !== a.biome || G.floor !== a.floor) { stopAutoClear('o herói saiu do andar'); return; }
+  if (!p.alive) {
+    if (!a.deadT) a.deadT = G.time;
+    if (G.time - a.deadT < C.reviveDelay) return;
+    if (potionCount('rez') && revive()) { closeModal(); a.deadT = 0; a.tgt = null; return; }
+    stopAutoClear('o herói caiu sem Poção da Ressurreição');
+    return;
+  }
+  a.deadT = 0;
+  if (KEYS.any() || mouse.down) a.manualT = G.time + C.manualPause;
+  drinkPotions();
+  if (G.time < a.manualT || G.time < p.lockUntil || p.dash || p.dodge) return;
+  if ((a.thinkT -= dt) > 0) return;
+  a.thinkT = C.think;
+  if (validTarget(p.target)) { watchStuck(a, p); return; }
+  // depois do chefe, recolher o que sobrou no chão tem limite de tempo
+  if (a.bossDown && !a.endT && !G.monsters.some((m) => !m.dead)) a.endT = G.time;
+  const late = a.endT && G.time - a.endT > C.lootTimeout;
+  const t = late ? null : pickTarget(a);
+  if (t) { a.nextT = 0; aim(p, t); return; }
+  p.target = null;
+  if (!a.bossDown) return; // o chefe ainda está vivo mas fora de alcance por enquanto (travado): espera
+  // drops recém-caídos ainda no ar: espera pousarem antes de dar o andar por limpo
+  if (!late && G.loot.some((l) => G.time - l.born <= 0.6 && lootOk2(l))) return;
+  // andar limpo: uma pausa curta para ver o resultado e desce
+  if (!a.nextT) a.nextT = G.time + C.nextDelay;
+  if (G.time >= a.nextT) nextFloor(a);
+}
+
+// ---------- HUD: selo da Auto-Limpeza sob o minimapa, com o botão Parar ----------
+let hudEl = null, lastHtml = '';
+function updateAutoHud() {
+  if (!hudEl) {
+    hudEl = $('#autoClr');
+    if (!hudEl) return;
+    hudEl.addEventListener('pointerdown', (e) => { if (e.target.closest('[data-auto="stop"]')) { e.stopPropagation(); e.preventDefault(); stopAutoClear('parada pelo jogador'); } });
+  }
+  const a = G.auto;
+  if (!a) { if (!hudEl.hidden) { hudEl.hidden = true; lastHtml = ''; } return; }
+  const left = G.monsters.reduce((n, m) => n + (m.dead ? 0 : 1), 0), tk = ticketCount(a.biome);
+  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && !left ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
+  const html = '<div class="ac-h"><b>Auto-Limpeza</b><button class="btn sm" data-auto="stop">Parar</button></div>' +
+    '<div class="ac-s">Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
+    '<div class="ac-s">Monstros ' + left + ' · tickets ' + tk + ' · andares ' + a.done + '</div>';
+  if (html !== lastHtml) { lastHtml = html; hudEl.innerHTML = html; }
+  hudEl.hidden = false;
+}
+return { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud };
+})();
+
 // ---- ui/questUi.js ----
 const { initQuestUi, openQuestBoard, questTargetPos, questUiTick } = (() => {
 // ---------- interface das missões e auxílios do HUD ----------
@@ -13031,15 +13316,6 @@ function initQuestUi() {
   $('#dialog').addEventListener('click', boardAction);
 }
 return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
-})();
-
-// ---- input/inputState.js ----
-const { KEYS, mouse } = (() => {
-// ---------- estado bruto da entrada (compartilhado entre entrada e simulação) ----------
-
-const mouse = { x: 0, y: 0, down: false, moved: false, lastRepath: 0, hover: null, orbit: null };
-const KEYS = { w: false, a: false, s: false, d: false, any() { return this.w || this.a || this.s || this.d; } };
-return { KEYS, mouse };
 })();
 
 // ---- ui/cursor.js ----
@@ -13381,6 +13657,7 @@ function hudTick() {
   if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
   updateSlotStates(ch, st);
   updateBossBar();
+  updateAutoHud();
   setHtml('buffs', G.buffs.map((x) => buffHtml(x, x.until - G.time)).join('') +
     (G.pet && G.pet.away > G.time ? buffHtml({ id: 'pet', name: 'Pet vendendo' }, G.pet.away - G.time) : ''));
   updateLowHp(hpFrac, G.player.alive);
@@ -13416,48 +13693,6 @@ function updateBossBar() {
 return { buildSlots, hudTick, resetHudCache };
 })();
 
-// ---- ui/log.js ----
-const { clearLog, log, setZoneText, toast } = (() => {
-// ---------- registro de mensagens, avisos centrais e nome da zona ----------
-
-const MAX_LINES = 9;
-const el = {};
-function dom(id) { return el[id] || (el[id] = $('#' + id)); }
-
-/** Adiciona uma linha ao registro (as antigas esmaecem via CSS, sem timers). */
-function log(text, cls) {
-  const box = dom('log');
-  const p = document.createElement('p');
-  p.className = cls || '';
-  p.textContent = text;
-  box.appendChild(p);
-  while (box.children.length > MAX_LINES) box.firstChild.remove();
-}
-/** Aviso grande no centro da tela (troca de andar, chefe derrotado, evolução). */
-/** Partes curtas separadas por " · " ("Andar 1", "nv 20–26") não quebram por dentro; nomes longos podem quebrar. */
-function partsHtml(text) { return String(text).split(' · ').map((p) => (p.length <= 14 ? '<span class="nw">' + esc(p) + '</span>' : esc(p))).join(' · '); }
-function toast(big, small) {
-  const t = dom('toast');
-  dom('toastBig').innerHTML = partsHtml(big);
-  dom('toastSmall').textContent = small || '';
-  t.classList.remove('show');
-  void t.offsetWidth; // reinicia a animação CSS (1 reflow, só neste evento raro)
-  t.classList.add('show');
-}
-/** Subtítulo da zona: a parte "Monstros nv …" ganha a classe zmon (o celular a esconde para poupar espaço). */
-function subHtml(text) {
-  const parts = String(text).split(' · ');
-  const keep = parts.filter((p) => !/^monstros nv/i.test(p)), mon = parts.filter((p) => /^monstros nv/i.test(p));
-  if (!mon.length) return partsHtml(text);
-  const m = partsHtml(mon.join(' · '));
-  return keep.length ? partsHtml(keep.join(' · ')) + '<span class="zmon"> · ' + m + '</span>' : '<span class="zmon">' + m + '</span>';
-}
-function setZoneText(a, b) { dom('zoneName').innerHTML = partsHtml(a); dom('zoneSub').innerHTML = subHtml(b); }
-/** Limpa o registro de mensagens (ao voltar para a tela de título). */
-function clearLog() { dom('log').textContent = ''; }
-return { clearLog, log, setZoneText, toast };
-})();
-
 // ---- ui/npcDialogs.js ----
 const { closeModal, confirmDescend, initDialogs, openNpc, showDeath } = (() => {
 // ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
@@ -13469,7 +13704,7 @@ const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.
 /** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
 const sellListed = (it) => !it.slot;
 /** Joias pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman';
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket';
 /** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
 const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
 /** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
@@ -13489,7 +13724,7 @@ function sellSection(ch) {
   h += '<div class="list selllist">';
   idx.forEach((i) => {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : 'Poção') + ' · você tem ' + q;
+    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · você tem ' + q;
     let a;
     if (it.locked) a = '<button class="btn sm" disabled>Trancado</button>';
     else if (cf && cf.it === it) {
@@ -13517,6 +13752,19 @@ function sellFromBag(ch, li, n, confirmed) {
   UI.sel = null;
   log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' de Ouro.', 'loot');
   Sfx.coin();
+}
+/** Tickets de Auto-Limpeza na Mercadora: um por masmorra, compra com confirmação (são caros). */
+function ticketSection(ch) {
+  const P = R.TICKET_PRICE;
+  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
+  R.TICKET_IDS.forEach((k) => {
+    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k;
+    const a = cf
+      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-ok="1">Confirmar · ' + fmt(P) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '"' + (ch.gold >= P ? '' : ' disabled') + '>×1 · ' + fmt(P) + '</button>';
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+  });
+  return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
 }
 function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
 /** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
@@ -13605,12 +13853,16 @@ function openNpc(id) {
       const lv1 = floorLevel(k, 1), lv = floorLevel(k, maxF);
       const r1 = R.levelRisk(lv1, ch.level), rMax = R.levelRisk(lv, ch.level);
       const btn = (f, risk, gold) => '<button class="btn sm risk-' + risk + (gold ? ' gold' : '') + '" data-npc="go" data-b="' + k + '" data-f="' + f + '" title="' + RISK[risk] + '">Andar ' + f + '</button>';
+      const tk = ticketCount(k);
       h += '<div class="dg risk-' + r1 + (k === rec ? ' rec' : '') + '"><div><b>' + esc(B.name) + '</b>' + (k === rec ? ' <span class="tag-rec">Recomendada</span>' : '') +
         '<div class="s">Monstros nv ' + lv1 + '+ · mais fundo liberado: andar ' + maxF + ' (nv ' + lv + ')</div>' +
-        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div></div><div class="row">' +
-        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') + '</div></div>';
+        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div>' +
+        '<div class="s tk">' + esc(R.TICKETS[k].name) + ': <b style="font:inherit;color:' + (tk ? R.TICKETS[k].color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · Auto-Limpeza a partir do andar ' + maxF : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') +
+        '<button class="btn sm auto risk-' + rMax + (tk ? ' gold' : '') + '" data-npc="auto" data-b="' + k + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + maxF + ' e segue enquanto houver tickets' : 'Sem tickets desta masmorra') + '">Auto-Limpeza</button></div></div>';
     });
-    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>';
+    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>' +
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, recolhe os drops, derrota o chefe e desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
   } else if (id === 'tower') {
     const best = ch.towerBest || 1, T = R.TOWER;
     const row = (f, gold) => {
@@ -13670,6 +13922,7 @@ function openNpc(id) {
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
     const RZ = R.POTIONS.rez;
     h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
+    h += '</div>' + ticketSection(ch) + '<div class="list">';
     h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
       ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
       : '<button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' de Ouro</button>') + '</div>';
@@ -13709,6 +13962,12 @@ function npcAction(e) {
       const k = b.dataset.b;
       if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0) return;
       closeModal(); enterDungeon(k, Math.max(1, Math.min(Math.floor(+b.dataset.f) || 1, ch.unlockedFloors[k] || 1)));
+      return;
+    }
+    case 'auto': {
+      const k = b.dataset.b;
+      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0 || !ticketCount(k)) return;
+      closeModal(); startAutoClear(k);
       return;
     }
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
@@ -13760,6 +14019,16 @@ function npcAction(e) {
       if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break;
       ch.gold -= D.price * n; Sfx.coin();
       log('Comprou ' + D.name + ' ×' + n + ' por ' + fmt(D.price * n) + ' de Ouro.', 'loot');
+      break;
+    }
+    case 'buytk': {
+      const k = b.dataset.k;
+      if (!R.TICKETS[k]) break;
+      if (ch.gold < R.TICKET_PRICE) { log('Ouro insuficiente.', 'warn'); break; }
+      if (b.dataset.ok !== '1' || UI.tkSel !== k || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; break; }
+      if (!buyTicket(k)) break;
+      Sfx.coin();
+      log('Comprou ' + R.TICKETS[k].name + ' por ' + fmt(R.TICKET_PRICE) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
       break;
     }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
@@ -18027,6 +18296,7 @@ function updateWorld(dt) {
   rebuildMonsterGrid();
   updatePlayer(dt);
   updateAutomation(dt);
+  updateAutoClear(dt);
   if (G.zone !== 'town') updateMonsters(dt);
   updateAllies(dt);
   updateProjectiles(dt);
@@ -18966,11 +19236,16 @@ const reachOf = (sk) => Math.max(sk.range || 0, sk.radius || 0) || CONFIG.auto.s
  * com MP/AG suficientes e um monstro ao alcance. As de recarga longa (buffs,
  * invocações, golpes fortes) têm prioridade; as rápidas preenchem o resto.
  */
+/** Na Auto-Limpeza sem nenhuma habilidade marcada, usa as da barra (menos as que deslocam o herói). */
+function autoList(ch) {
+  if (ch.autoSkills && ch.autoSkills.length) return ch.autoSkills;
+  return autoClearOn() ? ch.skillBar : null;
+}
 function autoCast(dt) {
-  const p = G.player, ch = G.ch, st = G.st;
-  if (!ch.autoSkills || !ch.autoSkills.length || !p || !p.alive || p.dash || G.skillQueue) return;
+  const p = G.player, ch = G.ch, st = G.st, list = autoList(ch);
+  if (!list || !list.length || !p || !p.alive || p.dash || G.skillQueue) return;
   if (G.time < p.lockUntil || G.zone === 'town' || inSafe()) return;
-  const ids = ch.autoSkills.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
+  const ids = list.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
   if (!ids.length) return;
   if ((scanT -= dt) > 0) return;
   scanT = CONFIG.auto.scanInterval;
@@ -19007,7 +19282,7 @@ function updateAutomation(dt) {
   if (!G.ch || !G.player) return;
   autoCast(dt);
   sellTick -= dt;
-  if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell) autoPetSell(); }
+  if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell || autoClearOn()) autoPetSell(); } // na Auto-Limpeza o pet vende sozinho
 }
 return { autoSkillAllowed, autoSkillOn, toggleAutoSkill, updateAutomation };
 })();
@@ -19165,7 +19440,7 @@ function selBagIdx() {
   return i;
 }
 /** Venda/descarte de item valioso pede um segundo clique: Excelente ou melhor, joias e talismãs. */
-const needsConfirm = (it) => !!it && (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+const needsConfirm = (it) => !!it && (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 const confirming = (it, act) => !!(UI.itemConfirm && UI.itemConfirm.it === it && UI.itemConfirm.act === act);
 /** Celular: detalhes num painel inferior em vez de tooltip ao lado do item. */
 const sheetMode = () => window.matchMedia('(max-width: 760px)').matches;
@@ -19176,12 +19451,14 @@ function itemColor(it) { return it.rarity ? R.RARITY[it.rarity].color : glyph(it
 function itemSub(it) {
   if (it.kind === 'jewel') return 'Joia · material de refino';
   if (it.kind === 'talisman') return 'Talismã · material de refino';
+  if (it.kind === 'ticket') return 'Ticket · Auto-Limpeza';
   if (it.kind === 'potion') return 'Consumível';
   return R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · Tier ' + (it.tier + 1) + (it.plus ? ' · <b class="lv">+' + it.plus + '</b>' : '');
 }
 function itemDesc(it) {
   if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar e derrota o chefe sozinho. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
   if (it.kind === 'potion') {
     const P = R.POTIONS[it.id];
     if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Ouro.';
@@ -19348,10 +19625,10 @@ const EQ_RIGHT = ['weapon', 'wings', 'pendant', 'ring'];
 // ---------- InventoryFilter ----------
 const InventoryFilter = {
   LABELS: { all: 'Todos', equip: 'Equipamentos', mat: 'Materiais', cons: 'Consumíveis', other: 'Outros' },
-  /** Equipamentos: peças da sua classe · Materiais: joias e talismãs · Consumíveis: poções · Outros: o resto (peças de outras classes). */
+  /** Equipamentos: peças da sua classe · Materiais: joias, talismãs e tickets · Consumíveis: poções · Outros: o resto (peças de outras classes). */
   cat(it) {
     if (it.slot) return classOk(it) ? 'equip' : 'other';
-    if (it.kind === 'jewel' || it.kind === 'talisman') return 'mat';
+    if (it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket') return 'mat';
     if (it.kind === 'potion') return 'cons';
     return 'other';
   },
@@ -19363,7 +19640,7 @@ const InventoryFilter = {
 
 // ---------- InventoryItem / EquipmentSlot ----------
 /** Brilho discreto para Excelente ou melhor, joias e talismãs. */
-const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 /** Cadeado dos itens trancados (nunca vendidos nem descartados). */
 const LOCK_SVG = '<span class="lk" title="Trancado" style="position:absolute;right:2px;bottom:13px;width:10px;height:11px;line-height:0;filter:drop-shadow(0 1px 1px #000)"><svg viewBox="0 0 10 11" width="10" height="11" aria-hidden="true"><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#e8d9a8" stroke-width="1.4"/><rect x="1" y="5" width="8" height="6" rx="1" fill="#e8d9a8"/></svg></span>';
 /** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
@@ -20595,6 +20872,7 @@ function lootLabel(l) {
   if (l.type === 'jewel') return { text: R.JEWELS[l.id].name, color: R.JEWELS[l.id].color };
   if (l.type === 'potion') return { text: R.POTIONS[l.id].name, color: R.POTIONS[l.id].color || (l.id === 'hp' ? '#ff8a7a' : '#8ab8ff') };
   if (l.type === 'talisman') return { text: R.TALISMANS[l.id].name, color: R.TALISMANS[l.id].color };
+  if (l.type === 'ticket') return { text: R.TICKETS[l.id].name, color: R.TICKETS[l.id].color };
   return { text: R.itemName(l.item), color: R.RARITY[l.item.rarity].color };
 }
 function dropLoot(x, z, l) {
@@ -20611,9 +20889,9 @@ function dropLoot(x, z, l) {
   mesh.position.y = 0.12;
   mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
-  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' ? 3 : 0;
+  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' || l.type === 'ticket' ? 3 : 0;
   // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
-  if (ord >= 1 || l.type === 'jewel' || l.type === 'talisman') {
+  if (ord >= 1) {
     const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
     pool.position.y = 0.05; pool.scale.setScalar(0.45 + ord * 0.05); pool.renderOrder = 1;
     g.add(pool);
@@ -20668,7 +20946,8 @@ function dropEdenRoll(x, z, drop, src) {
   for (const j of drop.jewels) dropLoot(x, z, { type: 'jewel', id: j });
   for (let i = 0; i < drop.talismans; i++) dropLoot(x, z, { type: 'talisman', id: 'luck' });
   for (const p of drop.potions) dropLoot(x, z, { type: 'potion', id: p });
-  return drop.items.length + drop.jewels.length + drop.talismans;
+  for (const t of drop.tickets || []) dropLoot(x, z, { type: 'ticket', id: t });
+  return drop.items.length + drop.jewels.length + drop.talismans + (drop.tickets || []).length;
 }
 /** Espaço: coleta tudo que está perto (mais raros primeiro); se nada estiver ao alcance, anda até o item mais próximo. */
 function spacePickup() {
@@ -20686,10 +20965,10 @@ function spacePickup() {
 }
 /**
  * Gold, poções e jewels são coletados só de passar por cima. Com "Pegar drops
- * automaticamente" ligado, tudo (itens também) num raio maior, sem mover o herói.
+ * automaticamente" ligado (ou na Auto-Limpeza), tudo (itens também) num raio maior, sem mover o herói.
  */
 function autoPickup(p) {
-  const C = CONFIG.loot, all = !!(G.ch && G.ch.autoLoot);
+  const C = CONFIG.loot, all = !!(G.ch && (G.ch.autoLoot || G.auto)); // a Auto-Limpeza recolhe tudo
   const r = all ? C.autoLootRadius : C.autoPickupRadius, r2 = r * r;
   const bagFull = G.ch.bag.length >= BAG_SIZE;
   for (let i = G.loot.length - 1; i >= 0; i--) {
@@ -20709,6 +20988,7 @@ function pickup(l) {
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
+  else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use na Guardiã Nyx (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
   else {
     if (!addToBag(l.item)) return false;
     Sfx.loot(R.RARITY[l.item.rarity].order);
@@ -21443,6 +21723,7 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
+  autoBossDown(); // Auto-Limpeza: termina o andar e desce sozinha se houver ticket
   const descend = () => enterDungeon(G.biome, G.floor + 1);
   // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
   G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
@@ -21577,6 +21858,7 @@ function installDebugHook(loopStats) {
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
     enterEden, edenState, towerState, lineClear, gltfHit, gltfRise,
     tryDodge, questEvent, openQuestBoard, spawnAlly, telegraphCircle, telegraphCone,
+    startAutoClear, stopAutoClear, buyTicket, ticketCount,
     warming, applyQuality, currentQuality, dynResScale, activeLights,
   };
 }

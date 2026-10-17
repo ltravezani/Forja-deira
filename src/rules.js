@@ -408,6 +408,19 @@
   const TALISMANS = {
     luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Joia do Caos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
+  /**
+   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx. Cada ticket limpa um
+   * andar inteiro sozinho (monstros e chefe). Vendidos pela Mercadora ou caem no Éden.
+   */
+  const TICKETS = {
+    forest: { name: 'Ticket da Floresta', color: '#8ae86a' },
+    caves: { name: 'Ticket das Cavernas', color: '#7ac8ff' },
+    ruins: { name: 'Ticket das Ruínas', color: '#e8c88a' },
+    castle: { name: 'Ticket do Castelo', color: '#ff7a7a' },
+    abyss: { name: 'Ticket do Abismo', color: '#ff9a4a' },
+  };
+  const TICKET_IDS = Object.keys(TICKETS);
+  const TICKET_PRICE = 1000000;
 
   /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
   function wingBonus(it) {
@@ -421,6 +434,7 @@
     if (it.kind === 'jewel') return JEWELS[it.id].name;
     if (it.kind === 'potion') return POTIONS[it.id].name;
     if (it.kind === 'talisman') return TALISMANS[it.id].name;
+    if (it.kind === 'ticket') return TICKETS[it.id].name;
     let base;
     if (it.slot === 'weapon') base = WEAPON_NAMES[it.cls][it.tier];
     else if (it.slot === 'ring') base = RING_NAMES[it.tier];
@@ -506,6 +520,7 @@
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
+    if (it.kind === 'ticket') return TICKET_PRICE * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
@@ -694,6 +709,7 @@
     bossRareRolls: 2,
     legend: { mini: 0.05, boss: 0.05 },     // item Lendário (só mini chefes e chefe final)
     talisman: 0.07,                          // Talismã da Sorte (sempre no chefe final)
+    ticket: 0.03,                            // Ticket de Auto-Limpeza de uma masmorra aleatória (qualquer monstro)
     buffPotion: { normal: 0.15, elite: 0.15, mini: 0.15, boss: 0.15, chest: 0.4, secret: 0.6 },
   };
   /** Milissegundos que faltam para poder entrar de novo (0 = liberado). */
@@ -716,12 +732,13 @@
    * Drop do Éden (determinístico pela seed). src: normal|elite|mini|boss|chest|secret.
    * Joia ou item Ancestral (10%, mais em mini chefes e no chefe), Lendário só em mini
    * chefes e no chefe (5%), Talismã da Sorte (7%, sempre no chefe), poções de reforço (15%),
+   * Ticket de Auto-Limpeza de uma masmorra aleatória (3%),
    * além de Gold e poções de vida/mana como numa masmorra.
    */
   function rollEdenDrop(opts) {
     const { seed, mLevel, src, mf, favorCls } = opts;
     const rnd = mulberry32(seed);
-    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, log: [] };
+    const out = { gold: 0, items: [], jewels: [], potions: [], talismans: 0, tickets: [], log: [] };
     const boss = src === 'boss', mini = src === 'mini', chest = src === 'chest' || src === 'secret';
     const equipSrc = boss ? 'boss' : mini || chest ? 'elite' : src;
     if (rnd() < DROP_CHANCE.gold || boss || mini || chest) {
@@ -743,6 +760,10 @@
     const rb = rnd();
     if (rb < (EDEN.buffPotion[src] || 0)) out.potions.push(BUFF_POTIONS[Math.floor(rnd() * BUFF_POTIONS.length)]);
     if (!boss && rnd() < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    // por último, para não mudar os sorteios anteriores da mesma seed
+    const rk = rnd();
+    out.log.push({ what: 'ticket', roll: rk, threshold: EDEN.ticket });
+    if (rk < EDEN.ticket) out.tickets.push(TICKET_IDS[Math.floor(rnd() * TICKET_IDS.length)]);
     return out;
   }
 
@@ -1054,7 +1075,7 @@
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,

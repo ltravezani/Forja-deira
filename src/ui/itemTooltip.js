@@ -32,7 +32,7 @@ export function selBagIdx() {
   return i;
 }
 /** Venda/descarte de item valioso pede um segundo clique: Excelente ou melhor, joias e talismãs. */
-export const needsConfirm = (it) => !!it && (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+export const needsConfirm = (it) => !!it && (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 const confirming = (it, act) => !!(UI.itemConfirm && UI.itemConfirm.it === it && UI.itemConfirm.act === act);
 /** Celular: detalhes num painel inferior em vez de tooltip ao lado do item. */
 const sheetMode = () => window.matchMedia('(max-width: 760px)').matches;
@@ -43,12 +43,14 @@ function itemColor(it) { return it.rarity ? R.RARITY[it.rarity].color : glyph(it
 function itemSub(it) {
   if (it.kind === 'jewel') return 'Joia · material de refino';
   if (it.kind === 'talisman') return 'Talismã · material de refino';
+  if (it.kind === 'ticket') return 'Ticket · Auto-Limpeza';
   if (it.kind === 'potion') return 'Consumível';
   return R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · Tier ' + (it.tier + 1) + (it.plus ? ' · <b class="lv">+' + it.plus + '</b>' : '');
 }
 function itemDesc(it) {
   if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar e derrota o chefe sozinho. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
   if (it.kind === 'potion') {
     const P = R.POTIONS[it.id];
     if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Ouro.';

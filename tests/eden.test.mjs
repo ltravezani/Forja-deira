@@ -88,6 +88,20 @@ test('rollEdenDrop: Guardião sempre dá Talismã; Lendário só em mini chefe e
   assert.ok(legMini > 0 && Math.abs(legMini / N - 0.05) < 0.02, 'lendário em mini ~5%: ' + legMini / N);
 });
 
+test('Ticket de Auto-Limpeza: ~3% por monstro do Éden, de uma masmorra aleatória', () => {
+  const N = 6000, seen = {};
+  let n = 0;
+  for (let s = 1; s <= N; s++) {
+    const d = R.rollEdenDrop({ seed: s * 104729, mLevel: 60, src: s % 2 ? 'normal' : 'boss', mf: 0, favorCls: 'dk' });
+    for (const t of d.tickets) { assert.ok(R.TICKETS[t], 'ticket conhecido: ' + t); seen[t] = 1; n++; }
+  }
+  assert.ok(Math.abs(n / N - 0.03) < 0.01, 'ticket ~3%: ' + n / N);
+  assert.deepEqual(Object.keys(seen).sort(), R.TICKET_IDS.slice().sort(), 'todas as masmorras aparecem');
+  assert.equal(R.TICKET_PRICE, 1000000);
+  assert.equal(R.itemName({ kind: 'ticket', id: 'castle' }), 'Ticket do Castelo');
+  assert.ok(R.sellValue({ kind: 'ticket', id: 'forest', qty: 1 }) < R.TICKET_PRICE, 'revender rende menos que o preço da Mercadora');
+});
+
 test('Talismã da Sorte: falha da Chaos mantém o +nível; sem talismã volta a +0', () => {
   const it = () => ({ plus: 11, addOpt: 0, slot: 'weapon' });
   const a = it(), ra = R.applyUpgrade(a, 'chaos', 0.999, { talisman: true });

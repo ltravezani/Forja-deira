@@ -144,6 +144,14 @@ export function buildItemModel(kind, o) {
     for (const [x, y] of [[0, 0.09], [0, -0.09], [0.09, 0], [-0.09, 0]]) part(GEO.sphS, gem, 0.12, 0.12, 0.05, x, y, 0.045, h, false);
     part(GEO.torusF, gold, 0.16, 0.16, 0.3, 0, 0.29, 0, h).rotation.y = Math.PI / 2;
     part(GEO.sphS, halo, 0.75, 0.75, 0.4, 0, 0, 0, h, false);
+  } else if (kind === 'ticket') {
+    // bilhete de pergaminho em pé, com o selo da masmorra brilhando
+    h.position.y = 0.3; h.rotation.y = 0.4;
+    part(GEO.box, toon(0xe8d8b0, 0, 0, { rough: 0.85 }), 0.62, 0.36, 0.03, 0, 0, 0, h);
+    part(GEO.box, toon(0x8a6a3a, 0, 0, { rough: 0.9 }), 0.64, 0.04, 0.035, 0, 0.17, 0, h, false);
+    part(GEO.box, toon(0x8a6a3a, 0, 0, { rough: 0.9 }), 0.64, 0.04, 0.035, 0, -0.17, 0, h, false);
+    part(GEO.cyl, gem, 0.17, 0.04, 0.17, 0.12, 0, 0.02, h, false).rotation.x = Math.PI / 2;
+    part(GEO.sphS, halo, 0.7, 0.5, 0.35, 0, 0, 0, h, false);
   } else if (kind === 'gold') {
     const coin = toon(0xffd24a, 0xaa7a00, 0.35, { metal: 0.9, rough: 0.3, env: 1.2 });
     const n = Math.min(7, 2 + (o.amount || 1));

@@ -102,6 +102,19 @@ export const CONFIG = {
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
     scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
   },
+  // Auto-Limpeza (tickets da Guardiã Nyx): o herói limpa o andar e derrota o chefe sozinho
+  autoClear: {
+    think: 0.2,             // s entre decisões de alvo
+    lootRadius: 10,         // m: drops a essa distância são buscados no caminho entre um monstro e outro
+    hpPotionBelow: 0.5,     // bebe Poção de Vida abaixo desta fração do HP
+    mpPotionBelow: 0.25,    // bebe Poção de Mana abaixo desta fração do MP
+    reviveDelay: 1.4,       // s caído antes de usar a Poção da Ressurreição sozinho
+    manualPause: 2.5,       // s sem decidir depois que o jogador mexe no herói (teclado ou clique)
+    stuckTime: 6,           // s sem andar nem ferir o alvo: desiste dele por um tempo
+    skipTime: 30,           // s ignorando um alvo travado (atrás de parede, fora do caminho)
+    lootTimeout: 25,        // s no fim do andar recolhendo o que sobrou no chão
+    nextDelay: 1.6,         // s depois do andar limpo antes de descer
+  },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
     sleepDistance: 70,      // m: longe disso, monstros ociosos não simulam

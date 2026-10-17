@@ -21,6 +21,15 @@ test('sanitizeCharacter corrige números inválidos e campos ausentes', async ()
   assert.ok(Number.isFinite(st.maxHp));
 });
 
+test('sanitizeCharacter mantém tickets de Auto-Limpeza conhecidos e descarta os desconhecidos', async () => {
+  const { sanitizeCharacter } = await load('core/state.js');
+  const ch = { name: 'T', cls: 'dk', bag: [{ kind: 'ticket', id: 'abyss', qty: 3 }, { kind: 'ticket', id: 'lua', qty: 1 }], equip: {} };
+  sanitizeCharacter(ch);
+  assert.equal(ch.bag.length, 1);
+  assert.equal(ch.bag[0].id, 'abyss');
+  assert.equal(ch.bag[0].qty, 3);
+});
+
 test('loadSave migra saves antigos (remove Web3) e tolera save corrompido', async () => {
   const { loadSave, S, SAVE_KEY } = await load('core/state.js');
   const old = { chars: [{ name: 'Velho', cls: 'dk', bag: [{ kind: 'jewel', id: 'bless', qty: 1, nft: { tokenId: 1 } }], equip: {} }], wallet: { trz: 1 }, market: {}, active: 0 };
