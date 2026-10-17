@@ -6146,8 +6146,8 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Joia do Caos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
   /**
-   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx. Cada ticket limpa um
-   * andar inteiro sozinho (monstros e chefe). Vendidos pela Mercadora ou caem no Éden.
+   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx e um da Torre Infinita.
+   * Cada ticket limpa um andar sozinho. Vendidos pela Mercadora; os das masmorras também caem no Éden.
    */
   const TICKETS = {
     forest: { name: 'Ticket da Floresta', color: '#8ae86a' },
@@ -6155,9 +6155,13 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     ruins: { name: 'Ticket das Ruínas', color: '#e8c88a' },
     castle: { name: 'Ticket do Castelo', color: '#ff7a7a' },
     abyss: { name: 'Ticket do Abismo', color: '#ff9a4a' },
+    tower: { name: 'Ticket da Torre', color: '#6ad8ff' },
   };
-  const TICKET_IDS = Object.keys(TICKETS);
+  /** Tickets das masmorras da Guardiã Nyx (os que caem no Éden). */
+  const TICKET_IDS = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
   const TICKET_PRICE = 1000000;
+  const TOWER_TICKET_PRICE = 5000000;
+  const ticketPrice = (id) => (id === 'tower' ? TOWER_TICKET_PRICE : TICKET_PRICE);
 
   /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
   function wingBonus(it) {
@@ -6257,7 +6261,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
-    if (it.kind === 'ticket') return TICKET_PRICE * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
+    if (it.kind === 'ticket') return ticketPrice(it.id) * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
@@ -6812,7 +6816,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE, TOWER_TICKET_PRICE, ticketPrice,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
@@ -6934,7 +6938,7 @@ const CONFIG = {
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
     scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
   },
-  // Auto-Limpeza (tickets da Guardiã Nyx): o herói limpa o andar e derrota o chefe sozinho
+  // Auto-Limpeza (tickets da Guardiã Nyx e da Torre): o herói limpa o andar e derrota o chefe sozinho
   autoClear: {
     think: 0.2,             // s entre decisões de alvo
     lootRadius: 10,         // m: drops a essa distância são buscados no caminho entre um monstro e outro
@@ -6944,7 +6948,9 @@ const CONFIG = {
     manualPause: 2.5,       // s sem decidir depois que o jogador mexe no herói (teclado ou clique)
     stuckTime: 6,           // s sem andar nem ferir o alvo: desiste dele por um tempo
     skipTime: 30,           // s ignorando um alvo travado (atrás de parede, fora do caminho)
-    lootTimeout: 25,        // s no fim do andar recolhendo o que sobrou no chão
+    lootTimeout: 25,        // s no fim do andar da torre recolhendo o que sobrou no chão
+    bossLootTime: 4,        // s na masmorra depois do chefe pegando os drops por perto antes de descer
+    towerStuckTimeout: 120, // s depois do chefe da torre com monstro vivo inalcançável: sobe mesmo assim
     nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
   monsters: {
@@ -12998,1182 +13004,6 @@ function clearLog() { dom('log').textContent = ''; }
 return { clearLog, log, setZoneText, toast };
 })();
 
-// ---- game/autoClear.js ----
-const { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud } = (() => {
-// ---------- Auto-Limpeza: tickets da Guardiã Nyx limpam andares de masmorra sozinhos ----------
-
-/** Tickets de Auto-Limpeza da masmorra na mochila. */
-function ticketCount(biome) {
-  const t = G.ch && G.ch.bag.find((b) => b.kind === 'ticket' && b.id === biome);
-  return t ? t.qty : 0;
-}
-function takeTicket(biome) {
-  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'ticket' && b.id === biome);
-  if (!t) return false;
-  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
-  return true;
-}
-/** Compra na Mercadora: devolve false sem Ouro ou sem espaço na mochila. */
-function buyTicket(biome, n = 1) {
-  const ch = G.ch;
-  n = Math.max(1, Math.floor(n) || 1);
-  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE * n) return false;
-  if (!addToBag({ kind: 'ticket', id: biome, qty: n, uid: 'k' + biome })) return false;
-  ch.gold -= R.TICKET_PRICE * n;
-  return true;
-}
-
-const autoClearOn = () => !!G.auto;
-/** A Auto-Limpeza decide os alvos agora (não está pausada pelo jogador)? */
-const autoSteering = () => !!G.auto && G.time >= G.auto.manualT;
-
-/**
- * Começa na masmorra escolhida, no andar mais fundo liberado. Cada andar gasta um
- * ticket ao entrar; com tickets sobrando, o herói desce sozinho depois do chefe.
- */
-function startAutoClear(biome) {
-  const ch = G.ch;
-  if (DUNGEON_ORDER.indexOf(biome) < 0 || !takeTicket(biome)) return false;
-  const floor = ch.unlockedFloors[biome] || 1;
-  G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, endT: 0, nextT: 0, skip: new Map(), tgt: null };
-  enterDungeon(biome, floor);
-  toast('Auto-Limpeza', BIOMES[biome].name + ' · andar ' + floor);
-  log('Auto-Limpeza: ' + BIOMES[biome].name + ', andar ' + floor + ' (nv ' + floorLevel(biome, floor) + '). O herói limpa o andar e enfrenta o chefe sozinho; mexer nele pausa a automação por um instante.', 'sys');
-  return true;
-}
-function stopAutoClear(msg, done) {
-  const a = G.auto;
-  if (!a) return;
-  G.auto = null;
-  const p = G.player;
-  if (p && p.alive) { p.target = null; p.path = null; }
-  const n = a.done;
-  const cleared = n + (n === 1 ? ' andar limpo' : ' andares limpos');
-  log('Auto-Limpeza ' + (done ? 'concluída' : 'encerrada') + (msg ? ': ' + msg : '') + '. ' + cleared + '.', 'sys');
-  toast(done ? 'Auto-Limpeza concluída' : 'Auto-Limpeza encerrada', done ? cleared : msg || cleared);
-  persist();
-}
-/** Chefe do andar caiu (combat.js): termina o que sobrou e segue para o próximo. */
-function autoBossDown() { if (G.auto) G.auto.bossDown = true; }
-
-const skipped = (a, ref) => (a.skip.get(ref) || 0) > G.time;
-function validTarget(t) {
-  if (!t) return false;
-  if (t.type === 'mon') return !t.m.dead;
-  if (t.type === 'loot') return G.loot.indexOf(t.l) >= 0;
-  return false;
-}
-/** Drops que valem a viagem: itens só com espaço na mochila. */
-const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < BAG_SIZE;
-const lootOk = (l) => G.time - l.born > 0.6 && lootOk2(l);
-function nearest(list, ok, maxD) {
-  const p = G.player;
-  let best = null, bd = maxD * maxD;
-  for (const o of list) {
-    if (!ok(o)) continue;
-    const d = (o.x - p.x) ** 2 + (o.z - p.z) ** 2;
-    if (d < bd) { bd = d; best = o; }
-  }
-  return best;
-}
-/**
- * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
- * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão.
- */
-function pickTarget(a) {
-  const ok = (m) => !m.dead && !skipped(a, m);
-  const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
-  if (fighting) return { type: 'mon', m: fighting };
-  const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), a.bossDown ? 1e4 : CONFIG.autoClear.lootRadius);
-  if (l) return { type: 'loot', l };
-  const m = nearest(G.monsters, (x) => ok(x) && !x.boss, 1e4) || nearest(G.monsters, ok, 1e4);
-  return m ? { type: 'mon', m } : null;
-}
-function aim(p, t) {
-  p.target = t;
-  if (t.type === 'mon') p.path = null; else pathTo(t.l.x, t.l.z);
-}
-/** Sem andar nem ferir o alvo por alguns segundos: deixa ele de lado por um tempo. */
-function watchStuck(a, p) {
-  const C = CONFIG.autoClear, t = p.target, ref = t.type === 'mon' ? t.m : t.l;
-  let s = a.tgt;
-  if (!s || s.ref !== ref) s = a.tgt = { ref, x: p.x, z: p.z, hp: t.type === 'mon' ? t.m.hp : 0, at: G.time };
-  const hp = t.type === 'mon' ? t.m.hp : 0;
-  if (Math.hypot(p.x - s.x, p.z - s.z) > 1.5 || hp < s.hp) { s.x = p.x; s.z = p.z; s.hp = hp; s.at = G.time; return; }
-  if (G.time - s.at > C.stuckTime) {
-    a.skip.set(ref, G.time + C.skipTime);
-    a.tgt = null; p.target = null; p.path = null;
-  }
-}
-function drinkPotions() {
-  const C = CONFIG.autoClear, st = G.st;
-  if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
-  else if (G.mp < st.maxMp * C.mpPotionBelow && potionCount('mp')) usePotion('mp');
-}
-function nextFloor(a) {
-  a.done++;
-  if (!takeTicket(a.biome)) {
-    stopAutoClear('os tickets acabaram', true);
-    return;
-  }
-  a.used++;
-  a.floor++;
-  a.bossDown = false; a.endT = 0; a.nextT = 0; a.tgt = null; a.skip.clear();
-  enterDungeon(a.biome, a.floor);
-  log('Auto-Limpeza: descendo para o andar ' + a.floor + ' (' + ticketCount(a.biome) + ' tickets restantes).', 'sys');
-}
-
-function updateAutoClear(dt) {
-  const a = G.auto, p = G.player, C = CONFIG.autoClear;
-  if (!a || !p || !G.ch) return;
-  // saiu da masmorra (portal para a cidade, renasceu em Aldrena, outra zona): fim
-  if (G.zone !== 'dungeon' || G.biome !== a.biome || G.floor !== a.floor) { stopAutoClear('o herói saiu do andar'); return; }
-  if (!p.alive) {
-    if (!a.deadT) a.deadT = G.time;
-    if (G.time - a.deadT < C.reviveDelay) return;
-    if (potionCount('rez') && revive()) { closeModal(); a.deadT = 0; a.tgt = null; return; }
-    stopAutoClear('o herói caiu sem Poção da Ressurreição');
-    return;
-  }
-  a.deadT = 0;
-  if (KEYS.any() || mouse.down) a.manualT = G.time + C.manualPause;
-  drinkPotions();
-  if (G.time < a.manualT || G.time < p.lockUntil || p.dash || p.dodge) return;
-  if ((a.thinkT -= dt) > 0) return;
-  a.thinkT = C.think;
-  if (validTarget(p.target)) { watchStuck(a, p); return; }
-  // depois do chefe, recolher o que sobrou no chão tem limite de tempo
-  if (a.bossDown && !a.endT && !G.monsters.some((m) => !m.dead)) a.endT = G.time;
-  const late = a.endT && G.time - a.endT > C.lootTimeout;
-  const t = late ? null : pickTarget(a);
-  if (t) { a.nextT = 0; aim(p, t); return; }
-  p.target = null;
-  if (!a.bossDown) return; // o chefe ainda está vivo mas fora de alcance por enquanto (travado): espera
-  // drops recém-caídos ainda no ar: espera pousarem antes de dar o andar por limpo
-  if (!late && G.loot.some((l) => G.time - l.born <= 0.6 && lootOk2(l))) return;
-  // andar limpo: uma pausa curta para ver o resultado e desce
-  if (!a.nextT) a.nextT = G.time + C.nextDelay;
-  if (G.time >= a.nextT) nextFloor(a);
-}
-
-// ---------- HUD: selo da Auto-Limpeza sob o minimapa, com o botão Parar ----------
-let hudEl = null, lastHtml = '';
-function updateAutoHud() {
-  if (!hudEl) {
-    hudEl = $('#autoClr');
-    if (!hudEl) return;
-    hudEl.addEventListener('pointerdown', (e) => { if (e.target.closest('[data-auto="stop"]')) { e.stopPropagation(); e.preventDefault(); stopAutoClear('parada pelo jogador'); } });
-  }
-  const a = G.auto;
-  if (!a) { if (!hudEl.hidden) { hudEl.hidden = true; lastHtml = ''; } return; }
-  const left = G.monsters.reduce((n, m) => n + (m.dead ? 0 : 1), 0), tk = ticketCount(a.biome);
-  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && !left ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
-  const html = '<div class="ac-h"><b>Auto-Limpeza</b><button class="btn sm" data-auto="stop">Parar</button></div>' +
-    '<div class="ac-s">Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
-    '<div class="ac-s">Monstros ' + left + ' · tickets ' + tk + ' · andares ' + a.done + '</div>';
-  if (html !== lastHtml) { lastHtml = html; hudEl.innerHTML = html; }
-  hudEl.hidden = false;
-}
-return { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud };
-})();
-
-// ---- ui/questUi.js ----
-const { initQuestUi, openQuestBoard, questTargetPos, questUiTick } = (() => {
-// ---------- interface das missões e auxílios do HUD ----------
-// Rastreador de missão (canto, recolhível), Quadro de Missões (janela), alvo da
-// missão no minimapa e no rótulo do NPC, selo "!" nos botões com pontos livres,
-// legenda dos ícones do menu no primeiro acesso.
-
-/** Pergaminho do rastreador recolhido. */
-const QUEST_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4"/><path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10"/><path d="M7 4a2 2 0 0 0-2 2v11"/><path d="M8.5 9h4.5M8.5 12.5h4.5"/></g></svg>';
-const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null };
-
-// ---------- alvo da missão (minimapa e rótulo) ----------
-/** Ponto do mundo que a missão atual aponta ({x, z}) ou null. Só na cidade. */
-function questTargetPos() {
-  const ch = G.ch;
-  if (!ch || !ch.quests || G.zone !== 'town') return null;
-  const step = currentOnboard(ch);
-  // missão de abate na cidade: a Guardiã dos portais é o caminho
-  const npcId = step ? step.npc || (step.id === 'kill' ? 'portal' : null) : null;
-  if (npcId) return G.npcs.find((n) => n.id === npcId) || null;
-  if (ch.quests.daily.some((d) => d.p >= d.n && !d.c)) return G.npcs.find((n) => n.id === 'board') || null;
-  return null;
-}
-/** Destaca o rótulo do NPC alvo com um "!". */
-function markTarget() {
-  const t = questTargetPos();
-  if (t === UIQ.target) return;
-  if (UIQ.target && UIQ.target.label) UIQ.target.label.classList.remove('qmark');
-  UIQ.target = t;
-  if (t && t.label) t.label.classList.add('qmark');
-}
-
-// ---------- rastreador ----------
-function trackerHtml(ch) {
-  const q = ch.quests, step = currentOnboard(ch);
-  const fold = S.settings.questFold === true;
-  const ready = q.daily.filter((d) => d.p >= d.n && !d.c).length;
-  const done = q.daily.filter((d) => d.p >= d.n).length;
-  let title, line = '', hint = '';
-  if (step) {
-    title = 'Primeiros passos ' + (q.ob + 1) + '/' + ONBOARD.length;
-    line = esc(step.text()) + (step.need > 1 ? ' <b class="num">' + q.obProg + '/' + step.need + '</b>' : '');
-    hint = step.id === 'stats' && !ch.points ? 'Suba de nível para ganhar pontos.' : step.hint;
-  } else {
-    title = 'Missões diárias ' + done + '/' + q.daily.length;
-    const next = q.daily.find((d) => d.p < d.n);
-    line = next ? esc(dailyText(next)) + ' <b class="num">' + next.p + '/' + next.n + '</b>' : 'Todas concluídas hoje.';
-    if (!ready) hint = 'Toque para ver o Quadro de Missões.';
-  }
-  if (ready) hint = '<b class="qt-ready">' + ready + (ready > 1 ? ' recompensas prontas' : ' recompensa pronta') + '</b> · resgate no Quadro de Missões' + (inSafe() ? '' : ', em Aldrena');
-  // recolhido: só o ícone de pergaminho (o título "Missões diárias 0/3" some)
-  if (fold) return { fold, ready, title, html: '' };
-  return { fold, ready, title, html: '<span class="qt-title">' + esc(title) + '</span><span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '') };
-}
-function renderTracker() {
-  const ch = G.ch;
-  if (!ch || !ch.quests || !UIQ.track) return;
-  const t = trackerHtml(ch);
-  const key = t.html + (t.fold ? 1 : 0) + t.ready;
-  if (key === UIQ.last) return;
-  UIQ.last = key;
-  UIQ.body.innerHTML = t.html;
-  UIQ.track.classList.toggle('fold', t.fold);
-  UIQ.track.classList.toggle('ready', t.ready > 0);
-  UIQ.head.setAttribute('aria-expanded', String(!t.fold));
-  UIQ.head.setAttribute('aria-label', t.fold ? 'Abrir rastreador de missão: ' + t.title : 'Recolher rastreador de missão');
-  UIQ.head.title = t.fold ? t.title + (t.ready ? ' · recompensa pronta' : '') : 'Recolher';
-  UIQ.head.innerHTML = t.fold ? QUEST_ICON : '▾';
-}
-
-// ---------- Quadro de Missões ----------
-function boardHtml() {
-  const ch = G.ch, q = ch.quests, town = inSafe();
-  let h = '<h3>Quadro de Missões</h3><div class="role">Missões iniciais e diárias de Aldrena</div>';
-  if (q.ob < ONBOARD.length) {
-    h += '<h4 class="qb-h">Primeiros passos</h4><div class="list">';
-    ONBOARD.forEach((s, i) => {
-      const st = i < q.ob ? 'done' : i === q.ob ? 'cur' : 'next';
-      const prog = st === 'cur' && s.need > 1 ? ' · ' + q.obProg + '/' + s.need : '';
-      h += '<div class="li qb-' + st + '"><span>' + (st === 'done' ? '✓ ' : '') + esc(s.text()) + prog + '</span><span class="a note">' + esc(rewardText(s.reward)) + '</span>' + (st === 'cur' ? '<span class="s">' + esc(s.hint) + '</span>' : '') + '</div>';
-    });
-    h += '</div><p class="note">A recompensa das missões iniciais chega na hora, onde você estiver.</p>';
-  }
-  h += '<h4 class="qb-h">Diárias de hoje</h4><div class="list">';
-  q.daily.forEach((d, i) => {
-    const ok = d.p >= d.n, pct = Math.min(100, (d.p / d.n) * 100).toFixed(0);
-    const btn = d.c ? '<button class="btn sm" disabled>Resgatada</button>'
-      : '<button class="btn sm' + (ok && town ? ' gold' : '') + '" data-q="claim" data-i="' + i + '"' + (ok && town ? '' : ' disabled') + '>Resgatar</button>';
-    h += '<div class="li qb-daily' + (d.c ? ' qb-done' : '') + '"><span>' + esc(dailyText(d)) + ' <b class="num">' + Math.min(d.p, d.n) + '/' + d.n + '</b></span><span class="a">' + btn + '</span>' +
-      '<span class="s"><span class="qb-bar"><i style="width:' + pct + '%"></i></span>' + esc(rewardText(d.r)) + '</span></div>';
-  });
-  h += '</div>';
-  h += '<p class="note">Resgate as três para ganhar também ' + esc(R.JEWELS[DAILY_BONUS.jewel].name) + ' e Ouro extra' + (q.bonus ? ' (já recebido hoje)' : '') + '. Novas missões à meia-noite (horário local).' +
-    (town ? '' : ' <b>Fora da cidade dá para acompanhar, mas o resgate é no quadro, em Aldrena.</b>') + '</p>';
-  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
-  return h;
-}
-/** Abre o Quadro de Missões (no quadro da praça ou pelo rastreador). */
-function openQuestBoard() {
-  if (!G.ch || !G.ch.quests) return;
-  questPoll();
-  G.openNpcId = 'board';
-  $('#dialog').innerHTML = boardHtml();
-  $('#modal').classList.remove('acct-on');
-  $('#modal').hidden = false;
-}
-function boardAction(e) {
-  const b = e.target.closest('[data-q]');
-  if (!b || b.disabled) return;
-  if (b.dataset.q === 'claim' && claimQuest(+b.dataset.i)) {
-    const dlg = $('#dialog'), top = dlg.scrollTop;
-    dlg.innerHTML = boardHtml();
-    dlg.scrollTop = top;
-  }
-}
-
-// ---------- selos "!" e legenda do menu ----------
-function updateBadges(ch) {
-  const pts = ch.points > 0, tree = R.treePoints(ch) - R.treeSpent(ch) > 0;
-  for (const [sel, on, tip] of [['char', pts, 'Pontos de atributo livres'], ['skills', tree, 'Pontos de maestria livres']]) {
-    for (const el of document.querySelectorAll('.menu [data-tab="' + sel + '"], #tabs [data-t="' + sel + '"]')) {
-      if (el.classList.contains('alert') === on) continue;
-      el.classList.toggle('alert', on);
-      if (on) el.dataset.alert = tip; else delete el.dataset.alert;
-    }
-  }
-  // menu recolhido no celular: o selo passa para a seta que abre o menu
-  const fold = document.getElementById('menuFold');
-  if (fold && fold.classList.contains('alert') !== (pts || tree)) fold.classList.toggle('alert', pts || tree);
-}
-/** Legenda dos ícones do menu: aparece no primeiro acesso e some com "Entendi" ou ao abrir um painel. */
-function showLegend() {
-  if (UIQ.legend || S.settings.menuHelpSeen) return;
-  const menu = $('.menu');
-  if (!menu) return;
-  const box = document.createElement('div');
-  box.className = 'menu-legend';
-  box.setAttribute('role', 'note');
-  let h = '<b>Menu</b>';
-  for (const btn of menu.querySelectorAll('button:not(.menu-fold)')) {
-    const svg = btn.querySelector('svg');
-    h += '<span class="ml-row">' + (svg ? svg.outerHTML : '') + esc(btn.dataset.tip || btn.getAttribute('aria-label') || '') + '</span>';
-  }
-  h += '<button class="btn sm" type="button">Entendi</button>';
-  box.innerHTML = h;
-  box.querySelector('button').addEventListener('click', hideLegend);
-  menu.parentNode.insertBefore(box, menu.nextSibling);
-  UIQ.legend = box;
-}
-function hideLegend() {
-  if (!UIQ.legend) return;
-  UIQ.legend.remove();
-  UIQ.legend = null;
-  S.settings.menuHelpSeen = true;
-  persist();
-}
-/** No toque não há "passar o mouse": o primeiro toque em cada ícone mostra o nome por 1,6 s. */
-function touchTips() {
-  for (const btn of document.querySelectorAll('.menu button[data-tip]')) {
-    btn.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;
-      btn.classList.add('tip-on');
-      clearTimeout(btn._tipT);
-      btn._tipT = setTimeout(() => btn.classList.remove('tip-on'), 1600);
-    });
-    btn.addEventListener('click', () => { if (UIQ.legend) hideLegend(); });
-  }
-}
-
-/** Atualização no ritmo do HUD (10×/s): progresso das missões, rastreador, selos e alvo. */
-function questUiTick() {
-  const ch = G.ch;
-  if (!ch) return;
-  if (UIQ.ch !== ch) { UIQ.ch = ch; UIQ.last = ''; UIQ.target = null; }
-  questPoll();
-  renderTracker();
-  markTarget();
-  updateBadges(ch);
-  if (!S.settings.menuHelpSeen && !UIQ.legend) showLegend();
-}
-
-/** Cria o rastreador dentro do HUD e liga os cliques do quadro. */
-function initQuestUi() {
-  const col = $('.topright');
-  const box = document.createElement('div');
-  box.className = 'qtrack';
-  box.id = 'qtrack';
-  box.innerHTML = '<button class="qt-fold" type="button" aria-label="Recolher ou abrir o rastreador de missão" aria-expanded="true">▾</button><div class="qt-body" role="button" tabindex="0" title="Abrir o Quadro de Missões"></div>';
-  col.appendChild(box);
-  UIQ.track = box;
-  UIQ.head = box.querySelector('.qt-fold');
-  UIQ.body = box.querySelector('.qt-body');
-  UIQ.head.addEventListener('click', (e) => { e.stopPropagation(); S.settings.questFold = S.settings.questFold !== true; persist(); renderTracker(); });
-  UIQ.body.addEventListener('click', openQuestBoard);
-  UIQ.body.addEventListener('keydown', (e) => { if (e.key === 'Enter') openQuestBoard(); });
-  touchTips();
-  $('#dialog').addEventListener('click', boardAction);
-}
-return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
-})();
-
-// ---- ui/cursor.js ----
-const { MCUR, initCursor, mcurSet } = (() => {
-// Cursor medieval desenhado pelo jogo: sempre visível (o sistema pode esconder o
-// ponteiro enquanto teclas são pressionadas, ex.: WASD/1–6 no Linux).
-
-const MCUR = { el: document.getElementById('mcur'), mode: '' };
-function mcurMode(t) {
-  if (!t || !t.closest) return '';
-  if (t.closest('input, textarea')) return 'text';
-  if (t.closest('button:not([disabled]), [data-act], .label, a, select, .slot, .cell, .cls')) return 'hand';
-  if (t === canvas && mouse.hover) return 'atk';
-  return '';
-}
-function mcurSet(m) {
-  if (m === MCUR.mode) return;
-  MCUR.mode = m;
-  MCUR.el.className = m === 'text' ? '' : m;
-  MCUR.el.style.visibility = m === 'text' ? 'hidden' : '';
-}
-/** Liga o cursor desenhado pelo jogo (uma única vez, no boot). */
-function initCursor() {
-  window.addEventListener('pointermove', (e) => {
-    if (e.pointerType === 'touch') { document.documentElement.classList.remove('swcur'); return; }
-    document.documentElement.classList.add('swcur');
-    MCUR.el.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)';
-    MCUR.x = e.clientX; MCUR.y = e.clientY;
-    mcurSet(mcurMode(e.target));
-  }, { passive: true });
-  document.addEventListener('mouseleave', () => (MCUR.el.style.visibility = 'hidden'));
-  document.addEventListener('mouseenter', () => (MCUR.el.style.visibility = ''));
-  window.addEventListener('blur', () => (MCUR.el.style.visibility = 'hidden'));
-  window.addEventListener('focus', () => (MCUR.el.style.visibility = ''));
-}
-return { MCUR, initCursor, mcurSet };
-})();
-
-// ---- input/picking.js ----
-const { clickWorld, pickMonster, screenToGround, updateHover } = (() => {
-// ---------- seleção no mundo: tela → chão, monstro, NPC, portal, barril ----------
-
-const raycaster = new THREE.Raycaster();
-const groundPlane = new THREE.Plane(new V3(0, 1, 0), 0);
-const ndc = new THREE.Vector2();
-/** Ponto do chão sob a posição de tela (px). Devolve um vetor novo (o chamador pode guardá-lo). */
-function screenToGround(sx, sy) {
-  ndc.set((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
-  raycaster.setFromCamera(ndc, camera);
-  const p = new V3();
-  // terreno com relevo: duas passadas contra um plano na altura local
-  groundPlane.constant = -(G.player ? gy(G.player.x, G.player.z) : 0);
-  if (!raycaster.ray.intersectPlane(groundPlane, p)) return null;
-  return p;
-}
-
-/** Monstro vivo mais próximo do ponto de tela (raio de 44 px; 90 px para chefes). */
-function pickMonster(sx, sy) {
-  let best = null, bd = 44 * 44;
-  for (const m of G.monsters) {
-    if (m.dead) continue;
-    const s = toScreen(m.x, m.model.height * 0.5, m.z);
-    if (!s.vis) continue;
-    const rr = m.boss ? 90 : 44;
-    const d = (s.x - sx) ** 2 + (s.y - sy) ** 2;
-    if (d < rr * rr && d < bd) { bd = d; best = m; }
-  }
-  return best;
-}
-function pickNpc(sx, sy) {
-  let best = null, bd = 50 * 50;
-  for (const n of G.npcs) {
-    const s = toScreen(n.x, 1.2, n.z);
-    const d = (s.x - sx) ** 2 + (s.y - sy) ** 2;
-    if (d < bd) { bd = d; best = n; }
-  }
-  return best;
-}
-function pickBreakable(sx, sy) {
-  for (const b of G.breakables) {
-    if (b.broken) continue;
-    const s = toScreen(b.x, 0.5, b.z);
-    if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 32 * 32) return b;
-  }
-  return null;
-}
-/** Clique no mundo: monstro > portal > NPC > barril > chão. `fromHold` = botão segurado (só persegue/anda). */
-function clickWorld(sx, sy, fromHold) {
-  const p = G.player;
-  if (!p.alive) return;
-  const m = pickMonster(sx, sy);
-  if (m) { p.target = { type: 'mon', m }; p.path = null; return; }
-  if (fromHold && p.target && p.target.type === 'mon') return;
-  if (!fromHold) {
-    for (const pt of allPortals()) {
-      const s = toScreen(pt.x, 1.8, pt.z);
-      if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 60 * 60) { p.target = { type: 'portal', p: pt }; pathTo(pt.x, pt.z); return; }
-    }
-    const n = G.npcs.length && pickNpc(sx, sy);
-    if (n) { targetNpc(n); return; }
-    const b = pickBreakable(sx, sy);
-    if (b) { p.target = { type: 'barrel', b }; pathTo(b.x, b.z); return; }
-  }
-  const g = screenToGround(sx, sy);
-  if (!g) return;
-  p.target = null;
-  cancelChannel();
-  pathTo(g.x, g.z);
-  if (!fromHold) spawnRing(g.x, g.z, 0.9, 0.2, 0xffe0a0, 0.35);
-}
-
-/** Atualiza o monstro sob o cursor (1× por quadro, não a cada pointermove) e o cursor de ataque. */
-// toque não tem cursor pairando: a busca de monstro sob o último toque roda a ~4 vezes por segundo
-let touchOnly = false, touchT = 0;
-if (typeof window === 'object') {
-  window.addEventListener('pointerdown', (e) => { touchOnly = e.pointerType === 'touch'; }, { capture: true, passive: true });
-  window.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') touchOnly = false; }, { capture: true, passive: true });
-}
-function updateHover() {
-  if (G.paused) return;
-  if (touchOnly) { const now = performance.now(); if (now - touchT < 250) return; touchT = now; }
-  const m = pickMonster(mouse.x, mouse.y);
-  if (m === mouse.hover) return;
-  mouse.hover = m;
-  if (MCUR.mode === '' || MCUR.mode === 'atk') mcurSet(m ? 'atk' : '');
-}
-return { clickWorld, pickMonster, screenToGround, updateHover };
-})();
-
-// ---- game/dodge.js ----
-const { dodgeLeft, tryDodge, updateDodge } = (() => {
-// ---------- esquiva: passo curto com invulnerabilidade (Shift no PC, botão no toque) ----------
-// Direção: teclas de movimento, se houver; senão o cursor (PC) ou o caminho que o
-// herói segue (toque); por último, para onde ele está virado. Para na parede: o
-// passo é testado com o raio do herói, como os empurrões das habilidades.
-
-/** Segundos até a esquiva voltar (0 = pronta). */
-function dodgeLeft() {
-  const p = G.player;
-  return p ? Math.max(0, (p.dodgeReadyAt || 0) - G.time) : 0;
-}
-/** Direção da esquiva (vetor unitário) ou null. */
-function dodgeDir(p, useCursor) {
-  let dx = 0, dz = 0;
-  if (KEYS.any()) {
-    const fx = -Math.sin(CAM.yaw), fz = -Math.cos(CAM.yaw);
-    if (KEYS.w) { dx += fx; dz += fz; }
-    if (KEYS.s) { dx -= fx; dz -= fz; }
-    if (KEYS.a) { dx += fz; dz -= fx; }
-    if (KEYS.d) { dx -= fz; dz += fx; }
-  }
-  if (!dx && !dz && useCursor) {
-    const g = screenToGround(mouse.x, mouse.y);
-    if (g) { dx = g.x - p.x; dz = g.z - p.z; }
-  }
-  if ((!dx && !dz) || Math.hypot(dx, dz) < 0.3) {
-    const n = p.path && p.path[0];
-    if (n && Math.hypot(n.x - p.x, n.z - p.z) > 0.3) { dx = n.x - p.x; dz = n.z - p.z; }
-    else { dx = Math.sin(p.rot); dz = Math.cos(p.rot); }
-  }
-  const l = Math.hypot(dx, dz);
-  return l ? { x: dx / l, z: dz / l } : null;
-}
-/**
- * Tenta esquivar. `useCursor`: no PC, a direção segue o cursor quando não há
- * tecla de movimento. Cancela a canalização do portal e interrompe a trava de
- * habilidade leve (não a investida nem o salto). Devolve true se esquivou.
- */
-function tryDodge(useCursor) {
-  const p = G.player, C = CONFIG.dodge;
-  if (G.mode !== 'play' || G.paused || !p || !p.alive || p.dodge || p.dash || p.hop) return false;
-  if (G.time < (p.dodgeReadyAt || 0)) return false;
-  const dir = dodgeDir(p, useCursor);
-  if (!dir) return false;
-  cancelChannel();
-  p.dodge = { t: 0, dur: C.dur, dist: C.dist, dx: dir.x, dz: dir.z, ghost: 0 };
-  p.dodgeReadyAt = G.time + C.cd;
-  p.invulnUntil = Math.max(p.invulnUntil || 0, G.time + C.invuln);
-  p.path = null; p.target = null; p.lockUntil = 0; p.castFace = null;
-  p.rot = p.rotTarget = Math.atan2(dir.x, dir.z);
-  emit(p.x, 0.2, p.z, { n: 14, color: 0xd8c8a8, speed: 3, up: 0.6, life: 0.45, size: 0.9, spread: 0.6 });
-  Sfx.swing();
-  return true;
-}
-/** Deslocamento da esquiva (rápido no começo, freia no fim); para ou desliza na parede. */
-function updateDodge(p, dt) {
-  const d = p.dodge;
-  const k0 = Math.min(1, d.t / d.dur);
-  d.t += dt;
-  const k1 = Math.min(1, d.t / d.dur);
-  const ease = (k) => 1 - (1 - k) * (1 - k);
-  const step = d.dist * (ease(k1) - ease(k0));
-  const r = CONFIG.player.radius, nx = p.x + d.dx * step, nz = p.z + d.dz * step;
-  if (walkableR(G.L, nx, nz, r)) { p.x = nx; p.z = nz; }
-  else if (walkableR(G.L, nx, p.z, r)) p.x = nx;
-  else if (walkableR(G.L, p.x, nz, r)) p.z = nz;
-  else d.t = d.dur; // parede de frente: termina aqui
-  if (d.t - d.ghost > 0.05 && k1 < 0.85) { d.ghost = d.t; afterimage(p.x, p.z, p.rot, 0xcfd8ff, 0.25); }
-  if (d.t >= d.dur) p.dodge = null;
-}
-return { dodgeLeft, tryDodge, updateDodge };
-})();
-
-// ---- ui/feedback.js ----
-const { hurtFeedback, updateLowHp } = (() => {
-// ---------- retorno visual de dano e vida baixa (vinheta vermelha) ----------
-
-const fx = { el: null, anim: null };
-function el() { return fx.el || (fx.el = $('#hurtfx')); }
-
-/** Pulso vermelho proporcional à fração de vida perdida no golpe. */
-function hurtFeedback(frac) {
-  const e = el();
-  if (!e || !(frac > 0)) return;
-  const peak = Math.min(0.55, 0.15 + frac * 2.5);
-  if (fx.anim) fx.anim.cancel();
-  fx.anim = e.animate([{ opacity: peak }, { opacity: 0 }], { duration: 380, easing: 'ease-out' });
-}
-/** Aviso persistente (pulsante) enquanto a vida estiver abaixo do limite configurado. */
-function updateLowHp(hpFrac, alive) {
-  const e = el();
-  if (e) e.classList.toggle('low', alive && hpFrac < CONFIG.feel.lowHpWarn);
-}
-return { hurtFeedback, updateLowHp };
-})();
-
-// ---- ui/hud.js ----
-const { buildSlots, hudTick, resetHudCache } = (() => {
-// ---------- barra de habilidades e HUD (orbes, EXP, chefe, buffs) ----------
-
-const slotRefs = [];
-const DODGE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3a2e52"/><stop offset="1" stop-color="#14101c"/></radialGradient></defs>' +
-  '<rect width="64" height="64" fill="url(#g)"/><g fill="none" stroke="#e8d08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 44c9-3 15-11 22-22"/><path d="M24 20h11v11"/></g>' +
-  '<g fill="none" stroke="#e8d08a" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"><path d="M10 54h16"/><path d="M38 46c6 0 11-3 16-8"/></g>' +
-  '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>');
-/** Recria a barra de habilidades (troca de habilidades, evolução, novo personagem). */
-function buildSlots() {
-  const box = $('#slots');
-  box.innerHTML = '';
-  slotRefs.length = 0;
-  const ch = G.ch;
-  for (let i = 0; i < 6; i++) {
-    const id = ch.skillBar[i];
-    const sk = id && R.SKILLS[id];
-    const el = document.createElement('button');
-    el.className = 'slot sk' + (i === G.selectedSlot ? ' sel' : '');
-    el.dataset.slot = i;
-    if (sk) { el.classList.add('has'); el.style.backgroundImage = 'url("' + skillIconURI(id) + '")'; }
-    el.innerHTML = '<kbd>' + (i + 1) + '</kbd>' + (sk ? '<span class="sn">' + esc(sk.name) + '</span>' : '<span style="color:#5a506a">—</span>') + '<i class="cd"></i>';
-    el.title = sk ? sk.name + ' · MP ' + sk.mp + ' · AG ' + sk.ag + (i === G.selectedSlot ? ' · botão direito' : '') : 'Vazio';
-    el.setAttribute('aria-label', sk ? sk.name : 'Habilidade ' + (i + 1) + ': vazio');
-    el.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      Sfx.init();
-      if (e.pointerType === 'touch' || e.pointerType === 'pen') requestCast(i);
-      else { G.selectedSlot = i; buildSlots(); }
-    });
-    box.appendChild(el);
-    slotRefs.push({ i, el, cd: el.querySelector('.cd'), h: null, no: null });
-  }
-  // esquiva: casa fixa entre as habilidades e as poções (Shift no PC, toque no celular)
-  {
-    const el = document.createElement('button');
-    el.className = 'slot dodge has';
-    el.style.backgroundImage = 'url("' + DODGE_ICON + '")';
-    el.title = 'Esquiva · Shift · passo rápido sem receber dano';
-    el.setAttribute('aria-label', 'Esquiva');
-    el.innerHTML = '<kbd>Shift</kbd><span class="sn">Esquiva</span><i class="cd"></i>';
-    el.addEventListener('pointerdown', (e) => {
-      e.stopPropagation(); e.preventDefault();
-      Sfx.init();
-      tryDodge(false);
-    });
-    box.appendChild(el);
-    slotRefs.push({ dodge: true, el, cd: el.querySelector('.cd'), h: null });
-  }
-  for (const id of ['hp', 'mp']) {
-    const el = document.createElement('button');
-    el.className = 'slot pot-' + id;
-    el.setAttribute('aria-label', id === 'hp' ? 'Poção de Vida' : 'Poção de Mana');
-    el.style.backgroundImage = 'url("' + iconURI('potion', id === 'hp' ? '#e8483a' : '#3a78e8') + '"), radial-gradient(circle at 50% 45%, ' + (id === 'hp' ? '#4a1414' : '#14204a') + ', #0c0910 80%)';
-    el.classList.add('has', 'pot');
-    el.innerHTML = '<kbd>' + (id === 'hp' ? 'Q' : 'E') + '</kbd><span class="sn">' + (id === 'hp' ? 'Vida' : 'Mana') + '</span><span class="q num" data-pot="' + id + '"></span>';
-    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); usePotion(id); });
-    box.appendChild(el);
-    slotRefs.push({ pot: id, el, q: el.querySelector('.q'), qty: null });
-  }
-}
-
-// ---------- HUD ----------
-// Referências de DOM em cache e escrita só quando o valor exibido muda (o HUD
-// roda 10×/s; a maioria dos campos fica igual entre atualizações).
-const H = {};
-const last = new Map();
-function ref(id) { return H[id] || (H[id] = $('#' + id)); }
-function setText(id, v) { if (last.get(id) !== v) { last.set(id, v); ref(id).textContent = v; } }
-function setHtml(id, v) { if (last.get(id) !== v) { last.set(id, v); ref(id).innerHTML = v; } }
-function setStyle(id, prop, v) { const k = id + '.' + prop; if (last.get(k) !== v) { last.set(k, v); ref(id).style[prop] = v; } }
-function setVar(id, name, v) { const k = id + '--' + name; if (last.get(k) !== v) { last.set(k, v); ref(id).style.setProperty(name, v); } }
-/** Força a próxima atualização a reescrever tudo (troca de personagem). */
-function resetHudCache() { last.clear(); }
-
-/** Tempo de buff: "42s" ou "9:58" (poções de reforço duram 10 minutos). */
-const buffLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : Math.ceil(s) + 's');
-const SHRINE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#4a3a18"/><stop offset="1" stop-color="#140e06"/></radialGradient></defs>' +
-  '<rect width="64" height="64" fill="url(#g)"/><path d="M32 8l6 16 17 1-13 11 5 17-15-10-15 10 5-17L9 25l17-1z" fill="#f2cf7a" stroke="#6a4a14" stroke-width="2" stroke-linejoin="round"/></svg>');
-const PET_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="#e8d08a"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg>');
-/** Ícone do buff: habilidade, poção de reforço, santuário (Éden/Torre) ou pet. */
-function buffIcon(b) {
-  if (b.id === 'pet') return ['pet', PET_ICON];
-  if (R.SKILLS[b.id]) return ['', skillIconURI(b.id)];
-  const pot = b.id && b.id.indexOf('pot:') === 0 && R.POTIONS[b.id.slice(4)];
-  if (pot) return ['pot', iconURI('potion', pot.color)];
-  return ['shrine', SHRINE_ICON];
-}
-function buffHtml(b, left) {
-  const [cls, uri] = buffIcon(b), t = buffLeft(left);
-  return '<span class="buff ' + cls + (left < 10 ? ' end' : '') + '" style="background-image:url(&quot;' + uri + '&quot;)" title="' + esc(b.name) + '" role="img" aria-label="' + esc(b.name) + ' ' + t + '"><b>' + t + '</b></span>';
-}
-function hudTick() {
-  const ch = G.ch, st = G.st;
-  if (!ch || !st) return;
-  const hpFrac = Math.max(0, G.hp / st.maxHp);
-  setVar('orbHp', '--fill', hpFrac.toFixed(3));
-  setVar('orbMp', '--fill', Math.max(0, G.mp / st.maxMp).toFixed(3));
-  setText('hpTxt', fmt(Math.max(0, G.hp)));
-  setText('mpTxt', fmt(G.mp));
-  setStyle('agFill', 'width', ((G.ag / st.maxAg) * 100).toFixed(1) + '%');
-  setText('agTxt', 'AG ' + fmt(G.ag) + ' / ' + fmt(st.maxAg));
-  const pct = ch.level >= R.RATES.maxLevel ? 100 : (ch.exp / R.expToNext(ch.level)) * 100;
-  setStyle('expFill', 'width', pct.toFixed(2) + '%');
-  setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
-  setText('rateTxt', 'EXP ' + R.expRate(ch.resets) + 'x');
-  // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
-  setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
-  const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
-  if (ig && ig.textContent !== gt) ig.textContent = gt;
-  const tb = ref('tbItems'), on = !!G.showAllLabels;
-  if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
-  updateSlotStates(ch, st);
-  updateBossBar();
-  updateAutoHud();
-  setHtml('buffs', G.buffs.map((x) => buffHtml(x, x.until - G.time)).join('') +
-    (G.pet && G.pet.away > G.time ? buffHtml({ id: 'pet', name: 'Pet vendendo' }, G.pet.away - G.time) : ''));
-  updateLowHp(hpFrac, G.player.alive);
-}
-function updateSlotStates(ch, st) {
-  for (const s of slotRefs) {
-    if (s.dodge) {
-      const left = dodgeLeft();
-      const h = left > 0 ? Math.min(100, (left / CONFIG.dodge.cd) * 100).toFixed(1) + '%' : '0';
-      if (s.h !== h) { s.h = h; s.cd.style.height = h; s.el.classList.toggle('cooling', left > 0); }
-      continue;
-    }
-    if (s.pot) { const n = String(potionCount(s.pot)); if (s.qty !== n) { s.qty = n; s.q.textContent = n; } continue; }
-    const id = ch.skillBar[s.i];
-    if (!id) continue;
-    const sk = R.SKILLS[id];
-    const left = cdLeft(id);
-    const h = left > 0 ? Math.min(100, (left / (sk.cd * (1 + st.cdPct / 100))) * 100).toFixed(1) + '%' : '0';
-    if (s.h !== h) { s.h = h; s.cd.style.height = h; }
-    const c = R.skillCost(st, sk);
-    const no = G.mp < c.mp || G.ag < c.ag;
-    if (s.no !== no) { s.no = no; s.el.classList.toggle('nomana', no); }
-  }
-}
-function updateBossBar() {
-  const b = G.boss;
-  const show = !!(b && !b.dead && b.aggro);
-  if (last.get('boss') !== show) { last.set('boss', show); ref('bossbar').hidden = !show; }
-  if (!show) return;
-  setText('bossName', b.name + ' · nv ' + b.level);
-  setStyle('bossFill', 'width', ((b.hp / b.maxHp) * 100).toFixed(1) + '%');
-}
-return { buildSlots, hudTick, resetHudCache };
-})();
-
-// ---- ui/npcDialogs.js ----
-const { closeModal, confirmDescend, initDialogs, openNpc, showDeath } = (() => {
-// ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
-
-function modal(html) { $('#dialog').innerHTML = html; $('#modal').classList.remove('acct-on'); $('#modal').hidden = false; }
-function closeModal() { $('#modal').hidden = true; }
-const SELL_CATS = { all: 'Todos', jewel: 'Joias', potion: 'Poções' };
-const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');
-/** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
-const sellListed = (it) => !it.slot;
-/** Joias pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket';
-/** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
-const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
-/** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
-let merchItems = [], smithItems = [];
-function sellSection(ch) {
-  merchItems = ch.bag.slice();
-  const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
-  const cnt = { all: 0, jewel: 0, potion: 0 };
-  ch.bag.forEach((it) => { if (!sellListed(it)) return; cnt.all++; const c = sellCat(it); if (c in cnt) cnt[c]++; });
-  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Vender item</h4>';
-  h += '<div class="btabs">' + Object.keys(SELL_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="sellf" data-k="' + k + '">' + SELL_CATS[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
-  const idx = [];
-  ch.bag.forEach((it, i) => { if (sellListed(it) && (f === 'all' || sellCat(it) === f)) idx.push(i); });
-  idx.sort((a, b) => R.sellValue(ch.bag[b], 1) - R.sellValue(ch.bag[a], 1));
-  if (!idx.length) return h + '<p class="note">Nada ' + (f === 'all' ? 'na mochila' : 'desta categoria na mochila') + ' para vender.</p>';
-  const cf = UI.merchConfirm && ch.bag.includes(UI.merchConfirm.it) ? UI.merchConfirm : null;
-  h += '<div class="list selllist">';
-  idx.forEach((i) => {
-    const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · você tem ' + q;
-    let a;
-    if (it.locked) a = '<button class="btn sm" disabled>Trancado</button>';
-    else if (cf && cf.it === it) {
-      a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
-    } else {
-      a = q > 1
-        ? '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">×1 · ' + fmt(R.sellValue(it, 1)) + '</button><button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="' + q + '">Tudo · ' + fmt(R.sellValue(it)) + '</button>'
-        : '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">Vender · ' + fmt(R.sellValue(it)) + '</button>';
-    }
-    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" title="' + esc(R.itemName(it)) + '" style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + q : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + (cf && cf.it === it ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
-  });
-  return h + '</div>';
-}
-function sellFromBag(ch, li, n, confirmed) {
-  // confere o item da lista na mochila agora (o pet ou uma poção podem ter mudado as posições)
-  const it = merchItems[li], i = it ? ch.bag.indexOf(it) : -1;
-  if (i < 0 || !sellListed(it) || it.locked) { UI.merchConfirm = null; return; }
-  const q = it.qty || 1;
-  n = Math.max(1, Math.min(n || 1, q));
-  if (sellNeedsConfirm(it) && !confirmed) { UI.merchConfirm = { it, n }; return; }
-  UI.merchConfirm = null;
-  const gold = R.sellValue(it, n);
-  ch.gold += gold;
-  if (n >= q) ch.bag.splice(i, 1); else it.qty = q - n;
-  UI.sel = null;
-  log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' de Ouro.', 'loot');
-  Sfx.coin();
-}
-/** Tickets de Auto-Limpeza na Mercadora: um por masmorra, compra com confirmação (são caros). */
-function ticketSection(ch) {
-  const P = R.TICKET_PRICE;
-  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
-  R.TICKET_IDS.forEach((k) => {
-    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k, cn = UI.tkN || 1;
-    const btn = (n) => '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + n + '"' + (ch.gold >= P * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(P * n) + '</button>';
-    const a = cf
-      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + cn + '" data-ok="1">Confirmar ×' + cn + ' · ' + fmt(P * cn) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
-      : btn(1) + btn(10);
-    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
-  });
-  return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
-}
-function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
-/** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
-function takeTalisman() {
-  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'talisman' && b.id === 'luck');
-  if (!t) return false;
-  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
-  return true;
-}
-/** Evolução de asa (asa normal +12 → Ascendida): custo, chance e o que acontece na falha. */
-function wingUpSection(sel, cnt, useT, tal) {
-  const W = R.WING_UP, pl = sel.plus || 0;
-  let h = '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evoluir asa</h4>';
-  if (sel.stage) return h + '<p class="note">Esta asa já é Ascendida: maior, com mais penas e +10% de dano, +6% de absorção e +5% de HP. Continue refinando até +15.</p>';
-  const c = R.wingUpgradeChance(sel);
-  const need = Object.keys(W.jewels);
-  const have = need.every((j) => cnt(j) >= W.jewels[j]);
-  h += '<p class="note">Vira <b>' + esc(R.itemName(Object.assign({}, sel, { stage: 1, plus: 0 }))) + '</b>: asa maior e mais detalhada, +10% de dano, +6% de absorção e +5% de HP. Mantém o +nível no sucesso.</p>';
-  h += '<p class="note">Custo: ' + need.map((j) => '<span style="color:' + R.JEWELS[j].color + '">' + W.jewels[j] + ' ' + R.JEWELS[j].name + '</span> (' + cnt(j) + ')').join(' · ') + '. As joias são gastas mesmo se falhar.</p>';
-  h += '<p class="note">Chance: 10% com a asa +12 e +5% a cada nível acima (+13: 15%, +14: 20%, +15: 25%).</p>';
-  const fail = useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: a asa volta a +0.' + (tal ? ' Ligue o Talismã da Sorte acima para proteger.' : '');
-  h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
-  return h;
-}
-/** Equipamentos que o Ferreiro aceita: os equipados (na ordem dos slots) e os da mochila. */
-const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot).sort(smithOrder));
-/** Mochila no Ferreiro: por tipo de peça, depois tier, raridade e +nível (maiores primeiro). */
-const smithOrder = (a, b) => R.SLOTS.indexOf(a.slot) - R.SLOTS.indexOf(b.slot) || b.tier - a.tier ||
-  R.RARITY[b.rarity].order - R.RARITY[a.rarity].order || (b.plus || 0) - (a.plus || 0);
-const SMITH_VIEW = { all: 'Todos', eq: 'Equipados', bag: 'Na mochila' };
-const isEquipped = (ch, it) => ch.equip[it.slot] === it;
-/** Nome sem o "+N" do final (o +nível aparece num selo sobre o ícone). */
-const baseName = (it) => R.itemName(it).replace(/ \+\d+$/, '');
-const tierTxt = (it) => 'Tier ' + (it.tier + 1);
-/** Cartão de item da lista do Ferreiro: ícone com +nível, nome na cor da raridade, tier, tipo e selo de equipado. */
-function smithCard(ch, x, i, sel) {
-  const eq = isEquipped(ch, x), pl = x.plus || 0, other = !classOk(x);
-  return '<button class="sm-it' + (x === sel ? ' on' : '') + (eq ? ' eq' : '') + (other ? ' other' : '') + '" data-npc="smithsel" data-i="' + i + '" style="--rc:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' +
-    '<span class="ic">' + iconHtml(glyph(x)) + (pl ? '<b class="pl">+' + pl + '</b>' : '') + '</span>' +
-    '<span class="tx"><span class="nm">' + esc(baseName(x)) + '</span><span class="mt"><b class="tr">T' + (x.tier + 1) + '</b>' +
-    (eq ? '<span class="tag eq">Equipado</span> ' : other ? '<span class="tag ot">Outra classe</span> ' : '') + R.SLOT_LABEL[x.slot] + ' · ' + R.RARITY[x.rarity].name + '</span></span></button>';
-}
-/** Cabeçalho do item escolhido: ícone grande, tier, raridade, onde está, CP e opções especiais. */
-function smithSelHtml(ch, it) {
-  const eq = isEquipped(ch, it), pl = it.plus || 0, col = R.RARITY[it.rarity].color, cur = ch.equip[it.slot];
-  const opts = [];
-  if (it.luck) opts.push('Sorte');
-  if (it.skill) opts.push('Habilidade');
-  if (it.addOpt) opts.push('Opção adicional +' + it.addOpt);
-  const nx = R.excOpts(it).length;
-  if (nx) opts.push(nx + (nx === 1 ? ' opção excelente' : ' opções excelentes'));
-  if (it.anc) opts.push('Ancestral');
-  if (it.legend) opts.push('Lendário');
-  let h = '<div class="sm-sel" style="--rc:' + col + '"><span class="ic">' + iconHtml(glyph(it)) + '</span><div class="tx">' +
-    '<div class="nm">' + esc(R.itemName(it)) + '</div>' +
-    '<div class="mt">' + R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · <b class="tr">' + tierTxt(it) + '</b> de 10 · <b class="pl">+' + pl + '</b> · CP ' + fmtCP(R.itemCP(it)) + '</div>' +
-    '<div class="mt">' + (eq ? '<span class="tag eq">Equipado</span>' : '<span class="tag bag">Na mochila</span>') +
-    (!classOk(it) ? ' <span class="tag ot">Exclusivo de ' + esc(R.itemUsers(it).join(', ')) + '</span>' : '') + '</div>' +
-    (!eq && classOk(it) ? '<div class="mt">' + (cur ? 'Equipado no slot: <b style="color:' + R.RARITY[cur.rarity].color + '">' + esc(R.itemName(cur)) + '</b> (' + tierTxt(cur) + ')' : 'Slot de ' + R.SLOT_LABEL[it.slot].toLowerCase() + ' vazio') + '</div>' : '') +
-    (opts.length ? '<div class="mt op">' + opts.join(' · ') + '</div>' : '') + '</div></div>';
-  return h;
-}
-/** O item escolhido no Ferreiro ainda é do herói (equipado ou na mochila)? */
-const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
-function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
-function openNpc(id) {
-  if (id === 'board') { openQuestBoard(); return; } // Quadro de Missões (ui/questUi.js)
-  questEvent('talk', id);
-  if (G.openNpcId !== id || $('#modal').hidden) { UI.merchConfirm = null; UI.npcConfirm = null; }
-  G.openNpcId = id;
-  const ch = G.ch;
-  let h = npcHead(id);
-  if (id === 'portal') {
-    // cor pela diferença de nível (verde / amarelo / vermelho) e destaque da masmorra recomendada:
-    // a de monstros mais fortes que ainda não passam de 5 níveis acima do herói
-    const RISK = { easy: 'Fácil demais (pouca EXP)', ok: 'Adequado ao seu nível', hard: 'Desafiador', deadly: 'Perigoso para o seu nível' };
-    let rec = null, recLv = -1;
-    DUNGEON_ORDER.forEach((k) => {
-      const maxF = ch.unlockedFloors[k] || 1;
-      for (const f of [1, maxF]) { const lv = floorLevel(k, f); if (R.levelRisk(lv, ch.level) === 'ok' && lv > recLv) { recLv = lv; rec = k; } }
-    });
-    h += '<div class="dungeons">';
-    DUNGEON_ORDER.forEach((k) => {
-      const B = BIOMES[k];
-      const maxF = ch.unlockedFloors[k] || 1;
-      const lv1 = floorLevel(k, 1), lv = floorLevel(k, maxF);
-      const r1 = R.levelRisk(lv1, ch.level), rMax = R.levelRisk(lv, ch.level);
-      const btn = (f, risk, gold) => '<button class="btn sm risk-' + risk + (gold ? ' gold' : '') + '" data-npc="go" data-b="' + k + '" data-f="' + f + '" title="' + RISK[risk] + '">Andar ' + f + '</button>';
-      const tk = ticketCount(k);
-      h += '<div class="dg risk-' + r1 + (k === rec ? ' rec' : '') + '"><div><b>' + esc(B.name) + '</b>' + (k === rec ? ' <span class="tag-rec">Recomendada</span>' : '') +
-        '<div class="s">Monstros nv ' + lv1 + '+ · mais fundo liberado: andar ' + maxF + ' (nv ' + lv + ')</div>' +
-        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div>' +
-        '<div class="s tk">' + esc(R.TICKETS[k].name) + ': <b style="font:inherit;color:' + (tk ? R.TICKETS[k].color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · Auto-Limpeza a partir do andar ' + maxF : ' · compre com a Mercadora') + '</div></div><div class="row">' +
-        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') +
-        '<button class="btn sm auto risk-' + rMax + (tk ? ' gold' : '') + '" data-npc="auto" data-b="' + k + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + maxF + ' e segue enquanto houver tickets' : 'Sem tickets desta masmorra') + '">Auto-Limpeza</button></div></div>';
-    });
-    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>' +
-      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, recolhe os drops, derrota o chefe e desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
-  } else if (id === 'tower') {
-    const best = ch.towerBest || 1, T = R.TOWER;
-    const row = (f, gold) => {
-      const B = BIOMES[towerBiome(f, T.biomeEvery)], m = R.towerMod(f);
-      return '<div class="dg risk-' + R.levelRisk(R.towerLevel(f), ch.level) + '"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + dec(m.hp, 2) + ' · dano ×' + dec(m.dmg, 2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
-    };
-    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
-    h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
-      '<p class="note">Drops: só Ouro (o dobro de um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Joia aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Ouro e Joias.</p>';
-  } else if (id === 'eden') {
-    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = R.edenEntryLevel(ch.level);
-    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível − 15%) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
-      (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
-    h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
-      '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
-      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
-  } else if (id === 'smith') {
-    const all = smithList(ch);
-    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
-    // filtros: onde está (todos/equipados/mochila) e tipo de peça (só os tipos que o herói tem)
-    const view = SMITH_VIEW[UI.smithView] ? UI.smithView : 'all';
-    const kinds = R.SLOTS.filter((s) => all.some((x) => x.slot === s));
-    const kind = kinds.includes(UI.smithSlot) ? UI.smithSlot : 'all';
-    const vcnt = { all: all.length, eq: nEq, bag: all.length - nEq };
-    const items = all.filter((x) => (view === 'all' || (view === 'eq') === isEquipped(ch, x)) && (kind === 'all' || x.slot === kind));
-    smithItems = items;
-    const sel = items.find((x) => x === UI.smithSel) || items[0];
-    UI.smithSel = sel;
-    const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
-    h += '<div class="btabs">' + Object.keys(SMITH_VIEW).map((k) => '<button class="btab' + (view === k ? ' on' : '') + '" data-npc="smithview" data-k="' + k + '">' + SMITH_VIEW[k] + ' <span>' + vcnt[k] + '</span></button>').join('') + '</div>';
-    if (kinds.length > 1) h += '<div class="sm-kinds">' + ['all'].concat(kinds).map((s) => '<button class="chip' + (kind === s ? ' on' : '') + '" data-npc="smithslot" data-k="' + s + '">' + (s === 'all' ? 'Todos os tipos' : R.SLOT_LABEL[s]) + '</button>').join('') + '</div>';
-    h += '<div class="smithlist">' + (items.length ? items.map((x, i) => smithCard(ch, x, i, sel)).join('') : '<p class="note">Nenhum equipamento neste filtro.</p>') + '</div>';
-    if (sel) {
-      const tal = talismanCount();
-      if (!tal) UI.smithTalisman = false;
-      const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
-      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar</h4>';
-      h += smithSelHtml(ch, sel);
-      // Talismã da Sorte: liga/desliga; protege a fusão do Caos (a única que volta o item a +0)
-      const tg = { kind: 'talisman', id: 'luck' };
-      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão do Caos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão do Caos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
-      h += '<div class="list" style="margin-top:6px">';
-      ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
-        const c = R.upgradeChance(sel, j);
-        const need = R.upgradeCost(sel, j), short = c > 0 && cnt(j) < need;
-        const fee = (need > 1 ? ' · ' + need + ' joias' : '') + (j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' de Ouro' : '');
-        const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
-        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) >= need ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + (c > 0 && j === 'chaos' ? 'Para +' + (pl + 1) + ': ' + need + (need > 1 ? ' Joias do Caos' : ' Joia do Caos') + (short ? ' <b style="color:#ff6b6b">(faltam ' + (need - cnt(j)) + ')</b>' : '') + '. ' : '') + fail + '</span></div>';
-      });
-      h += '</div>';
-      if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
-    } else if (!all.length) h += '<p class="note">Você não tem equipamentos.</p>';
-  } else if (id === 'merchant') {
-    const junk = ch.bag.filter(junkSellable);
-    const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
-    h += '<div class="list">';
-    ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
-    const RZ = R.POTIONS.rez;
-    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row">' + [1, 10].map((n) => '<button class="btn sm gold" data-npc="buy" data-p="rez" data-n="' + n + '"' + (ch.gold >= RZ.price * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(RZ.price * n) + '</button>').join('') + '</span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
-    h += '</div>' + ticketSection(ch) + '<div class="list">';
-    h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
-      ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
-      : '<button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' de Ouro</button>') + '</div>';
-    h += sellSection(ch);
-  } else if (id === 'master') {
-    const ev = R.canEvolve(ch), rs = R.canReset(ch);
-    h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
-    h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP' + (R.skillsFor(ch.cls).some((k) => R.SKILLS[k].tier === ch.tier + 1) ? ', nova habilidade' : '') + ' e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A taxa de EXP cai de ' + R.expRate(ch.resets) + 'x para ' + R.expRate(ch.resets + 1) + 'x. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
-      (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
-        : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
-        : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
-    const spent = R.treeSpent(ch);
-    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
-      ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
-      : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 de Ouro</button>');
-  } else if (NPCS[id] && NPCS[id].soon) {
-    h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
-  }
-  // "Fechar" fica fixo no topo do diálogo (sempre visível em telas baixas) e repetido no fim
-  h = '<button class="btn sm dlg-x" data-npc="close" aria-label="Fechar">Fechar</button>' + h;
-  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
-  modal(h);
-}
-function npcAction(e) {
-  const b = e.target.closest('[data-npc]');
-  if (!b || b.disabled) return;
-  const a = b.dataset.npc, ch = G.ch;
-  // confirmação em dois cliques (reset, redistribuir, vender em lote): só o clique seguinte confirma
-  const confirmed = b.dataset.ok === '1' && UI.npcConfirm === a;
-  UI.npcConfirm = null;
-  switch (a) {
-    case 'npcno': break;
-    case 'close': closeModal(); return;
-    case 'go': {
-      // só andares já liberados (o botão pode estar velho)
-      const k = b.dataset.b;
-      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0) return;
-      closeModal(); enterDungeon(k, Math.max(1, Math.min(Math.floor(+b.dataset.f) || 1, ch.unlockedFloors[k] || 1)));
-      return;
-    }
-    case 'auto': {
-      const k = b.dataset.b;
-      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0 || !ticketCount(k)) return;
-      closeModal(); startAutoClear(k);
-      return;
-    }
-    case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
-    case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
-    case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
-    case 'smithview': UI.smithView = b.dataset.k; break;
-    case 'smithslot': UI.smithSlot = b.dataset.k; break;
-    case 'up': {
-      const it = UI.smithSel, j = b.dataset.j;
-      const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
-      // valida tudo ANTES de cobrar: o item ainda é do herói (o pet pode tê-lo vendido) e a fusão tem chance
-      if (!owned(ch, it)) { log('Este item não está mais com você.', 'warn'); UI.smithSel = null; break; }
-      if (!R.JEWELS[j] || R.upgradeChance(it, j) <= 0) break;
-      const need = R.upgradeCost(it, j);
-      if (!stack) break;
-      if (stack.qty < need) { log('São necessárias ' + need + ' unidades de ' + R.JEWELS[j].name + ' para esta fusão (você tem ' + stack.qty + ').', 'warn'); break; }
-      if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('A fusão do Caos custa ' + fmt(R.RATES.chaosFeeGold) + ' de Ouro.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
-      stack.qty -= need; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
-      // Talismã da Sorte: gasto na tentativa de fusão do Caos com ele ligado
-      const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
-      const r = R.applyUpgrade(it, j, Math.random(), { talisman });
-      if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
-      else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
-      else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
-      recalc(); buildPlayerModel();
-      break;
-    }
-    case 'wingup': {
-      const it = UI.smithSel, W = R.WING_UP;
-      if (!owned(ch, it)) { log('Esta asa não está mais com você.', 'warn'); UI.smithSel = null; break; }
-      if (it.slot !== 'wings' || it.stage || R.wingUpgradeChance(it) <= 0) break;
-      const stacks = Object.keys(W.jewels).map((j) => ch.bag.find((x) => x.kind === 'jewel' && x.id === j));
-      if (stacks.some((x, i) => !x || x.qty < W.jewels[Object.keys(W.jewels)[i]])) { log('Faltam Joias para evoluir a asa.', 'warn'); break; }
-      Object.keys(W.jewels).forEach((j, i) => { const x = stacks[i]; x.qty -= W.jewels[j]; if (!x.qty) ch.bag.splice(ch.bag.indexOf(x), 1); });
-      const talisman = UI.smithTalisman && R.talismanUseful('wing') && takeTalisman();
-      const r = R.applyWingUpgrade(it, Math.random(), { talisman });
-      if (r.ok) {
-        log('A asa evoluiu! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Asa Ascendida', R.itemName(it));
-        if (G.player) emit(G.player.x, 1.4, G.player.z, { n: 90, color: 0xfff0b0, speed: 3, up: 3, life: 1.4, size: 1.1, grav: 1, spread: 1.6 });
-      } else if (r.protected) { log('A evolução falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'A asa continua em +' + (it.plus || 0)); }
-      else { log('A evolução falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it) + ' voltou a +0.', 'warn'); Sfx.hurt(); }
-      recalc(); buildPlayerModel();
-      break;
-    }
-    case 'taltoggle': UI.smithTalisman = !UI.smithTalisman && talismanCount() > 0; break;
-    case 'buy': {
-      const D = R.POTIONS[b.dataset.p], n = +b.dataset.n;
-      if (ch.gold < D.price * n) { log('Ouro insuficiente.', 'warn'); break; }
-      if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break;
-      ch.gold -= D.price * n; Sfx.coin();
-      log('Comprou ' + D.name + ' ×' + n + ' por ' + fmt(D.price * n) + ' de Ouro.', 'loot');
-      break;
-    }
-    case 'buytk': {
-      const k = b.dataset.k, n = +b.dataset.n === 10 ? 10 : 1;
-      if (!R.TICKETS[k]) break;
-      if (ch.gold < R.TICKET_PRICE * n) { log('Ouro insuficiente.', 'warn'); break; }
-      if (b.dataset.ok !== '1' || UI.tkSel !== k || UI.tkN !== n || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; UI.tkN = n; break; }
-      if (!buyTicket(k, n)) break;
-      Sfx.coin();
-      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(R.TICKET_PRICE * n) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
-      break;
-    }
-    case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
-    case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
-    case 'sellno': UI.merchConfirm = null; break;
-    case 'selljunk': {
-      const junk = ch.bag.filter(junkSellable);
-      if (!junk.length) break;
-      if (!confirmed) { UI.npcConfirm = a; break; }
-      let total = 0;
-      junk.forEach((x) => { total += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); });
-      ch.gold += total;
-      if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
-      log('Vendeu ' + junk.length + ' Comuns/Mágicos por ' + fmt(total) + ' de Ouro.', 'loot');
-      Sfx.coin();
-      break;
-    }
-    case 'evolve': {
-      const ev = R.canEvolve(ch);
-      if (!ev.ok) break;
-      ch.tier++;
-      recalc(); buildPlayerModel(); unlockSkills(); buildSlots();
-      toast(R.className(ch), 'Evolução de classe');
-      log('Você evoluiu para ' + R.className(ch) + '!', 'sys');
-      emit(G.player.x, 0.2, G.player.z, { n: 120, color: 0xffd76a, speed: 4, up: 4, life: 1.5, size: 1.3, grav: 2, spread: 2 });
-      break;
-    }
-    case 'reset': {
-      if (!R.canReset(ch).ok) break;
-      if (!confirmed) { UI.npcConfirm = a; break; }
-      const r = R.applyReset(ch);
-      if (!r.ok) break;
-      for (const s of R.SLOTS) if (ch.equip[s]) { /* itens ficam equipados, inativos até cumprir requisito */ }
-      recalc();
-      G.hp = G.st.maxHp; G.mp = G.st.maxMp;
-      buildSlots();
-      toast('Reset ' + ch.resets, fmt(ch.points) + ' pontos livres');
-      log('Reset ' + ch.resets + ' concluído. Distribua ' + fmt(ch.points) + ' pontos (C).', 'sys');
-      break;
-    }
-    case 'treereset': {
-      if (!R.treeSpent(ch)) break;
-      if (ch.gold < 100000) { log('Ouro insuficiente.', 'warn'); break; }
-      if (!confirmed) { UI.npcConfirm = a; break; }
-      ch.gold -= 100000; ch.tree = {}; recalc();
-      log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
-      break;
-    }
-  }
-  persist();
-  const dlg = $('#dialog'), list = dlg.querySelector('.selllist'), sl = dlg.querySelector('.smithlist');
-  const top = dlg.scrollTop, listTop = list ? list.scrollTop : 0, smithTop = sl ? sl.scrollTop : 0;
-  openNpc(G.openNpcId);
-  dlg.scrollTop = top;
-  const list2 = dlg.querySelector('.selllist');
-  if (list2) list2.scrollTop = listTop;
-  const sl2 = dlg.querySelector('.smithlist');
-  if (sl2) sl2.scrollTop = smithTop;
-  hudTick();
-}
-function showDeath(loss, zl, rez) {
-  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' de Ouro. Itens equipados nunca são perdidos para monstros.</p>' +
-    (rez ? '<p class="note" style="text-align:center">A Poção da Ressurreição (' + rez + ') te levanta aqui mesmo, com HP cheio, e devolve a EXP e o Ouro perdidos.</p>' : '') +
-    '<div class="row" style="justify-content:center;margin-top:12px">' + (rez ? '<button class="btn gold" id="btnRevive">Usar Poção da Ressurreição</button>' : '') + '<button class="btn' + (rez ? '' : ' gold') + '" id="btnRespawn">Renascer em Aldrena</button></div></div>');
-  $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
-  if (rez) $('#btnRevive').addEventListener('click', () => { if (revive()) { closeModal(); hudTick(); } });
-}
-
-/** Pergunta antes de descer quando ainda há itens no chão (Não = continua no andar). */
-function confirmDescend(onYes) {
-  const n = G.loot.length;
-  modal('<h3>Próximo andar</h3><p>Ainda há ' + n + (n === 1 ? ' item' : ' itens') + ' no chão. Deseja ir para o próximo andar?</p><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="btnDescendNo">Não</button><button class="btn gold" id="btnDescendYes">Sim</button></div>');
-  $('#btnDescendNo').addEventListener('click', closeModal);
-  $('#btnDescendYes').addEventListener('click', () => { closeModal(); onYes(); });
-}
-
-/** Botões dos diálogos de NPC e clique fora do modal. */
-function initDialogs() {
-  $('#dialog').addEventListener('click', npcAction);
-  $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal' && G.player && G.player.alive) closeModal(); });
-}
-return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
-})();
-
 // ---- art/cutaway.js ----
 const { CUT, CUT_GLSL, clearCutaway, cutaway, injectCutaway, setCutaway } = (() => {
 // =============================================================================
@@ -15231,6 +14061,1533 @@ function roofMat() {
 return { kit, kitGlowMat, kitMat, kitWindMat, lavaMat, roofMat, setInstance, setKitGlowTime };
 })();
 
+// ---- game/tower.js ----
+const { clearTower, onTowerKill, spawnTowerEvents, towerState, updateTower } = (() => {
+// ---------- Torre Infinita: eventos do andar (emboscadas, invasão, círculo selado, santuário, Ladrão de Ouro) ----------
+
+/** Estado dos eventos do andar atual (zerado a cada andar). */
+const T = { ambush: [], seals: [], shrines: [], inv: null, thief: null, t: 0, total: 0, kills: 0, lvl: 1, pack: 3000 };
+
+/** Cor mágica de cada bioma da torre (barreiras, fendas, fumaça). */
+const TINT = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
+const AMBUSH_SAY = {
+  tw_granite: 'As estátuas ganham vida à sua volta!',
+  tw_arcane: 'Os livros sussurram e criaturas saem das sombras!',
+  tw_storm: 'Criaturas descem com o vento!',
+  tw_void: 'O vazio se abre à sua volta!',
+};
+/** Bênçãos dos santuários da torre, 60 s. */
+const BLESS = [
+  { name: 'Bênção da Fúria', stats: { dmgPct: 15 }, say: '+15% de dano', color: 0xff8a5a },
+  { name: 'Bênção da Égide', stats: { defPct: 30, dmgRed: 8 }, say: '+30% de defesa e -8% de dano recebido', color: 0x6ad8ff },
+  { name: 'Bênção do Vento', stats: { atkRatePct: 10, cdPct: -10 }, say: '+10% de velocidade de ataque e -10% de recarga', color: 0x9aff8a },
+];
+/** Segundos até o Ladrão de Ouro sumir depois de notar o herói. */
+const THIEF_ESCAPE = 18;
+
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+const tint = () => TINT[G.biome] || 0x6ad8ff;
+function nearWalkable(x, z, r) {
+  if (walkable(G.L, x, z)) return { x, z };
+  for (let k = 0; k < 16; k++) {
+    const a = rand() * Math.PI * 2, d = rand() * r;
+    if (walkable(G.L, x + Math.cos(a) * d, z + Math.sin(a) * d)) return { x: x + Math.cos(a) * d, z: z + Math.sin(a) * d };
+  }
+  return null;
+}
+/** Um bando do bioma (mesmo tamanho e níveis dos bandos comuns da torre). */
+function spawnPack(size, at, opt) {
+  const B = BIOMES[G.biome], pack = T.pack++, n = size * R.TOWER.monsterMult, kind = pick(B.monsters), out = [];
+  for (let i = 0; i < n; i++) {
+    const q = at(i, n);
+    if (!q) continue;
+    const m = spawnMonster(rand() < 0.7 ? kind : pick(B.monsters), q.x, q.z, T.lvl + Math.floor(rand() * 4), { pack, elite: !!opt.elite && i === 0 });
+    if (opt.aggro) m.aggro = true;
+    if (opt.puff) { emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 }); riseMonster(m); }
+    out.push(m);
+  }
+  return out;
+}
+/** Prêmio de um evento vencido: um punhado de Ouro (com o mesmo multiplicador da torre). */
+function goldReward(x, z, src, piles) {
+  for (let i = 0; i < piles; i++) {
+    const amount = Math.floor(R.goldAmount(T.lvl, src, rand()) * R.TOWER.goldMult * (1 + G.st.goldPct / 100) / piles);
+    dropLoot(x, z, { type: 'gold', amount });
+  }
+  emit(x, 0.6, z, { n: 40, color: 0xffd86a, speed: 3, up: 4, life: 1, size: 0.9, grav: 3, spread: 0.6 });
+  Sfx.loot(2);
+}
+
+/** Monta os eventos do andar (chamado depois dos bandos comuns). */
+function spawnTowerEvents(L, lvl) {
+  clearTower();
+  T.t = 0; T.kills = 0; T.lvl = lvl; T.pack = 3000;
+  for (const e of L.events || []) {
+    const x = e.x * TILE, z = e.z * TILE;
+    if (e.type === 'ambush') T.ambush.push({ x, z, r: e.r * TILE, size: e.size, state: 0, mons: [] });
+    else if (e.type === 'sealed') {
+      const r = e.r * TILE;
+      const mons = spawnPack(e.size, () => nearWalkable(x + (rand() - 0.5) * r, z + (rand() - 0.5) * r, 2) || { x, z }, { elite: true });
+      for (const m of mons) m.sealed = true;
+      T.seals.push({ x, z, r, state: 0, mons, tiles: null, mesh: null, t: 0 });
+    } else if (e.type === 'invasion') T.inv = { state: 0, delay: e.delay, size: e.size, x: 0, z: 0, mons: [], waves: 0, waveT: 0, mesh: null, close: 0 };
+    else if (e.type === 'shrine') spawnShrine(x, z, BLESS[e.kind % BLESS.length]);
+    else if (e.type === 'thief') {
+      const m = spawnMonster('tw_thief', x, z, lvl + 2, { pack: T.pack++ });
+      T.thief = { m, seenT: -1, gone: false };
+    }
+  }
+  T.total = G.monsters.filter((m) => !m.dead && !m.boss).length;
+}
+
+// ---------- emboscadas ----------
+function triggerAmbush(a) {
+  a.state = 1;
+  const p = G.player;
+  // surgem em volta do herói, só em pontos que ele enxerga (nada brota atrás de parede)
+  a.mons = spawnPack(a.size, (i, n) => {
+    for (let k = 0; k < 12; k++) {
+      const ang = (i / n) * Math.PI * 2 + k * 0.55 + rand() * 0.3, d = (2.2 + rand() * 2.8 - k * 0.12) * TILE;
+      const x = p.x + Math.cos(ang) * d, z = p.z + Math.sin(ang) * d;
+      if (walkable(G.L, x, z) && lineClear(G.L, p.x, p.z, x, z, 0.3)) return { x, z };
+    }
+    return nearWalkable(p.x, p.z, TILE);
+  }, { aggro: true, puff: true, elite: rand() < 0.5 });
+  spawnRing(p.x, p.z, 1, 7 * TILE, tint(), 0.8);
+  toast('Emboscada!', AMBUSH_SAY[G.biome] || 'Você foi cercado!');
+  log('Emboscada! Derrote os atacantes para ganhar o Ouro que eles guardavam.', 'warn');
+  shake(0.5); Sfx.boom();
+}
+
+// ---------- círculo selado ----------
+/** Fecha o círculo: os tiles da borda viram parede até o bando de dentro cair. */
+function seal(s) {
+  s.state = 1; s.t = 0;
+  const L = G.L, r = s.r, tiles = [];
+  for (let tz = Math.floor((s.z - r) / TILE) - 2; tz <= Math.ceil((s.z + r) / TILE) + 2; tz++) for (let tx = Math.floor((s.x - r) / TILE) - 2; tx <= Math.ceil((s.x + r) / TILE) + 2; tx++) {
+    if (tx < 0 || tz < 0 || tx >= L.W || tz >= L.H) continue;
+    const d = Math.hypot(tx * TILE - s.x, tz * TILE - s.z);
+    if (d >= r && d < r + TILE * 1.2 && L.grid[tz * L.W + tx] === 1) { L.grid[tz * L.W + tx] = 0; tiles.push(tz * L.W + tx); }
+  }
+  s.tiles = tiles;
+  // quem do bando ficou do lado de fora é puxado para dentro
+  for (const m of s.mons) {
+    m.aggro = true;
+    if (m.dead || Math.hypot(m.x - s.x, m.z - s.z) < r - 1) continue;
+    const q = nearWalkable(s.x + (rand() - 0.5) * r, s.z + (rand() - 0.5) * r, 2) || { x: s.x, z: s.z };
+    m.x = q.x; m.z = q.z; m.path = null;
+    emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 });
+  }
+  const mat = new THREE.MeshBasicMaterial({ color: tint(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(r + TILE * 0.5, r + TILE * 0.5, 2.6, 56, 1, true), mat);
+  wall.position.set(s.x, 1.3, s.z);
+  wall.renderOrder = 4;
+  world.add(wall);
+  s.mesh = wall;
+  spawnRing(s.x, s.z, r * 0.3, r + TILE * 0.5, tint(), 0.7);
+  toast('Círculo selado!', 'Uma barreira se fechou: derrote os guardiões do círculo');
+  log('Círculo selado! A barreira só cai quando os guardiões de dentro forem derrotados.', 'warn');
+  shake(0.4); Sfx.boom();
+}
+function unseal(s, won) {
+  s.state = 2;
+  const L = G.L;
+  if (s.tiles) for (const i of s.tiles) L.grid[i] = 1;
+  s.tiles = null;
+  if (s.mesh) { world.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); s.mesh = null; }
+  emit(s.x, 1, s.z, { n: 60, color: tint(), speed: 6, up: 2, life: 0.8, size: 1.1, spread: s.r });
+  if (!won) return;
+  goldReward(s.x, s.z, 'elite', 4);
+  toast('Círculo quebrado', 'A barreira caiu e deixou um tesouro');
+}
+
+// ---------- invasão ----------
+/** Abre a fenda num ponto andável a uma distância média do herói (fora de círculos selados). */
+function openRift(v) {
+  const p = G.player, L = G.L;
+  let best = null;
+  for (let k = 0; k < 160 && !best; k++) {
+    const tx = 1 + Math.floor(rand() * (L.W - 2)), tz = 1 + Math.floor(rand() * (L.H - 2));
+    if (L.grid[tz * L.W + tx] !== 1) continue;
+    const x = tx * TILE, z = tz * TILE, d = Math.hypot(x - p.x, z - p.z);
+    if (d < (k < 120 ? 16 : 10) || d > (k < 120 ? 30 : 60)) continue;
+    if (T.seals.some((s) => s.state === 1 && Math.hypot(x - s.x, z - s.z) < s.r + TILE * 2)) continue;
+    best = { x, z };
+  }
+  if (!best) return false;
+  v.state = 1; v.x = best.x; v.z = best.z; v.waveT = 0.6;
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(GEO.torusF, glowShared(tint(), 0.95));
+  ring.scale.setScalar(3.4);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(1.5, 28), new THREE.MeshBasicMaterial({ color: 0x0a0414, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(2.1, 28), glowShared(tint(), 0.35));
+  halo.position.z = -0.02;
+  g.add(halo, core, ring);
+  g.position.set(v.x, 2, v.z);
+  g.rotation.y = Math.PI / 4; // de frente para a câmera
+  g.scale.setScalar(0.01);
+  world.add(g);
+  v.mesh = g; v.ring = ring;
+  spawnRing(v.x, v.z, 0.5, 6, tint(), 1);
+  toast('Invasão!', 'Uma fenda se abriu no andar e os monstros vêm atrás de você');
+  log('Invasão! Uma fenda se abriu e monstros estão atravessando. Feche-a derrotando todos.', 'warn');
+  Sfx.boom();
+  return true;
+}
+function updateInvasion(v, dt) {
+  if (v.state === 0) {
+    const boss = G.boss && G.boss.aggro;
+    if (!boss && G.player.alive && (T.t > v.delay || T.kills >= T.total * 0.4)) openRift(v);
+    return;
+  }
+  const g = v.mesh;
+  if (g) {
+    const k = v.state === 2 ? Math.max(0, 1 - v.close * 2) : Math.min(1, g.scale.x + dt * 2);
+    g.scale.setScalar(Math.max(0.01, k));
+    v.ring.rotation.z += dt * 2.2;
+    if (Math.random() < 0.5) emit(v.x + (rand() - 0.5) * 2, 1 + rand() * 2.4, v.z + (rand() - 0.5) * 2, { n: 1, color: tint(), speed: 0.6, up: 1, life: 0.9, size: 0.7, grav: -0.6 });
+  }
+  if (v.state === 1) {
+    // três ondas, a cada 3,5 s, saindo da fenda
+    if (v.waves < 3) {
+      v.waveT -= dt;
+      if (v.waveT <= 0) {
+        v.waveT = 3.5; v.waves++;
+        const part = Math.ceil(v.size / 3);
+        v.mons.push(...spawnPack(part, () => nearWalkable(v.x + (rand() - 0.5) * 3, v.z + (rand() - 0.5) * 3, 3), { aggro: true, puff: true, elite: v.waves === 3 }));
+        spawnRing(v.x, v.z, 0.5, 4, tint(), 0.6);
+      }
+    } else if (v.mons.every((m) => m.dead)) {
+      v.state = 2; v.close = 0;
+      goldReward(v.x, v.z, 'elite', 3);
+      toast('Invasão repelida', 'A fenda se fechou');
+      log('A fenda se fechou. A invasão foi repelida.', 'sys');
+    }
+  } else if (v.state === 2 && g) {
+    v.close += dt;
+    if (v.close > 0.6) { removeRift(g); v.mesh = null; }
+  }
+}
+
+/** Remove a fenda (o anel usa material compartilhado; o miolo e o halo têm geometria própria). */
+function removeRift(g) {
+  world.remove(g);
+  const [halo, core] = g.children;
+  halo.geometry.dispose(); core.geometry.dispose(); core.material.dispose();
+}
+
+// ---------- santuários ----------
+function spawnShrine(x, z, B) {
+  const g = new THREE.Group();
+  const k = kit('shrine');
+  const m = new THREE.Mesh(k.geo, kitMat());
+  m.castShadow = true; m.receiveShadow = true;
+  const orb = new THREE.Mesh(k.glow, kitGlowMat());
+  orb.renderOrder = 3;
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), glowShared(B.color, 0.5));
+  halo.position.y = 2.1;
+  g.add(m, orb, halo);
+  g.position.set(x, gy(x, z), z);
+  world.add(g);
+  T.shrines.push({ x, z, used: false, g, halo, B });
+}
+function useShrine(s) {
+  s.used = true;
+  const B = s.B;
+  G.buffs = G.buffs.filter((b) => b.id !== 'tower:shrine');
+  G.buffs.push({ id: 'tower:shrine', name: B.name, until: G.time + 60, stats: B.stats });
+  recalc();
+  G.hp = G.st.maxHp; G.mp = G.st.maxMp;
+  const p = G.player;
+  emit(p.x, 0.4, p.z, { n: 70, color: B.color, speed: 3, up: 4, life: 1.2, size: 1, grav: 1.5, spread: 1.2 });
+  spawnRing(s.x, s.z, 0.5, 4, B.color, 0.9);
+  floatText(p.x, 3, p.z, B.name, 'heal');
+  toast(B.name, B.say + ' por 60s · HP e mana cheios');
+  log('Santuário da torre: ' + B.name + ' (' + B.say + ' por 60s).', 'sys');
+  Sfx.level();
+  s.halo.visible = false;
+}
+
+// ---------- Ladrão de Ouro ----------
+function updateThief(th) {
+  const m = th.m;
+  if (th.gone || m.dead) return;
+  if (Math.random() < 0.25) emit(m.x + (rand() - 0.5), 0.6 + rand(), m.z + (rand() - 0.5), { n: 1, color: 0xffd86a, speed: 0.5, up: 1, life: 0.7, size: 0.6, grav: 1 });
+  if (m.aggro && th.seenT < 0) {
+    th.seenT = T.t;
+    toast('Ladrão de Ouro!', 'Pegue-o antes que ele escape com o tesouro');
+    log('Um Ladrão de Ouro! Ele foge e some em ' + THIEF_ESCAPE + 's: derrote-o para pegar o que carrega.', 'loot');
+  }
+  if (th.seenT >= 0 && T.t - th.seenT > THIEF_ESCAPE) {
+    th.gone = true;
+    m.dead = true; m.deadT = 99; m.model.root.visible = false;
+    emit(m.x, 1, m.z, { n: 40, color: 0xffd86a, speed: 5, up: 3, life: 0.7, size: 1 });
+    spawnRing(m.x, m.z, 0.3, 3, 0xffd86a, 0.5);
+    toast('Ele escapou…', 'O Ladrão de Ouro sumiu com o tesouro');
+    log('O Ladrão de Ouro escapou.', 'sys');
+  }
+}
+
+// ---------- mortes e quadro ----------
+/** Qualquer abate na torre: conta para a invasão e paga o Ladrão de Ouro. */
+function onTowerKill(m) {
+  if (!m.boss) T.kills++;
+  if (T.thief && m === T.thief.m) {
+    goldReward(m.x, m.z, 'boss', 6);
+    toast('Ladrão de Ouro derrotado', 'O tesouro dele caiu no chão');
+    log('Você pegou o Ladrão de Ouro! O Ouro que ele carregava se espalhou.', 'loot');
+    Sfx.loot(4);
+  }
+  for (const a of T.ambush) if (a.state === 1 && a.mons.every((o) => o.dead)) {
+    a.state = 2;
+    goldReward(m.x, m.z, 'elite', 2);
+    toast('Emboscada vencida', 'Os atacantes deixaram Ouro para trás');
+  }
+}
+function updateTower(dt) {
+  const p = G.player, L = G.L;
+  if (!p || !L || !L.tower) return;
+  T.t += dt;
+  for (const a of T.ambush) if (a.state === 0 && p.alive && (a.x - p.x) ** 2 + (a.z - p.z) ** 2 < a.r * a.r) triggerAmbush(a);
+  for (const s of T.seals) {
+    if (s.state === 0) {
+      if (p.alive && Math.hypot(p.x - s.x, p.z - s.z) < s.r - TILE && s.mons.some((m) => !m.dead)) seal(s);
+      else if (s.mons.every((m) => m.dead)) s.state = 2; // vencido sem fechar (de longe)
+    } else if (s.state === 1) {
+      s.t += dt;
+      if (s.mesh) { s.mesh.material.opacity = Math.min(0.32, s.t * 0.8) * (0.8 + Math.sin(G.time * 4) * 0.2); s.mesh.rotation.y += dt * 0.4; }
+      // trava de segurança: o herói caiu ou a luta se arrastou demais
+      if (s.mons.every((m) => m.dead)) unseal(s, true);
+      else if (!p.alive || s.t > 90) unseal(s, false);
+    }
+  }
+  if (T.inv) updateInvasion(T.inv, dt);
+  for (const s of T.shrines) {
+    if (s.used) continue;
+    s.halo.position.y = 2.1 + Math.sin(G.time * 2 + s.x) * 0.12;
+    if (Math.random() < 0.3) emit(s.x + (rand() - 0.5), 2.1, s.z + (rand() - 0.5), { n: 1, color: s.B.color, speed: 0.4, up: 1.5, life: 1.2, size: 0.6, grav: -0.5 });
+    if (p.alive && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < 3.2 * 3.2) useShrine(s);
+  }
+  if (T.thief) updateThief(T.thief);
+}
+/** Saída do andar: remove barreiras, fenda e santuários. */
+function clearTower() {
+  for (const s of T.seals) if (s.mesh) { world.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
+  if (T.inv && T.inv.mesh) removeRift(T.inv.mesh);
+  for (const s of T.shrines) { world.remove(s.g); s.halo.geometry.dispose(); }
+  T.ambush = []; T.seals = []; T.shrines = []; T.inv = null; T.thief = null;
+}
+/** Estado dos eventos para testes e depuração. */
+function towerState() { return T; }
+return { clearTower, onTowerKill, spawnTowerEvents, towerState, updateTower };
+})();
+
+// ---- game/autoClear.js ----
+const { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud } = (() => {
+// ---------- Auto-Limpeza: tickets da Guardiã Nyx e da Torre Infinita limpam andares sozinhos ----------
+
+/** Tickets de Auto-Limpeza da masmorra (ou da torre, 'tower') na mochila. */
+function ticketCount(biome) {
+  const t = G.ch && G.ch.bag.find((b) => b.kind === 'ticket' && b.id === biome);
+  return t ? t.qty : 0;
+}
+function takeTicket(biome) {
+  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'ticket' && b.id === biome);
+  if (!t) return false;
+  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
+  return true;
+}
+/** Compra na Mercadora: devolve false sem Ouro ou sem espaço na mochila. */
+function buyTicket(biome, n = 1) {
+  const ch = G.ch;
+  n = Math.max(1, Math.floor(n) || 1);
+  const cost = R.ticketPrice(biome) * n;
+  if (!R.TICKETS[biome] || ch.gold < cost) return false;
+  if (!addToBag({ kind: 'ticket', id: biome, qty: n, uid: 'k' + biome })) return false;
+  ch.gold -= cost;
+  return true;
+}
+
+const autoClearOn = () => !!G.auto;
+/** A Auto-Limpeza decide os alvos agora (não está pausada pelo jogador)? */
+const autoSteering = () => !!G.auto && G.time >= G.auto.manualT;
+
+const isTower = (a) => a.biome === 'tower';
+const placeName = (a) => (isTower(a) ? 'Torre Infinita' : BIOMES[a.biome].name);
+function enterFloor(a) { if (isTower(a)) enterTower(a.floor); else enterDungeon(a.biome, a.floor); }
+
+/**
+ * Começa na masmorra escolhida (ou na torre, biome 'tower'), no andar mais fundo liberado.
+ * Cada andar gasta um ticket ao entrar. Na masmorra, o herói desce logo depois do chefe;
+ * na torre, só sobe depois de derrotar todos os monstros do andar.
+ */
+function startAutoClear(biome) {
+  const ch = G.ch, tower = biome === 'tower';
+  if ((!tower && DUNGEON_ORDER.indexOf(biome) < 0) || !takeTicket(biome)) return false;
+  const floor = tower ? ch.towerBest || 1 : ch.unlockedFloors[biome] || 1;
+  const a = G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, bossT: 0, endT: 0, nextT: 0, skip: new Map(), tgt: null };
+  enterFloor(a);
+  const lvl = tower ? R.towerLevel(floor) : floorLevel(biome, floor);
+  toast('Auto-Limpeza', placeName(a) + ' · andar ' + floor);
+  log('Auto-Limpeza: ' + placeName(a) + ', andar ' + floor + ' (nv ' + lvl + '). ' + (tower ? 'O herói derrota todos os monstros e o chefe e só então sobe' : 'O herói enfrenta o chefe e desce logo depois dele') + '; mexer nele pausa a automação por um instante.', 'sys');
+  return true;
+}
+function stopAutoClear(msg, done) {
+  const a = G.auto;
+  if (!a) return;
+  G.auto = null;
+  const p = G.player;
+  if (p && p.alive) { p.target = null; p.path = null; }
+  const n = a.done;
+  const cleared = n + (n === 1 ? ' andar limpo' : ' andares limpos');
+  log('Auto-Limpeza ' + (done ? 'concluída' : 'encerrada') + (msg ? ': ' + msg : '') + '. ' + cleared + '.', 'sys');
+  toast(done ? 'Auto-Limpeza concluída' : 'Auto-Limpeza encerrada', done ? cleared : msg || cleared);
+  persist();
+}
+/** Chefe do andar caiu (combat.js): na masmorra segue para o próximo andar; na torre termina o que sobrou. */
+function autoBossDown() { if (G.auto && !G.auto.bossDown) { G.auto.bossDown = true; G.auto.bossT = G.time; } }
+
+const skipped = (a, ref) => (a.skip.get(ref) || 0) > G.time;
+function validTarget(t) {
+  if (!t) return false;
+  if (t.type === 'mon') return !t.m.dead;
+  if (t.type === 'loot') return G.loot.indexOf(t.l) >= 0;
+  return false;
+}
+/** Drops que valem a viagem: itens só com espaço na mochila. */
+const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < BAG_SIZE;
+const lootOk = (l) => G.time - l.born > 0.6 && lootOk2(l);
+function nearest(list, ok, maxD) {
+  const p = G.player;
+  let best = null, bd = maxD * maxD;
+  for (const o of list) {
+    if (!ok(o)) continue;
+    const d = (o.x - p.x) ** 2 + (o.z - p.z) ** 2;
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+/**
+ * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
+ * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão
+ * (na masmorra, só os drops por perto, por poucos segundos, sem caçar os monstros que sobraram).
+ */
+function pickTarget(a) {
+  if (a.bossDown && !isTower(a)) {
+    const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), CONFIG.autoClear.lootRadius);
+    return l ? { type: 'loot', l } : null;
+  }
+  const ok = (m) => !m.dead && !skipped(a, m);
+  const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
+  if (fighting) return { type: 'mon', m: fighting };
+  const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), a.bossDown ? 1e4 : CONFIG.autoClear.lootRadius);
+  if (l) return { type: 'loot', l };
+  const m = nearest(G.monsters, (x) => ok(x) && !x.boss, 1e4) || nearest(G.monsters, ok, 1e4);
+  return m ? { type: 'mon', m } : null;
+}
+function aim(p, t) {
+  p.target = t;
+  if (t.type === 'mon') p.path = null; else pathTo(t.l.x, t.l.z);
+}
+/** Sem andar nem ferir o alvo por alguns segundos: deixa ele de lado por um tempo. */
+function watchStuck(a, p) {
+  const C = CONFIG.autoClear, t = p.target, ref = t.type === 'mon' ? t.m : t.l;
+  let s = a.tgt;
+  if (!s || s.ref !== ref) s = a.tgt = { ref, x: p.x, z: p.z, hp: t.type === 'mon' ? t.m.hp : 0, at: G.time };
+  const hp = t.type === 'mon' ? t.m.hp : 0;
+  if (Math.hypot(p.x - s.x, p.z - s.z) > 1.5 || hp < s.hp) { s.x = p.x; s.z = p.z; s.hp = hp; s.at = G.time; return; }
+  if (G.time - s.at > C.stuckTime) {
+    a.skip.set(ref, G.time + C.skipTime);
+    a.tgt = null; p.target = null; p.path = null;
+  }
+}
+function drinkPotions() {
+  const C = CONFIG.autoClear, st = G.st;
+  if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
+  else if (G.mp < st.maxMp * C.mpPotionBelow && potionCount('mp')) usePotion('mp');
+}
+function nextFloor(a) {
+  a.done++;
+  if (!takeTicket(a.biome)) {
+    stopAutoClear('os tickets acabaram', true);
+    return;
+  }
+  a.used++;
+  a.floor++;
+  a.bossDown = false; a.bossT = 0; a.endT = 0; a.nextT = 0; a.tgt = null; a.skip.clear();
+  enterFloor(a);
+  log('Auto-Limpeza: ' + (isTower(a) ? 'subindo' : 'descendo') + ' para o andar ' + a.floor + ' (' + ticketCount(a.biome) + ' tickets restantes).', 'sys');
+}
+/** Na torre o andar só acaba sem nenhum monstro vivo e sem a fenda da invasão ainda soltando ondas. */
+function towerFloorClear() {
+  if (G.monsters.some((m) => !m.dead)) return false;
+  const inv = towerState().inv;
+  return !inv || inv.state === 2;
+}
+
+function updateAutoClear(dt) {
+  const a = G.auto, p = G.player, C = CONFIG.autoClear;
+  if (!a || !p || !G.ch) return;
+  // saiu da masmorra (portal para a cidade, renasceu em Aldrena, outra zona): fim
+  if (isTower(a) ? G.zone !== 'tower' || G.floor !== a.floor : G.zone !== 'dungeon' || G.biome !== a.biome || G.floor !== a.floor) { stopAutoClear('o herói saiu do andar'); return; }
+  if (!p.alive) {
+    if (!a.deadT) a.deadT = G.time;
+    if (G.time - a.deadT < C.reviveDelay) return;
+    if (potionCount('rez') && revive()) { closeModal(); a.deadT = 0; a.tgt = null; return; }
+    stopAutoClear('o herói caiu sem Poção da Ressurreição');
+    return;
+  }
+  a.deadT = 0;
+  if (KEYS.any() || mouse.down) a.manualT = G.time + C.manualPause;
+  drinkPotions();
+  if (G.time < a.manualT || G.time < p.lockUntil || p.dash || p.dodge) return;
+  if ((a.thinkT -= dt) > 0) return;
+  a.thinkT = C.think;
+  const tower = isTower(a);
+  // depois do chefe, recolher o que sobrou no chão tem limite de tempo (na masmorra, curto e já conta da queda do chefe)
+  if (a.bossDown && !a.endT && (!tower || towerFloorClear())) a.endT = G.time;
+  const late = a.endT && G.time - a.endT > (tower ? C.lootTimeout : C.bossLootTime);
+  // na masmorra, com o chefe caído, larga o monstro que estava perseguindo; acabou o tempo, larga o drop também
+  if (p.target && (late || (a.bossDown && !tower && p.target.type === 'mon'))) { p.target = null; p.path = null; }
+  if (validTarget(p.target)) { watchStuck(a, p); return; }
+  const t = late ? null : pickTarget(a);
+  if (t) { a.nextT = 0; aim(p, t); return; }
+  p.target = null;
+  if (!a.bossDown) return; // o chefe ainda está vivo mas fora de alcance por enquanto (travado): espera
+  // torre: com monstro vivo (travado e deixado de lado por um tempo) ou onda da invasão por vir, espera;
+  // só um monstro inalcançável por muito tempo libera a subida, para a automação não ficar presa
+  if (tower && !towerFloorClear() && G.time - a.bossT < C.towerStuckTimeout) return;
+  // drops recém-caídos ainda no ar: espera pousarem antes de dar o andar por limpo
+  if (!late && G.loot.some((l) => G.time - l.born <= 0.6 && lootOk2(l))) return;
+  // andar limpo: uma pausa curta para ver o resultado e desce
+  if (!a.nextT) a.nextT = G.time + C.nextDelay;
+  if (G.time >= a.nextT) nextFloor(a);
+}
+
+// ---------- HUD: selo da Auto-Limpeza sob o minimapa, com o botão Parar ----------
+let hudEl = null, lastHtml = '';
+function updateAutoHud() {
+  if (!hudEl) {
+    hudEl = $('#autoClr');
+    if (!hudEl) return;
+    hudEl.addEventListener('pointerdown', (e) => { if (e.target.closest('[data-auto="stop"]')) { e.stopPropagation(); e.preventDefault(); stopAutoClear('parada pelo jogador'); } });
+  }
+  const a = G.auto;
+  if (!a) { if (!hudEl.hidden) { hudEl.hidden = true; lastHtml = ''; } return; }
+  const left = G.monsters.reduce((n, m) => n + (m.dead ? 0 : 1), 0), tk = ticketCount(a.biome);
+  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && (!left || !isTower(a)) ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
+  const html = '<div class="ac-h"><b>Auto-Limpeza</b><button class="btn sm" data-auto="stop">Parar</button></div>' +
+    '<div class="ac-s">' + (isTower(a) ? 'Torre · ' : '') + 'Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
+    '<div class="ac-s">Monstros ' + left + ' · tickets ' + tk + ' · andares ' + a.done + '</div>';
+  if (html !== lastHtml) { lastHtml = html; hudEl.innerHTML = html; }
+  hudEl.hidden = false;
+}
+return { autoBossDown, autoClearOn, autoSteering, buyTicket, startAutoClear, stopAutoClear, ticketCount, updateAutoClear, updateAutoHud };
+})();
+
+// ---- ui/questUi.js ----
+const { initQuestUi, openQuestBoard, questTargetPos, questUiTick } = (() => {
+// ---------- interface das missões e auxílios do HUD ----------
+// Rastreador de missão (canto, recolhível), Quadro de Missões (janela), alvo da
+// missão no minimapa e no rótulo do NPC, selo "!" nos botões com pontos livres,
+// legenda dos ícones do menu no primeiro acesso.
+
+/** Pergaminho do rastreador recolhido. */
+const QUEST_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4"/><path d="M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10"/><path d="M7 4a2 2 0 0 0-2 2v11"/><path d="M8.5 9h4.5M8.5 12.5h4.5"/></g></svg>';
+const UIQ = { track: null, head: null, body: null, last: '', ch: null, target: null, legend: null };
+
+// ---------- alvo da missão (minimapa e rótulo) ----------
+/** Ponto do mundo que a missão atual aponta ({x, z}) ou null. Só na cidade. */
+function questTargetPos() {
+  const ch = G.ch;
+  if (!ch || !ch.quests || G.zone !== 'town') return null;
+  const step = currentOnboard(ch);
+  // missão de abate na cidade: a Guardiã dos portais é o caminho
+  const npcId = step ? step.npc || (step.id === 'kill' ? 'portal' : null) : null;
+  if (npcId) return G.npcs.find((n) => n.id === npcId) || null;
+  if (ch.quests.daily.some((d) => d.p >= d.n && !d.c)) return G.npcs.find((n) => n.id === 'board') || null;
+  return null;
+}
+/** Destaca o rótulo do NPC alvo com um "!". */
+function markTarget() {
+  const t = questTargetPos();
+  if (t === UIQ.target) return;
+  if (UIQ.target && UIQ.target.label) UIQ.target.label.classList.remove('qmark');
+  UIQ.target = t;
+  if (t && t.label) t.label.classList.add('qmark');
+}
+
+// ---------- rastreador ----------
+function trackerHtml(ch) {
+  const q = ch.quests, step = currentOnboard(ch);
+  const fold = S.settings.questFold === true;
+  const ready = q.daily.filter((d) => d.p >= d.n && !d.c).length;
+  const done = q.daily.filter((d) => d.p >= d.n).length;
+  let title, line = '', hint = '';
+  if (step) {
+    title = 'Primeiros passos ' + (q.ob + 1) + '/' + ONBOARD.length;
+    line = esc(step.text()) + (step.need > 1 ? ' <b class="num">' + q.obProg + '/' + step.need + '</b>' : '');
+    hint = step.id === 'stats' && !ch.points ? 'Suba de nível para ganhar pontos.' : step.hint;
+  } else {
+    title = 'Missões diárias ' + done + '/' + q.daily.length;
+    const next = q.daily.find((d) => d.p < d.n);
+    line = next ? esc(dailyText(next)) + ' <b class="num">' + next.p + '/' + next.n + '</b>' : 'Todas concluídas hoje.';
+    if (!ready) hint = 'Toque para ver o Quadro de Missões.';
+  }
+  if (ready) hint = '<b class="qt-ready">' + ready + (ready > 1 ? ' recompensas prontas' : ' recompensa pronta') + '</b> · resgate no Quadro de Missões' + (inSafe() ? '' : ', em Aldrena');
+  // recolhido: só o ícone de pergaminho (o título "Missões diárias 0/3" some)
+  if (fold) return { fold, ready, title, html: '' };
+  return { fold, ready, title, html: '<span class="qt-title">' + esc(title) + '</span><span class="qt-line">' + line + '</span>' + (hint ? '<span class="qt-hint">' + hint + '</span>' : '') };
+}
+function renderTracker() {
+  const ch = G.ch;
+  if (!ch || !ch.quests || !UIQ.track) return;
+  const t = trackerHtml(ch);
+  const key = t.html + (t.fold ? 1 : 0) + t.ready;
+  if (key === UIQ.last) return;
+  UIQ.last = key;
+  UIQ.body.innerHTML = t.html;
+  UIQ.track.classList.toggle('fold', t.fold);
+  UIQ.track.classList.toggle('ready', t.ready > 0);
+  UIQ.head.setAttribute('aria-expanded', String(!t.fold));
+  UIQ.head.setAttribute('aria-label', t.fold ? 'Abrir rastreador de missão: ' + t.title : 'Recolher rastreador de missão');
+  UIQ.head.title = t.fold ? t.title + (t.ready ? ' · recompensa pronta' : '') : 'Recolher';
+  UIQ.head.innerHTML = t.fold ? QUEST_ICON : '▾';
+}
+
+// ---------- Quadro de Missões ----------
+function boardHtml() {
+  const ch = G.ch, q = ch.quests, town = inSafe();
+  let h = '<h3>Quadro de Missões</h3><div class="role">Missões iniciais e diárias de Aldrena</div>';
+  if (q.ob < ONBOARD.length) {
+    h += '<h4 class="qb-h">Primeiros passos</h4><div class="list">';
+    ONBOARD.forEach((s, i) => {
+      const st = i < q.ob ? 'done' : i === q.ob ? 'cur' : 'next';
+      const prog = st === 'cur' && s.need > 1 ? ' · ' + q.obProg + '/' + s.need : '';
+      h += '<div class="li qb-' + st + '"><span>' + (st === 'done' ? '✓ ' : '') + esc(s.text()) + prog + '</span><span class="a note">' + esc(rewardText(s.reward)) + '</span>' + (st === 'cur' ? '<span class="s">' + esc(s.hint) + '</span>' : '') + '</div>';
+    });
+    h += '</div><p class="note">A recompensa das missões iniciais chega na hora, onde você estiver.</p>';
+  }
+  h += '<h4 class="qb-h">Diárias de hoje</h4><div class="list">';
+  q.daily.forEach((d, i) => {
+    const ok = d.p >= d.n, pct = Math.min(100, (d.p / d.n) * 100).toFixed(0);
+    const btn = d.c ? '<button class="btn sm" disabled>Resgatada</button>'
+      : '<button class="btn sm' + (ok && town ? ' gold' : '') + '" data-q="claim" data-i="' + i + '"' + (ok && town ? '' : ' disabled') + '>Resgatar</button>';
+    h += '<div class="li qb-daily' + (d.c ? ' qb-done' : '') + '"><span>' + esc(dailyText(d)) + ' <b class="num">' + Math.min(d.p, d.n) + '/' + d.n + '</b></span><span class="a">' + btn + '</span>' +
+      '<span class="s"><span class="qb-bar"><i style="width:' + pct + '%"></i></span>' + esc(rewardText(d.r)) + '</span></div>';
+  });
+  h += '</div>';
+  h += '<p class="note">Resgate as três para ganhar também ' + esc(R.JEWELS[DAILY_BONUS.jewel].name) + ' e Ouro extra' + (q.bonus ? ' (já recebido hoje)' : '') + '. Novas missões à meia-noite (horário local).' +
+    (town ? '' : ' <b>Fora da cidade dá para acompanhar, mas o resgate é no quadro, em Aldrena.</b>') + '</p>';
+  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
+  return h;
+}
+/** Abre o Quadro de Missões (no quadro da praça ou pelo rastreador). */
+function openQuestBoard() {
+  if (!G.ch || !G.ch.quests) return;
+  questPoll();
+  G.openNpcId = 'board';
+  $('#dialog').innerHTML = boardHtml();
+  $('#modal').classList.remove('acct-on');
+  $('#modal').hidden = false;
+}
+function boardAction(e) {
+  const b = e.target.closest('[data-q]');
+  if (!b || b.disabled) return;
+  if (b.dataset.q === 'claim' && claimQuest(+b.dataset.i)) {
+    const dlg = $('#dialog'), top = dlg.scrollTop;
+    dlg.innerHTML = boardHtml();
+    dlg.scrollTop = top;
+  }
+}
+
+// ---------- selos "!" e legenda do menu ----------
+function updateBadges(ch) {
+  const pts = ch.points > 0, tree = R.treePoints(ch) - R.treeSpent(ch) > 0;
+  for (const [sel, on, tip] of [['char', pts, 'Pontos de atributo livres'], ['skills', tree, 'Pontos de maestria livres']]) {
+    for (const el of document.querySelectorAll('.menu [data-tab="' + sel + '"], #tabs [data-t="' + sel + '"]')) {
+      if (el.classList.contains('alert') === on) continue;
+      el.classList.toggle('alert', on);
+      if (on) el.dataset.alert = tip; else delete el.dataset.alert;
+    }
+  }
+  // menu recolhido no celular: o selo passa para a seta que abre o menu
+  const fold = document.getElementById('menuFold');
+  if (fold && fold.classList.contains('alert') !== (pts || tree)) fold.classList.toggle('alert', pts || tree);
+}
+/** Legenda dos ícones do menu: aparece no primeiro acesso e some com "Entendi" ou ao abrir um painel. */
+function showLegend() {
+  if (UIQ.legend || S.settings.menuHelpSeen) return;
+  const menu = $('.menu');
+  if (!menu) return;
+  const box = document.createElement('div');
+  box.className = 'menu-legend';
+  box.setAttribute('role', 'note');
+  let h = '<b>Menu</b>';
+  for (const btn of menu.querySelectorAll('button:not(.menu-fold)')) {
+    const svg = btn.querySelector('svg');
+    h += '<span class="ml-row">' + (svg ? svg.outerHTML : '') + esc(btn.dataset.tip || btn.getAttribute('aria-label') || '') + '</span>';
+  }
+  h += '<button class="btn sm" type="button">Entendi</button>';
+  box.innerHTML = h;
+  box.querySelector('button').addEventListener('click', hideLegend);
+  menu.parentNode.insertBefore(box, menu.nextSibling);
+  UIQ.legend = box;
+}
+function hideLegend() {
+  if (!UIQ.legend) return;
+  UIQ.legend.remove();
+  UIQ.legend = null;
+  S.settings.menuHelpSeen = true;
+  persist();
+}
+/** No toque não há "passar o mouse": o primeiro toque em cada ícone mostra o nome por 1,6 s. */
+function touchTips() {
+  for (const btn of document.querySelectorAll('.menu button[data-tip]')) {
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      btn.classList.add('tip-on');
+      clearTimeout(btn._tipT);
+      btn._tipT = setTimeout(() => btn.classList.remove('tip-on'), 1600);
+    });
+    btn.addEventListener('click', () => { if (UIQ.legend) hideLegend(); });
+  }
+}
+
+/** Atualização no ritmo do HUD (10×/s): progresso das missões, rastreador, selos e alvo. */
+function questUiTick() {
+  const ch = G.ch;
+  if (!ch) return;
+  if (UIQ.ch !== ch) { UIQ.ch = ch; UIQ.last = ''; UIQ.target = null; }
+  questPoll();
+  renderTracker();
+  markTarget();
+  updateBadges(ch);
+  if (!S.settings.menuHelpSeen && !UIQ.legend) showLegend();
+}
+
+/** Cria o rastreador dentro do HUD e liga os cliques do quadro. */
+function initQuestUi() {
+  const col = $('.topright');
+  const box = document.createElement('div');
+  box.className = 'qtrack';
+  box.id = 'qtrack';
+  box.innerHTML = '<button class="qt-fold" type="button" aria-label="Recolher ou abrir o rastreador de missão" aria-expanded="true">▾</button><div class="qt-body" role="button" tabindex="0" title="Abrir o Quadro de Missões"></div>';
+  col.appendChild(box);
+  UIQ.track = box;
+  UIQ.head = box.querySelector('.qt-fold');
+  UIQ.body = box.querySelector('.qt-body');
+  UIQ.head.addEventListener('click', (e) => { e.stopPropagation(); S.settings.questFold = S.settings.questFold !== true; persist(); renderTracker(); });
+  UIQ.body.addEventListener('click', openQuestBoard);
+  UIQ.body.addEventListener('keydown', (e) => { if (e.key === 'Enter') openQuestBoard(); });
+  touchTips();
+  $('#dialog').addEventListener('click', boardAction);
+}
+return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
+})();
+
+// ---- ui/cursor.js ----
+const { MCUR, initCursor, mcurSet } = (() => {
+// Cursor medieval desenhado pelo jogo: sempre visível (o sistema pode esconder o
+// ponteiro enquanto teclas são pressionadas, ex.: WASD/1–6 no Linux).
+
+const MCUR = { el: document.getElementById('mcur'), mode: '' };
+function mcurMode(t) {
+  if (!t || !t.closest) return '';
+  if (t.closest('input, textarea')) return 'text';
+  if (t.closest('button:not([disabled]), [data-act], .label, a, select, .slot, .cell, .cls')) return 'hand';
+  if (t === canvas && mouse.hover) return 'atk';
+  return '';
+}
+function mcurSet(m) {
+  if (m === MCUR.mode) return;
+  MCUR.mode = m;
+  MCUR.el.className = m === 'text' ? '' : m;
+  MCUR.el.style.visibility = m === 'text' ? 'hidden' : '';
+}
+/** Liga o cursor desenhado pelo jogo (uma única vez, no boot). */
+function initCursor() {
+  window.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch') { document.documentElement.classList.remove('swcur'); return; }
+    document.documentElement.classList.add('swcur');
+    MCUR.el.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)';
+    MCUR.x = e.clientX; MCUR.y = e.clientY;
+    mcurSet(mcurMode(e.target));
+  }, { passive: true });
+  document.addEventListener('mouseleave', () => (MCUR.el.style.visibility = 'hidden'));
+  document.addEventListener('mouseenter', () => (MCUR.el.style.visibility = ''));
+  window.addEventListener('blur', () => (MCUR.el.style.visibility = 'hidden'));
+  window.addEventListener('focus', () => (MCUR.el.style.visibility = ''));
+}
+return { MCUR, initCursor, mcurSet };
+})();
+
+// ---- input/picking.js ----
+const { clickWorld, pickMonster, screenToGround, updateHover } = (() => {
+// ---------- seleção no mundo: tela → chão, monstro, NPC, portal, barril ----------
+
+const raycaster = new THREE.Raycaster();
+const groundPlane = new THREE.Plane(new V3(0, 1, 0), 0);
+const ndc = new THREE.Vector2();
+/** Ponto do chão sob a posição de tela (px). Devolve um vetor novo (o chamador pode guardá-lo). */
+function screenToGround(sx, sy) {
+  ndc.set((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const p = new V3();
+  // terreno com relevo: duas passadas contra um plano na altura local
+  groundPlane.constant = -(G.player ? gy(G.player.x, G.player.z) : 0);
+  if (!raycaster.ray.intersectPlane(groundPlane, p)) return null;
+  return p;
+}
+
+/** Monstro vivo mais próximo do ponto de tela (raio de 44 px; 90 px para chefes). */
+function pickMonster(sx, sy) {
+  let best = null, bd = 44 * 44;
+  for (const m of G.monsters) {
+    if (m.dead) continue;
+    const s = toScreen(m.x, m.model.height * 0.5, m.z);
+    if (!s.vis) continue;
+    const rr = m.boss ? 90 : 44;
+    const d = (s.x - sx) ** 2 + (s.y - sy) ** 2;
+    if (d < rr * rr && d < bd) { bd = d; best = m; }
+  }
+  return best;
+}
+function pickNpc(sx, sy) {
+  let best = null, bd = 50 * 50;
+  for (const n of G.npcs) {
+    const s = toScreen(n.x, 1.2, n.z);
+    const d = (s.x - sx) ** 2 + (s.y - sy) ** 2;
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function pickBreakable(sx, sy) {
+  for (const b of G.breakables) {
+    if (b.broken) continue;
+    const s = toScreen(b.x, 0.5, b.z);
+    if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 32 * 32) return b;
+  }
+  return null;
+}
+/** Clique no mundo: monstro > portal > NPC > barril > chão. `fromHold` = botão segurado (só persegue/anda). */
+function clickWorld(sx, sy, fromHold) {
+  const p = G.player;
+  if (!p.alive) return;
+  const m = pickMonster(sx, sy);
+  if (m) { p.target = { type: 'mon', m }; p.path = null; return; }
+  if (fromHold && p.target && p.target.type === 'mon') return;
+  if (!fromHold) {
+    for (const pt of allPortals()) {
+      const s = toScreen(pt.x, 1.8, pt.z);
+      if ((s.x - sx) ** 2 + (s.y - sy) ** 2 < 60 * 60) { p.target = { type: 'portal', p: pt }; pathTo(pt.x, pt.z); return; }
+    }
+    const n = G.npcs.length && pickNpc(sx, sy);
+    if (n) { targetNpc(n); return; }
+    const b = pickBreakable(sx, sy);
+    if (b) { p.target = { type: 'barrel', b }; pathTo(b.x, b.z); return; }
+  }
+  const g = screenToGround(sx, sy);
+  if (!g) return;
+  p.target = null;
+  cancelChannel();
+  pathTo(g.x, g.z);
+  if (!fromHold) spawnRing(g.x, g.z, 0.9, 0.2, 0xffe0a0, 0.35);
+}
+
+/** Atualiza o monstro sob o cursor (1× por quadro, não a cada pointermove) e o cursor de ataque. */
+// toque não tem cursor pairando: a busca de monstro sob o último toque roda a ~4 vezes por segundo
+let touchOnly = false, touchT = 0;
+if (typeof window === 'object') {
+  window.addEventListener('pointerdown', (e) => { touchOnly = e.pointerType === 'touch'; }, { capture: true, passive: true });
+  window.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') touchOnly = false; }, { capture: true, passive: true });
+}
+function updateHover() {
+  if (G.paused) return;
+  if (touchOnly) { const now = performance.now(); if (now - touchT < 250) return; touchT = now; }
+  const m = pickMonster(mouse.x, mouse.y);
+  if (m === mouse.hover) return;
+  mouse.hover = m;
+  if (MCUR.mode === '' || MCUR.mode === 'atk') mcurSet(m ? 'atk' : '');
+}
+return { clickWorld, pickMonster, screenToGround, updateHover };
+})();
+
+// ---- game/dodge.js ----
+const { dodgeLeft, tryDodge, updateDodge } = (() => {
+// ---------- esquiva: passo curto com invulnerabilidade (Shift no PC, botão no toque) ----------
+// Direção: teclas de movimento, se houver; senão o cursor (PC) ou o caminho que o
+// herói segue (toque); por último, para onde ele está virado. Para na parede: o
+// passo é testado com o raio do herói, como os empurrões das habilidades.
+
+/** Segundos até a esquiva voltar (0 = pronta). */
+function dodgeLeft() {
+  const p = G.player;
+  return p ? Math.max(0, (p.dodgeReadyAt || 0) - G.time) : 0;
+}
+/** Direção da esquiva (vetor unitário) ou null. */
+function dodgeDir(p, useCursor) {
+  let dx = 0, dz = 0;
+  if (KEYS.any()) {
+    const fx = -Math.sin(CAM.yaw), fz = -Math.cos(CAM.yaw);
+    if (KEYS.w) { dx += fx; dz += fz; }
+    if (KEYS.s) { dx -= fx; dz -= fz; }
+    if (KEYS.a) { dx += fz; dz -= fx; }
+    if (KEYS.d) { dx -= fz; dz += fx; }
+  }
+  if (!dx && !dz && useCursor) {
+    const g = screenToGround(mouse.x, mouse.y);
+    if (g) { dx = g.x - p.x; dz = g.z - p.z; }
+  }
+  if ((!dx && !dz) || Math.hypot(dx, dz) < 0.3) {
+    const n = p.path && p.path[0];
+    if (n && Math.hypot(n.x - p.x, n.z - p.z) > 0.3) { dx = n.x - p.x; dz = n.z - p.z; }
+    else { dx = Math.sin(p.rot); dz = Math.cos(p.rot); }
+  }
+  const l = Math.hypot(dx, dz);
+  return l ? { x: dx / l, z: dz / l } : null;
+}
+/**
+ * Tenta esquivar. `useCursor`: no PC, a direção segue o cursor quando não há
+ * tecla de movimento. Cancela a canalização do portal e interrompe a trava de
+ * habilidade leve (não a investida nem o salto). Devolve true se esquivou.
+ */
+function tryDodge(useCursor) {
+  const p = G.player, C = CONFIG.dodge;
+  if (G.mode !== 'play' || G.paused || !p || !p.alive || p.dodge || p.dash || p.hop) return false;
+  if (G.time < (p.dodgeReadyAt || 0)) return false;
+  const dir = dodgeDir(p, useCursor);
+  if (!dir) return false;
+  cancelChannel();
+  p.dodge = { t: 0, dur: C.dur, dist: C.dist, dx: dir.x, dz: dir.z, ghost: 0 };
+  p.dodgeReadyAt = G.time + C.cd;
+  p.invulnUntil = Math.max(p.invulnUntil || 0, G.time + C.invuln);
+  p.path = null; p.target = null; p.lockUntil = 0; p.castFace = null;
+  p.rot = p.rotTarget = Math.atan2(dir.x, dir.z);
+  emit(p.x, 0.2, p.z, { n: 14, color: 0xd8c8a8, speed: 3, up: 0.6, life: 0.45, size: 0.9, spread: 0.6 });
+  Sfx.swing();
+  return true;
+}
+/** Deslocamento da esquiva (rápido no começo, freia no fim); para ou desliza na parede. */
+function updateDodge(p, dt) {
+  const d = p.dodge;
+  const k0 = Math.min(1, d.t / d.dur);
+  d.t += dt;
+  const k1 = Math.min(1, d.t / d.dur);
+  const ease = (k) => 1 - (1 - k) * (1 - k);
+  const step = d.dist * (ease(k1) - ease(k0));
+  const r = CONFIG.player.radius, nx = p.x + d.dx * step, nz = p.z + d.dz * step;
+  if (walkableR(G.L, nx, nz, r)) { p.x = nx; p.z = nz; }
+  else if (walkableR(G.L, nx, p.z, r)) p.x = nx;
+  else if (walkableR(G.L, p.x, nz, r)) p.z = nz;
+  else d.t = d.dur; // parede de frente: termina aqui
+  if (d.t - d.ghost > 0.05 && k1 < 0.85) { d.ghost = d.t; afterimage(p.x, p.z, p.rot, 0xcfd8ff, 0.25); }
+  if (d.t >= d.dur) p.dodge = null;
+}
+return { dodgeLeft, tryDodge, updateDodge };
+})();
+
+// ---- ui/feedback.js ----
+const { hurtFeedback, updateLowHp } = (() => {
+// ---------- retorno visual de dano e vida baixa (vinheta vermelha) ----------
+
+const fx = { el: null, anim: null };
+function el() { return fx.el || (fx.el = $('#hurtfx')); }
+
+/** Pulso vermelho proporcional à fração de vida perdida no golpe. */
+function hurtFeedback(frac) {
+  const e = el();
+  if (!e || !(frac > 0)) return;
+  const peak = Math.min(0.55, 0.15 + frac * 2.5);
+  if (fx.anim) fx.anim.cancel();
+  fx.anim = e.animate([{ opacity: peak }, { opacity: 0 }], { duration: 380, easing: 'ease-out' });
+}
+/** Aviso persistente (pulsante) enquanto a vida estiver abaixo do limite configurado. */
+function updateLowHp(hpFrac, alive) {
+  const e = el();
+  if (e) e.classList.toggle('low', alive && hpFrac < CONFIG.feel.lowHpWarn);
+}
+return { hurtFeedback, updateLowHp };
+})();
+
+// ---- ui/hud.js ----
+const { buildSlots, hudTick, resetHudCache } = (() => {
+// ---------- barra de habilidades e HUD (orbes, EXP, chefe, buffs) ----------
+
+const slotRefs = [];
+const DODGE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3a2e52"/><stop offset="1" stop-color="#14101c"/></radialGradient></defs>' +
+  '<rect width="64" height="64" fill="url(#g)"/><g fill="none" stroke="#e8d08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 44c9-3 15-11 22-22"/><path d="M24 20h11v11"/></g>' +
+  '<g fill="none" stroke="#e8d08a" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"><path d="M10 54h16"/><path d="M38 46c6 0 11-3 16-8"/></g>' +
+  '<rect x="3" y="3" width="58" height="58" fill="none" stroke="#e8c878" stroke-opacity=".35" stroke-width="1"/></svg>');
+/** Recria a barra de habilidades (troca de habilidades, evolução, novo personagem). */
+function buildSlots() {
+  const box = $('#slots');
+  box.innerHTML = '';
+  slotRefs.length = 0;
+  const ch = G.ch;
+  for (let i = 0; i < 6; i++) {
+    const id = ch.skillBar[i];
+    const sk = id && R.SKILLS[id];
+    const el = document.createElement('button');
+    el.className = 'slot sk' + (i === G.selectedSlot ? ' sel' : '');
+    el.dataset.slot = i;
+    if (sk) { el.classList.add('has'); el.style.backgroundImage = 'url("' + skillIconURI(id) + '")'; }
+    el.innerHTML = '<kbd>' + (i + 1) + '</kbd>' + (sk ? '<span class="sn">' + esc(sk.name) + '</span>' : '<span style="color:#5a506a">—</span>') + '<i class="cd"></i>';
+    el.title = sk ? sk.name + ' · MP ' + sk.mp + ' · AG ' + sk.ag + (i === G.selectedSlot ? ' · botão direito' : '') : 'Vazio';
+    el.setAttribute('aria-label', sk ? sk.name : 'Habilidade ' + (i + 1) + ': vazio');
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      Sfx.init();
+      if (e.pointerType === 'touch' || e.pointerType === 'pen') requestCast(i);
+      else { G.selectedSlot = i; buildSlots(); }
+    });
+    box.appendChild(el);
+    slotRefs.push({ i, el, cd: el.querySelector('.cd'), h: null, no: null });
+  }
+  // esquiva: casa fixa entre as habilidades e as poções (Shift no PC, toque no celular)
+  {
+    const el = document.createElement('button');
+    el.className = 'slot dodge has';
+    el.style.backgroundImage = 'url("' + DODGE_ICON + '")';
+    el.title = 'Esquiva · Shift · passo rápido sem receber dano';
+    el.setAttribute('aria-label', 'Esquiva');
+    el.innerHTML = '<kbd>Shift</kbd><span class="sn">Esquiva</span><i class="cd"></i>';
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      Sfx.init();
+      tryDodge(false);
+    });
+    box.appendChild(el);
+    slotRefs.push({ dodge: true, el, cd: el.querySelector('.cd'), h: null });
+  }
+  for (const id of ['hp', 'mp']) {
+    const el = document.createElement('button');
+    el.className = 'slot pot-' + id;
+    el.setAttribute('aria-label', id === 'hp' ? 'Poção de Vida' : 'Poção de Mana');
+    el.style.backgroundImage = 'url("' + iconURI('potion', id === 'hp' ? '#e8483a' : '#3a78e8') + '"), radial-gradient(circle at 50% 45%, ' + (id === 'hp' ? '#4a1414' : '#14204a') + ', #0c0910 80%)';
+    el.classList.add('has', 'pot');
+    el.innerHTML = '<kbd>' + (id === 'hp' ? 'Q' : 'E') + '</kbd><span class="sn">' + (id === 'hp' ? 'Vida' : 'Mana') + '</span><span class="q num" data-pot="' + id + '"></span>';
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); usePotion(id); });
+    box.appendChild(el);
+    slotRefs.push({ pot: id, el, q: el.querySelector('.q'), qty: null });
+  }
+}
+
+// ---------- HUD ----------
+// Referências de DOM em cache e escrita só quando o valor exibido muda (o HUD
+// roda 10×/s; a maioria dos campos fica igual entre atualizações).
+const H = {};
+const last = new Map();
+function ref(id) { return H[id] || (H[id] = $('#' + id)); }
+function setText(id, v) { if (last.get(id) !== v) { last.set(id, v); ref(id).textContent = v; } }
+function setHtml(id, v) { if (last.get(id) !== v) { last.set(id, v); ref(id).innerHTML = v; } }
+function setStyle(id, prop, v) { const k = id + '.' + prop; if (last.get(k) !== v) { last.set(k, v); ref(id).style[prop] = v; } }
+function setVar(id, name, v) { const k = id + '--' + name; if (last.get(k) !== v) { last.set(k, v); ref(id).style.setProperty(name, v); } }
+/** Força a próxima atualização a reescrever tudo (troca de personagem). */
+function resetHudCache() { last.clear(); }
+
+/** Tempo de buff: "42s" ou "9:58" (poções de reforço duram 10 minutos). */
+const buffLeft = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') : Math.ceil(s) + 's');
+const SHRINE_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#4a3a18"/><stop offset="1" stop-color="#140e06"/></radialGradient></defs>' +
+  '<rect width="64" height="64" fill="url(#g)"/><path d="M32 8l6 16 17 1-13 11 5 17-15-10-15 10 5-17L9 25l17-1z" fill="#f2cf7a" stroke="#6a4a14" stroke-width="2" stroke-linejoin="round"/></svg>');
+const PET_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="#e8d08a"><ellipse cx="12" cy="15.5" rx="4.2" ry="3.6"/><circle cx="6.5" cy="10" r="1.9"/><circle cx="9.8" cy="6.8" r="1.9"/><circle cx="14.2" cy="6.8" r="1.9"/><circle cx="17.5" cy="10" r="1.9"/></g></svg>');
+/** Ícone do buff: habilidade, poção de reforço, santuário (Éden/Torre) ou pet. */
+function buffIcon(b) {
+  if (b.id === 'pet') return ['pet', PET_ICON];
+  if (R.SKILLS[b.id]) return ['', skillIconURI(b.id)];
+  const pot = b.id && b.id.indexOf('pot:') === 0 && R.POTIONS[b.id.slice(4)];
+  if (pot) return ['pot', iconURI('potion', pot.color)];
+  return ['shrine', SHRINE_ICON];
+}
+function buffHtml(b, left) {
+  const [cls, uri] = buffIcon(b), t = buffLeft(left);
+  return '<span class="buff ' + cls + (left < 10 ? ' end' : '') + '" style="background-image:url(&quot;' + uri + '&quot;)" title="' + esc(b.name) + '" role="img" aria-label="' + esc(b.name) + ' ' + t + '"><b>' + t + '</b></span>';
+}
+function hudTick() {
+  const ch = G.ch, st = G.st;
+  if (!ch || !st) return;
+  const hpFrac = Math.max(0, G.hp / st.maxHp);
+  setVar('orbHp', '--fill', hpFrac.toFixed(3));
+  setVar('orbMp', '--fill', Math.max(0, G.mp / st.maxMp).toFixed(3));
+  setText('hpTxt', fmt(Math.max(0, G.hp)));
+  setText('mpTxt', fmt(G.mp));
+  setStyle('agFill', 'width', ((G.ag / st.maxAg) * 100).toFixed(1) + '%');
+  setText('agTxt', 'AG ' + fmt(G.ag) + ' / ' + fmt(st.maxAg));
+  const pct = ch.level >= R.RATES.maxLevel ? 100 : (ch.exp / R.expToNext(ch.level)) * 100;
+  setStyle('expFill', 'width', pct.toFixed(2) + '%');
+  setText('expTxt', 'EXP ' + dec(pct, 2) + '%' + (ch.points ? ' · ' + fmt(ch.points) + ' pontos livres' : ''));
+  setText('rateTxt', 'EXP ' + R.expRate(ch.resets) + 'x');
+  // nome e classe somem no celular (CSS .lv-long); nível e CP ficam
+  setHtml('lvlTxt', '<span class="lv-long"><b>' + esc(ch.name) + '</b> · ' + esc(R.className(ch)) + ' · </span>Nv <b>' + ch.level + '</b>' + (ch.resets ? ' · Reset <b>' + ch.resets + '</b>' : '') + ' · CP <b class="cpv">' + fmt(G.cp || 0) + '</b>');
+  const ig = document.getElementById('invGold'), gt = fmt(ch.gold);
+  if (ig && ig.textContent !== gt) ig.textContent = gt;
+  const tb = ref('tbItems'), on = !!G.showAllLabels;
+  if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
+  updateSlotStates(ch, st);
+  updateBossBar();
+  updateAutoHud();
+  setHtml('buffs', G.buffs.map((x) => buffHtml(x, x.until - G.time)).join('') +
+    (G.pet && G.pet.away > G.time ? buffHtml({ id: 'pet', name: 'Pet vendendo' }, G.pet.away - G.time) : ''));
+  updateLowHp(hpFrac, G.player.alive);
+}
+function updateSlotStates(ch, st) {
+  for (const s of slotRefs) {
+    if (s.dodge) {
+      const left = dodgeLeft();
+      const h = left > 0 ? Math.min(100, (left / CONFIG.dodge.cd) * 100).toFixed(1) + '%' : '0';
+      if (s.h !== h) { s.h = h; s.cd.style.height = h; s.el.classList.toggle('cooling', left > 0); }
+      continue;
+    }
+    if (s.pot) { const n = String(potionCount(s.pot)); if (s.qty !== n) { s.qty = n; s.q.textContent = n; } continue; }
+    const id = ch.skillBar[s.i];
+    if (!id) continue;
+    const sk = R.SKILLS[id];
+    const left = cdLeft(id);
+    const h = left > 0 ? Math.min(100, (left / (sk.cd * (1 + st.cdPct / 100))) * 100).toFixed(1) + '%' : '0';
+    if (s.h !== h) { s.h = h; s.cd.style.height = h; }
+    const c = R.skillCost(st, sk);
+    const no = G.mp < c.mp || G.ag < c.ag;
+    if (s.no !== no) { s.no = no; s.el.classList.toggle('nomana', no); }
+  }
+}
+function updateBossBar() {
+  const b = G.boss;
+  const show = !!(b && !b.dead && b.aggro);
+  if (last.get('boss') !== show) { last.set('boss', show); ref('bossbar').hidden = !show; }
+  if (!show) return;
+  setText('bossName', b.name + ' · nv ' + b.level);
+  setStyle('bossFill', 'width', ((b.hp / b.maxHp) * 100).toFixed(1) + '%');
+}
+return { buildSlots, hudTick, resetHudCache };
+})();
+
+// ---- ui/npcDialogs.js ----
+const { closeModal, confirmDescend, initDialogs, openNpc, showDeath } = (() => {
+// ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
+
+function modal(html) { $('#dialog').innerHTML = html; $('#modal').classList.remove('acct-on'); $('#modal').hidden = false; }
+function closeModal() { $('#modal').hidden = true; }
+const SELL_CATS = { all: 'Todos', jewel: 'Joias', potion: 'Poções' };
+const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.kind === 'potion' ? 'potion' : 'other');
+/** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
+const sellListed = (it) => !it.slot;
+/** Joias pedem confirmação antes de vender. */
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket';
+/** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
+const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
+/** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
+let merchItems = [], smithItems = [];
+function sellSection(ch) {
+  merchItems = ch.bag.slice();
+  const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
+  const cnt = { all: 0, jewel: 0, potion: 0 };
+  ch.bag.forEach((it) => { if (!sellListed(it)) return; cnt.all++; const c = sellCat(it); if (c in cnt) cnt[c]++; });
+  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Vender item</h4>';
+  h += '<div class="btabs">' + Object.keys(SELL_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="sellf" data-k="' + k + '">' + SELL_CATS[k] + ' <span>' + cnt[k] + '</span></button>').join('') + '</div>';
+  const idx = [];
+  ch.bag.forEach((it, i) => { if (sellListed(it) && (f === 'all' || sellCat(it) === f)) idx.push(i); });
+  idx.sort((a, b) => R.sellValue(ch.bag[b], 1) - R.sellValue(ch.bag[a], 1));
+  if (!idx.length) return h + '<p class="note">Nada ' + (f === 'all' ? 'na mochila' : 'desta categoria na mochila') + ' para vender.</p>';
+  const cf = UI.merchConfirm && ch.bag.includes(UI.merchConfirm.it) ? UI.merchConfirm : null;
+  h += '<div class="list selllist">';
+  idx.forEach((i) => {
+    const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
+    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · você tem ' + q;
+    let a;
+    if (it.locked) a = '<button class="btn sm" disabled>Trancado</button>';
+    else if (cf && cf.it === it) {
+      a = '<button class="btn sm gold" data-npc="sell" data-i="' + i + '" data-n="' + cf.n + '" data-ok="1">Confirmar · ' + fmt(R.sellValue(it, cf.n)) + '</button><button class="btn sm" data-npc="sellno">Cancelar</button>';
+    } else {
+      a = q > 1
+        ? '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">×1 · ' + fmt(R.sellValue(it, 1)) + '</button><button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="' + q + '">Tudo · ' + fmt(R.sellValue(it)) + '</button>'
+        : '<button class="btn sm" data-npc="sell" data-i="' + i + '" data-n="1">Vender · ' + fmt(R.sellValue(it)) + '</button>';
+    }
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" title="' + esc(R.itemName(it)) + '" style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + q : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + (cf && cf.it === it ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+  });
+  return h + '</div>';
+}
+function sellFromBag(ch, li, n, confirmed) {
+  // confere o item da lista na mochila agora (o pet ou uma poção podem ter mudado as posições)
+  const it = merchItems[li], i = it ? ch.bag.indexOf(it) : -1;
+  if (i < 0 || !sellListed(it) || it.locked) { UI.merchConfirm = null; return; }
+  const q = it.qty || 1;
+  n = Math.max(1, Math.min(n || 1, q));
+  if (sellNeedsConfirm(it) && !confirmed) { UI.merchConfirm = { it, n }; return; }
+  UI.merchConfirm = null;
+  const gold = R.sellValue(it, n);
+  ch.gold += gold;
+  if (n >= q) ch.bag.splice(i, 1); else it.qty = q - n;
+  UI.sel = null;
+  log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' de Ouro.', 'loot');
+  Sfx.coin();
+}
+/** Tickets de Auto-Limpeza na Mercadora: um por masmorra e um da torre, compra com confirmação (são caros). */
+function ticketSection(ch) {
+  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
+  R.TICKET_IDS.concat('tower').forEach((k) => {
+    const P = R.ticketPrice(k), where = k === 'tower' ? 'Torre Infinita · 1 andar automático no portal da torre' : BIOMES[k].name + ' · 1 andar automático na Guardiã Nyx';
+    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k, cn = UI.tkN || 1;
+    const btn = (n) => '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + n + '"' + (ch.gold >= P * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(P * n) + '</button>';
+    const a = cf
+      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + cn + '" data-ok="1">Confirmar ×' + cn + ' · ' + fmt(P * cn) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : btn(1) + btn(10);
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(where) + ' · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+  });
+  return h + '</div><p class="note">Os tickets das masmorras também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
+}
+function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
+/** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
+function takeTalisman() {
+  const bag = G.ch.bag, t = bag.find((b) => b.kind === 'talisman' && b.id === 'luck');
+  if (!t) return false;
+  t.qty--; if (t.qty <= 0) bag.splice(bag.indexOf(t), 1);
+  return true;
+}
+/** Evolução de asa (asa normal +12 → Ascendida): custo, chance e o que acontece na falha. */
+function wingUpSection(sel, cnt, useT, tal) {
+  const W = R.WING_UP, pl = sel.plus || 0;
+  let h = '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evoluir asa</h4>';
+  if (sel.stage) return h + '<p class="note">Esta asa já é Ascendida: maior, com mais penas e +10% de dano, +6% de absorção e +5% de HP. Continue refinando até +15.</p>';
+  const c = R.wingUpgradeChance(sel);
+  const need = Object.keys(W.jewels);
+  const have = need.every((j) => cnt(j) >= W.jewels[j]);
+  h += '<p class="note">Vira <b>' + esc(R.itemName(Object.assign({}, sel, { stage: 1, plus: 0 }))) + '</b>: asa maior e mais detalhada, +10% de dano, +6% de absorção e +5% de HP. Mantém o +nível no sucesso.</p>';
+  h += '<p class="note">Custo: ' + need.map((j) => '<span style="color:' + R.JEWELS[j].color + '">' + W.jewels[j] + ' ' + R.JEWELS[j].name + '</span> (' + cnt(j) + ')').join(' · ') + '. As joias são gastas mesmo se falhar.</p>';
+  h += '<p class="note">Chance: 10% com a asa +12 e +5% a cada nível acima (+13: 15%, +14: 20%, +15: 25%).</p>';
+  const fail = useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: a asa volta a +0.' + (tal ? ' Ligue o Talismã da Sorte acima para proteger.' : '');
+  h += '<div class="list"><div class="li"><span style="color:var(--gold)">Evoluir para Ascendida</span><span class="a"><button class="btn sm gold" data-npc="wingup"' + (c > 0 && have ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' : 'Precisa +' + W.minPlus) + '</button></span><span class="s">' + (c > 0 ? fail : 'A asa precisa estar +' + W.minPlus + ' ou mais (agora +' + pl + ').') + '</span></div></div>';
+  return h;
+}
+/** Equipamentos que o Ferreiro aceita: os equipados (na ordem dos slots) e os da mochila. */
+const smithList = (ch) => R.SLOTS.map((s) => ch.equip[s]).filter(Boolean).concat(ch.bag.filter((x) => x.slot).sort(smithOrder));
+/** Mochila no Ferreiro: por tipo de peça, depois tier, raridade e +nível (maiores primeiro). */
+const smithOrder = (a, b) => R.SLOTS.indexOf(a.slot) - R.SLOTS.indexOf(b.slot) || b.tier - a.tier ||
+  R.RARITY[b.rarity].order - R.RARITY[a.rarity].order || (b.plus || 0) - (a.plus || 0);
+const SMITH_VIEW = { all: 'Todos', eq: 'Equipados', bag: 'Na mochila' };
+const isEquipped = (ch, it) => ch.equip[it.slot] === it;
+/** Nome sem o "+N" do final (o +nível aparece num selo sobre o ícone). */
+const baseName = (it) => R.itemName(it).replace(/ \+\d+$/, '');
+const tierTxt = (it) => 'Tier ' + (it.tier + 1);
+/** Cartão de item da lista do Ferreiro: ícone com +nível, nome na cor da raridade, tier, tipo e selo de equipado. */
+function smithCard(ch, x, i, sel) {
+  const eq = isEquipped(ch, x), pl = x.plus || 0, other = !classOk(x);
+  return '<button class="sm-it' + (x === sel ? ' on' : '') + (eq ? ' eq' : '') + (other ? ' other' : '') + '" data-npc="smithsel" data-i="' + i + '" style="--rc:' + R.RARITY[x.rarity].color + '" title="' + esc(R.itemName(x)) + '">' +
+    '<span class="ic">' + iconHtml(glyph(x)) + (pl ? '<b class="pl">+' + pl + '</b>' : '') + '</span>' +
+    '<span class="tx"><span class="nm">' + esc(baseName(x)) + '</span><span class="mt"><b class="tr">T' + (x.tier + 1) + '</b>' +
+    (eq ? '<span class="tag eq">Equipado</span> ' : other ? '<span class="tag ot">Outra classe</span> ' : '') + R.SLOT_LABEL[x.slot] + ' · ' + R.RARITY[x.rarity].name + '</span></span></button>';
+}
+/** Cabeçalho do item escolhido: ícone grande, tier, raridade, onde está, CP e opções especiais. */
+function smithSelHtml(ch, it) {
+  const eq = isEquipped(ch, it), pl = it.plus || 0, col = R.RARITY[it.rarity].color, cur = ch.equip[it.slot];
+  const opts = [];
+  if (it.luck) opts.push('Sorte');
+  if (it.skill) opts.push('Habilidade');
+  if (it.addOpt) opts.push('Opção adicional +' + it.addOpt);
+  const nx = R.excOpts(it).length;
+  if (nx) opts.push(nx + (nx === 1 ? ' opção excelente' : ' opções excelentes'));
+  if (it.anc) opts.push('Ancestral');
+  if (it.legend) opts.push('Lendário');
+  let h = '<div class="sm-sel" style="--rc:' + col + '"><span class="ic">' + iconHtml(glyph(it)) + '</span><div class="tx">' +
+    '<div class="nm">' + esc(R.itemName(it)) + '</div>' +
+    '<div class="mt">' + R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · <b class="tr">' + tierTxt(it) + '</b> de 10 · <b class="pl">+' + pl + '</b> · CP ' + fmtCP(R.itemCP(it)) + '</div>' +
+    '<div class="mt">' + (eq ? '<span class="tag eq">Equipado</span>' : '<span class="tag bag">Na mochila</span>') +
+    (!classOk(it) ? ' <span class="tag ot">Exclusivo de ' + esc(R.itemUsers(it).join(', ')) + '</span>' : '') + '</div>' +
+    (!eq && classOk(it) ? '<div class="mt">' + (cur ? 'Equipado no slot: <b style="color:' + R.RARITY[cur.rarity].color + '">' + esc(R.itemName(cur)) + '</b> (' + tierTxt(cur) + ')' : 'Slot de ' + R.SLOT_LABEL[it.slot].toLowerCase() + ' vazio') + '</div>' : '') +
+    (opts.length ? '<div class="mt op">' + opts.join(' · ') + '</div>' : '') + '</div></div>';
+  return h;
+}
+/** O item escolhido no Ferreiro ainda é do herói (equipado ou na mochila)? */
+const owned = (ch, it) => !!it && (ch.equip[it.slot] === it || ch.bag.includes(it));
+function npcHead(id) { const D = NPCS[id]; return '<h3>' + esc(D.name) + '</h3><div class="role">' + esc(D.role) + '</div><p class="say">“' + esc(D.say) + '”</p>'; }
+function openNpc(id) {
+  if (id === 'board') { openQuestBoard(); return; } // Quadro de Missões (ui/questUi.js)
+  questEvent('talk', id);
+  if (G.openNpcId !== id || $('#modal').hidden) { UI.merchConfirm = null; UI.npcConfirm = null; }
+  G.openNpcId = id;
+  const ch = G.ch;
+  let h = npcHead(id);
+  if (id === 'portal') {
+    // cor pela diferença de nível (verde / amarelo / vermelho) e destaque da masmorra recomendada:
+    // a de monstros mais fortes que ainda não passam de 5 níveis acima do herói
+    const RISK = { easy: 'Fácil demais (pouca EXP)', ok: 'Adequado ao seu nível', hard: 'Desafiador', deadly: 'Perigoso para o seu nível' };
+    let rec = null, recLv = -1;
+    DUNGEON_ORDER.forEach((k) => {
+      const maxF = ch.unlockedFloors[k] || 1;
+      for (const f of [1, maxF]) { const lv = floorLevel(k, f); if (R.levelRisk(lv, ch.level) === 'ok' && lv > recLv) { recLv = lv; rec = k; } }
+    });
+    h += '<div class="dungeons">';
+    DUNGEON_ORDER.forEach((k) => {
+      const B = BIOMES[k];
+      const maxF = ch.unlockedFloors[k] || 1;
+      const lv1 = floorLevel(k, 1), lv = floorLevel(k, maxF);
+      const r1 = R.levelRisk(lv1, ch.level), rMax = R.levelRisk(lv, ch.level);
+      const btn = (f, risk, gold) => '<button class="btn sm risk-' + risk + (gold ? ' gold' : '') + '" data-npc="go" data-b="' + k + '" data-f="' + f + '" title="' + RISK[risk] + '">Andar ' + f + '</button>';
+      const tk = ticketCount(k);
+      h += '<div class="dg risk-' + r1 + (k === rec ? ' rec' : '') + '"><div><b>' + esc(B.name) + '</b>' + (k === rec ? ' <span class="tag-rec">Recomendada</span>' : '') +
+        '<div class="s">Monstros nv ' + lv1 + '+ · mais fundo liberado: andar ' + maxF + ' (nv ' + lv + ')</div>' +
+        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div>' +
+        '<div class="s tk">' + esc(R.TICKETS[k].name) + ': <b style="font:inherit;color:' + (tk ? R.TICKETS[k].color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · Auto-Limpeza a partir do andar ' + maxF : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') +
+        '<button class="btn sm auto risk-' + rMax + (tk ? ' gold' : '') + '" data-npc="auto" data-b="' + k + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + maxF + ' e segue enquanto houver tickets' : 'Sem tickets desta masmorra') + '">Auto-Limpeza</button></div></div>';
+    });
+    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>' +
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, derrota o chefe e, assim que o chefe cai, pega os drops por perto e já desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
+  } else if (id === 'tower') {
+    const best = ch.towerBest || 1, T = R.TOWER;
+    const row = (f, gold) => {
+      const B = BIOMES[towerBiome(f, T.biomeEvery)], m = R.towerMod(f);
+      return '<div class="dg risk-' + R.levelRisk(R.towerLevel(f), ch.level) + '"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + dec(m.hp, 2) + ' · dano ×' + dec(m.dmg, 2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
+    };
+    const tk = ticketCount('tower'), TK = R.TICKETS.tower;
+    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') +
+      '<div class="dg"><div><b>Auto-Limpeza</b><div class="s tk">' + esc(TK.name) + ': <b style="font:inherit;color:' + (tk ? TK.color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · a partir do andar ' + best : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+      '<button class="btn sm auto' + (tk ? ' gold' : '') + '" data-npc="autotower"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + best + ' e segue subindo enquanto houver tickets' : 'Sem Ticket da Torre') + '">Auto-Limpeza</button></div></div></div>';
+    h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
+      '<p class="note">Drops: só Ouro (o dobro de um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Joia aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Ouro e Joias.</p>' +
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 Ticket da Torre por andar (' + fmt(R.TOWER_TICKET_PRICE) + ' de Ouro na Mercadora). O herói entra no recorde, derrota todos os monstros do andar e o chefe, recolhe os drops e só então sobe. Usa poções e a Poção da Ressurreição como na Guardiã Nyx; sem ela, para.</p>';
+  } else if (id === 'eden') {
+    const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = R.edenEntryLevel(ch.level);
+    h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível − 15%) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
+      (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
+    h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
+      '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
+      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
+  } else if (id === 'smith') {
+    const all = smithList(ch);
+    const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
+    // filtros: onde está (todos/equipados/mochila) e tipo de peça (só os tipos que o herói tem)
+    const view = SMITH_VIEW[UI.smithView] ? UI.smithView : 'all';
+    const kinds = R.SLOTS.filter((s) => all.some((x) => x.slot === s));
+    const kind = kinds.includes(UI.smithSlot) ? UI.smithSlot : 'all';
+    const vcnt = { all: all.length, eq: nEq, bag: all.length - nEq };
+    const items = all.filter((x) => (view === 'all' || (view === 'eq') === isEquipped(ch, x)) && (kind === 'all' || x.slot === kind));
+    smithItems = items;
+    const sel = items.find((x) => x === UI.smithSel) || items[0];
+    UI.smithSel = sel;
+    const cnt = (j) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === j); return x ? x.qty : 0; };
+    h += '<div class="btabs">' + Object.keys(SMITH_VIEW).map((k) => '<button class="btab' + (view === k ? ' on' : '') + '" data-npc="smithview" data-k="' + k + '">' + SMITH_VIEW[k] + ' <span>' + vcnt[k] + '</span></button>').join('') + '</div>';
+    if (kinds.length > 1) h += '<div class="sm-kinds">' + ['all'].concat(kinds).map((s) => '<button class="chip' + (kind === s ? ' on' : '') + '" data-npc="smithslot" data-k="' + s + '">' + (s === 'all' ? 'Todos os tipos' : R.SLOT_LABEL[s]) + '</button>').join('') + '</div>';
+    h += '<div class="smithlist">' + (items.length ? items.map((x, i) => smithCard(ch, x, i, sel)).join('') : '<p class="note">Nenhum equipamento neste filtro.</p>') + '</div>';
+    if (sel) {
+      const tal = talismanCount();
+      if (!tal) UI.smithTalisman = false;
+      const useT = UI.smithTalisman && tal > 0, pl = sel.plus || 0;
+      h += '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Aprimorar</h4>';
+      h += smithSelHtml(ch, sel);
+      // Talismã da Sorte: liga/desliga; protege a fusão do Caos (a única que volta o item a +0)
+      const tg = { kind: 'talisman', id: 'luck' };
+      h += '<div class="list"><div class="li"><span class="nm"><span class="ic">' + iconHtml(glyph(tg)) + '</span><span class="t" style="color:' + R.TALISMANS.luck.color + '">Talismã da Sorte ×' + tal + '</span></span><span class="a"><button class="btn sm' + (useT ? ' gold' : '') + '" data-npc="taltoggle"' + (tal ? '' : ' disabled') + '>' + (useT ? 'Em uso' : 'Usar') + '</button></span><span class="s">' + (tal ? (useT ? 'Ligado: se a fusão do Caos ou a evolução de asa falhar, o item fica em +' + pl + ' (gasta 1 talismã por tentativa).' : 'Desligado. Ligue para proteger a fusão do Caos e a evolução de asa.') : 'Cai no Éden (sempre do Guardião do Éden). Impede o item de voltar a +0.') + '</span></div></div>';
+      h += '<div class="list" style="margin-top:6px">';
+      ['bless', 'soul', 'chaos', 'life'].forEach((j) => {
+        const c = R.upgradeChance(sel, j);
+        const need = R.upgradeCost(sel, j), short = c > 0 && cnt(j) < need;
+        const fee = (need > 1 ? ' · ' + need + ' joias' : '') + (j === 'chaos' ? ' + ' + fmt(R.RATES.chaosFeeGold) + ' de Ouro' : '');
+        const fail = c <= 0 ? esc(R.JEWELS[j].desc) : j === 'bless' ? 'Sempre funciona até +6.' : j === 'soul' ? 'Falha: cai para +' + Math.max(6, pl - 1) + '.' : j === 'chaos' ? (useT ? '<b style="color:' + R.TALISMANS.luck.color + '">Falha: mantém +' + pl + ' (Talismã da Sorte).</b>' : 'Falha: volta a +0.') : 'Falha: nada muda.';
+        h += '<div class="li"><span style="color:' + R.JEWELS[j].color + '">' + R.JEWELS[j].name + ' ×' + cnt(j) + '</span><span class="a"><button class="btn sm' + (j === 'chaos' && useT ? ' gold' : '') + '" data-npc="up" data-j="' + j + '"' + (c > 0 && cnt(j) >= need ? '' : ' disabled') + '>' + (c > 0 ? Math.round(c * 100) + '%' + fee : '—') + '</button></span><span class="s">' + (c > 0 && j === 'chaos' ? 'Para +' + (pl + 1) + ': ' + need + (need > 1 ? ' Joias do Caos' : ' Joia do Caos') + (short ? ' <b style="color:#ff6b6b">(faltam ' + (need - cnt(j)) + ')</b>' : '') + '. ' : '') + fail + '</span></div>';
+      });
+      h += '</div>';
+      if (sel.slot === 'wings') h += wingUpSection(sel, cnt, useT, tal);
+    } else if (!all.length) h += '<p class="note">Você não tem equipamentos.</p>';
+  } else if (id === 'merchant') {
+    const junk = ch.bag.filter(junkSellable);
+    const junkVal = junk.reduce((a, x) => a + Math.floor(R.itemValue(x) * 0.5), 0);
+    h += '<div class="list">';
+    ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
+    const RZ = R.POTIONS.rez;
+    h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row">' + [1, 10].map((n) => '<button class="btn sm gold" data-npc="buy" data-p="rez" data-n="' + n + '"' + (ch.gold >= RZ.price * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(RZ.price * n) + '</button>').join('') + '</span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
+    h += '</div>' + ticketSection(ch) + '<div class="list">';
+    h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
+      ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
+      : '<button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' de Ouro</button>') + '</div>';
+    h += sellSection(ch);
+  } else if (id === 'master') {
+    const ev = R.canEvolve(ch), rs = R.canReset(ch);
+    h += '<h4 style="margin:6px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Evolução</h4>';
+    h += ev.next ? '<p>' + esc(R.className(ch)) + ' → <b style="color:var(--gold)">' + esc(ev.name) + '</b>: +' + ev.next.dmgPct + '% dano, +' + ev.next.hpPct + '% HP' + (R.skillsFor(ch.cls).some((k) => R.SKILLS[k].tier === ch.tier + 1) ? ', nova habilidade' : '') + ' e visual.</p><p class="note">' + (ev.ok ? 'Todos os requisitos cumpridos.' : 'Falta: ' + esc(ev.reasons.join(', '))) + '</p><button class="btn gold" data-npc="evolve"' + (ev.ok ? '' : ' disabled') + '>Evoluir</button>' : '<p class="note">Você já alcançou a forma final.</p>';
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Reset (' + ch.resets + ')</h4><p class="note">Nível 400+ e ' + fmt(rs.cost) + ' de Ouro. Volta ao nível 1 com ' + fmt((ch.resets + 1) * R.RATES.resetPoints + Math.max(0, ch.level - 400) * R.RATES.resetBonusPerLevel) + ' pontos livres, +2% de Encontrar Magia permanente e +1 ponto de árvore. A taxa de EXP cai de ' + R.expRate(ch.resets) + 'x para ' + R.expRate(ch.resets + 1) + 'x. A árvore de maestria é zerada e seus pontos voltam para redistribuir.</p>' +
+      (!rs.ok ? '<p class="note">Falta: ' + esc(rs.reasons.join(', ')) + '</p>'
+        : UI.npcConfirm === 'reset' ? '<div class="row"><button class="btn gold" data-npc="reset" data-ok="1">Confirmar reset · ' + fmt(rs.cost) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button></div>'
+        : '<button class="btn gold" data-npc="reset">Fazer reset</button>');
+    const spent = R.treeSpent(ch);
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
+      ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
+      : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 de Ouro</button>');
+  } else if (NPCS[id] && NPCS[id].soon) {
+    h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
+  }
+  // "Fechar" fica fixo no topo do diálogo (sempre visível em telas baixas) e repetido no fim
+  h = '<button class="btn sm dlg-x" data-npc="close" aria-label="Fechar">Fechar</button>' + h;
+  h += '<div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" data-npc="close">Fechar</button></div>';
+  modal(h);
+}
+function npcAction(e) {
+  const b = e.target.closest('[data-npc]');
+  if (!b || b.disabled) return;
+  const a = b.dataset.npc, ch = G.ch;
+  // confirmação em dois cliques (reset, redistribuir, vender em lote): só o clique seguinte confirma
+  const confirmed = b.dataset.ok === '1' && UI.npcConfirm === a;
+  UI.npcConfirm = null;
+  switch (a) {
+    case 'npcno': break;
+    case 'close': closeModal(); return;
+    case 'go': {
+      // só andares já liberados (o botão pode estar velho)
+      const k = b.dataset.b;
+      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0) return;
+      closeModal(); enterDungeon(k, Math.max(1, Math.min(Math.floor(+b.dataset.f) || 1, ch.unlockedFloors[k] || 1)));
+      return;
+    }
+    case 'auto': {
+      const k = b.dataset.b;
+      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0 || !ticketCount(k)) return;
+      closeModal(); startAutoClear(k);
+      return;
+    }
+    case 'autotower': if (!ticketCount('tower')) return; closeModal(); startAutoClear('tower'); return;
+    case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
+    case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
+    case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
+    case 'smithview': UI.smithView = b.dataset.k; break;
+    case 'smithslot': UI.smithSlot = b.dataset.k; break;
+    case 'up': {
+      const it = UI.smithSel, j = b.dataset.j;
+      const stack = ch.bag.find((x) => x.kind === 'jewel' && x.id === j);
+      // valida tudo ANTES de cobrar: o item ainda é do herói (o pet pode tê-lo vendido) e a fusão tem chance
+      if (!owned(ch, it)) { log('Este item não está mais com você.', 'warn'); UI.smithSel = null; break; }
+      if (!R.JEWELS[j] || R.upgradeChance(it, j) <= 0) break;
+      const need = R.upgradeCost(it, j);
+      if (!stack) break;
+      if (stack.qty < need) { log('São necessárias ' + need + ' unidades de ' + R.JEWELS[j].name + ' para esta fusão (você tem ' + stack.qty + ').', 'warn'); break; }
+      if (j === 'chaos') { if (ch.gold < R.RATES.chaosFeeGold) { log('A fusão do Caos custa ' + fmt(R.RATES.chaosFeeGold) + ' de Ouro.', 'warn'); break; } ch.gold -= R.RATES.chaosFeeGold; }
+      stack.qty -= need; if (!stack.qty) ch.bag.splice(ch.bag.indexOf(stack), 1);
+      // Talismã da Sorte: gasto na tentativa de fusão do Caos com ele ligado
+      const talisman = UI.smithTalisman && R.talismanUseful(j) && takeTalisman();
+      const r = R.applyUpgrade(it, j, Math.random(), { talisman });
+      if (r.ok) { log('Sucesso! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Sucesso', R.itemName(it)); }
+      else if (r.protected) { log('Falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'O item continua em +' + (it.plus || 0)); }
+      else { log('Falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it), 'warn'); Sfx.hurt(); }
+      recalc(); buildPlayerModel();
+      break;
+    }
+    case 'wingup': {
+      const it = UI.smithSel, W = R.WING_UP;
+      if (!owned(ch, it)) { log('Esta asa não está mais com você.', 'warn'); UI.smithSel = null; break; }
+      if (it.slot !== 'wings' || it.stage || R.wingUpgradeChance(it) <= 0) break;
+      const stacks = Object.keys(W.jewels).map((j) => ch.bag.find((x) => x.kind === 'jewel' && x.id === j));
+      if (stacks.some((x, i) => !x || x.qty < W.jewels[Object.keys(W.jewels)[i]])) { log('Faltam Joias para evoluir a asa.', 'warn'); break; }
+      Object.keys(W.jewels).forEach((j, i) => { const x = stacks[i]; x.qty -= W.jewels[j]; if (!x.qty) ch.bag.splice(ch.bag.indexOf(x), 1); });
+      const talisman = UI.smithTalisman && R.talismanUseful('wing') && takeTalisman();
+      const r = R.applyWingUpgrade(it, Math.random(), { talisman });
+      if (r.ok) {
+        log('A asa evoluiu! ' + R.itemName(it) + (talisman ? ' (Talismã da Sorte gasto)' : ''), 'loot'); Sfx.level(); toast('Asa Ascendida', R.itemName(it));
+        if (G.player) emit(G.player.x, 1.4, G.player.z, { n: 90, color: 0xfff0b0, speed: 3, up: 3, life: 1.4, size: 1.1, grav: 1, spread: 1.6 });
+      } else if (r.protected) { log('A evolução falhou (' + Math.round(r.chance * 100) + '%), mas o Talismã da Sorte manteve ' + R.itemName(it) + '.', 'loot'); Sfx.hurt(); toast('Talismã da Sorte', 'A asa continua em +' + (it.plus || 0)); }
+      else { log('A evolução falhou (' + Math.round(r.chance * 100) + '%). ' + R.itemName(it) + ' voltou a +0.', 'warn'); Sfx.hurt(); }
+      recalc(); buildPlayerModel();
+      break;
+    }
+    case 'taltoggle': UI.smithTalisman = !UI.smithTalisman && talismanCount() > 0; break;
+    case 'buy': {
+      const D = R.POTIONS[b.dataset.p], n = +b.dataset.n;
+      if (ch.gold < D.price * n) { log('Ouro insuficiente.', 'warn'); break; }
+      if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break;
+      ch.gold -= D.price * n; Sfx.coin();
+      log('Comprou ' + D.name + ' ×' + n + ' por ' + fmt(D.price * n) + ' de Ouro.', 'loot');
+      break;
+    }
+    case 'buytk': {
+      const k = b.dataset.k, n = +b.dataset.n === 10 ? 10 : 1;
+      if (!R.TICKETS[k]) break;
+      const cost = R.ticketPrice(k) * n;
+      if (ch.gold < cost) { log('Ouro insuficiente.', 'warn'); break; }
+      if (b.dataset.ok !== '1' || UI.tkSel !== k || UI.tkN !== n || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; UI.tkN = n; break; }
+      if (!buyTicket(k, n)) break;
+      Sfx.coin();
+      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(cost) + ' de Ouro. Use ' + (k === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot');
+      break;
+    }
+    case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
+    case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
+    case 'sellno': UI.merchConfirm = null; break;
+    case 'selljunk': {
+      const junk = ch.bag.filter(junkSellable);
+      if (!junk.length) break;
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      let total = 0;
+      junk.forEach((x) => { total += Math.floor(R.itemValue(x) * 0.5); ch.bag.splice(ch.bag.indexOf(x), 1); });
+      ch.gold += total;
+      if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
+      log('Vendeu ' + junk.length + ' Comuns/Mágicos por ' + fmt(total) + ' de Ouro.', 'loot');
+      Sfx.coin();
+      break;
+    }
+    case 'evolve': {
+      const ev = R.canEvolve(ch);
+      if (!ev.ok) break;
+      ch.tier++;
+      recalc(); buildPlayerModel(); unlockSkills(); buildSlots();
+      toast(R.className(ch), 'Evolução de classe');
+      log('Você evoluiu para ' + R.className(ch) + '!', 'sys');
+      emit(G.player.x, 0.2, G.player.z, { n: 120, color: 0xffd76a, speed: 4, up: 4, life: 1.5, size: 1.3, grav: 2, spread: 2 });
+      break;
+    }
+    case 'reset': {
+      if (!R.canReset(ch).ok) break;
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      const r = R.applyReset(ch);
+      if (!r.ok) break;
+      for (const s of R.SLOTS) if (ch.equip[s]) { /* itens ficam equipados, inativos até cumprir requisito */ }
+      recalc();
+      G.hp = G.st.maxHp; G.mp = G.st.maxMp;
+      buildSlots();
+      toast('Reset ' + ch.resets, fmt(ch.points) + ' pontos livres');
+      log('Reset ' + ch.resets + ' concluído. Distribua ' + fmt(ch.points) + ' pontos (C).', 'sys');
+      break;
+    }
+    case 'treereset': {
+      if (!R.treeSpent(ch)) break;
+      if (ch.gold < 100000) { log('Ouro insuficiente.', 'warn'); break; }
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      ch.gold -= 100000; ch.tree = {}; recalc();
+      log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
+      break;
+    }
+  }
+  persist();
+  const dlg = $('#dialog'), list = dlg.querySelector('.selllist'), sl = dlg.querySelector('.smithlist');
+  const top = dlg.scrollTop, listTop = list ? list.scrollTop : 0, smithTop = sl ? sl.scrollTop : 0;
+  openNpc(G.openNpcId);
+  dlg.scrollTop = top;
+  const list2 = dlg.querySelector('.selllist');
+  if (list2) list2.scrollTop = listTop;
+  const sl2 = dlg.querySelector('.smithlist');
+  if (sl2) sl2.scrollTop = smithTop;
+  hudTick();
+}
+function showDeath(loss, zl, rez) {
+  modal('<div class="deathscreen"><h2>Você caiu</h2><p style="text-align:center">Perdeu ' + fmt(loss) + ' de EXP e ' + fmt(zl) + ' de Ouro. Itens equipados nunca são perdidos para monstros.</p>' +
+    (rez ? '<p class="note" style="text-align:center">A Poção da Ressurreição (' + rez + ') te levanta aqui mesmo, com HP cheio, e devolve a EXP e o Ouro perdidos.</p>' : '') +
+    '<div class="row" style="justify-content:center;margin-top:12px">' + (rez ? '<button class="btn gold" id="btnRevive">Usar Poção da Ressurreição</button>' : '') + '<button class="btn' + (rez ? '' : ' gold') + '" id="btnRespawn">Renascer em Aldrena</button></div></div>');
+  $('#btnRespawn').addEventListener('click', () => { closeModal(); respawn(); });
+  if (rez) $('#btnRevive').addEventListener('click', () => { if (revive()) { closeModal(); hudTick(); } });
+}
+
+/** Pergunta antes de descer quando ainda há itens no chão (Não = continua no andar). */
+function confirmDescend(onYes) {
+  const n = G.loot.length;
+  modal('<h3>Próximo andar</h3><p>Ainda há ' + n + (n === 1 ? ' item' : ' itens') + ' no chão. Deseja ir para o próximo andar?</p><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="btnDescendNo">Não</button><button class="btn gold" id="btnDescendYes">Sim</button></div>');
+  $('#btnDescendNo').addEventListener('click', closeModal);
+  $('#btnDescendYes').addEventListener('click', () => { closeModal(); onYes(); });
+}
+
+/** Botões dos diálogos de NPC e clique fora do modal. */
+function initDialogs() {
+  $('#dialog').addEventListener('click', npcAction);
+  $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal' && G.player && G.player.alive) closeModal(); });
+}
+return { closeModal, confirmDescend, initDialogs, openNpc, showDeath };
+})();
+
 // ---- game/npcs.js ----
 const { clearNpcs, fmtWait, makePortal, spawnNpcs, targetNpc, updateNpcs, updatePortals } = (() => {
 // ---------- NPCs e cidade ----------
@@ -16275,327 +16632,6 @@ function clearEden() {
 /** Estado do Éden para testes e depuração. */
 function edenState() { return E; }
 return { clearEden, edenState, onEdenBossKilled, onEdenKill, onMiniKilled, openChest, spawnEden, updateEden };
-})();
-
-// ---- game/tower.js ----
-const { clearTower, onTowerKill, spawnTowerEvents, towerState, updateTower } = (() => {
-// ---------- Torre Infinita: eventos do andar (emboscadas, invasão, círculo selado, santuário, Ladrão de Ouro) ----------
-
-/** Estado dos eventos do andar atual (zerado a cada andar). */
-const T = { ambush: [], seals: [], shrines: [], inv: null, thief: null, t: 0, total: 0, kills: 0, lvl: 1, pack: 3000 };
-
-/** Cor mágica de cada bioma da torre (barreiras, fendas, fumaça). */
-const TINT = { tw_granite: 0x6ad8ff, tw_arcane: 0xc89aff, tw_storm: 0x8afff0, tw_void: 0xff5ad0 };
-const AMBUSH_SAY = {
-  tw_granite: 'As estátuas ganham vida à sua volta!',
-  tw_arcane: 'Os livros sussurram e criaturas saem das sombras!',
-  tw_storm: 'Criaturas descem com o vento!',
-  tw_void: 'O vazio se abre à sua volta!',
-};
-/** Bênçãos dos santuários da torre, 60 s. */
-const BLESS = [
-  { name: 'Bênção da Fúria', stats: { dmgPct: 15 }, say: '+15% de dano', color: 0xff8a5a },
-  { name: 'Bênção da Égide', stats: { defPct: 30, dmgRed: 8 }, say: '+30% de defesa e -8% de dano recebido', color: 0x6ad8ff },
-  { name: 'Bênção do Vento', stats: { atkRatePct: 10, cdPct: -10 }, say: '+10% de velocidade de ataque e -10% de recarga', color: 0x9aff8a },
-];
-/** Segundos até o Ladrão de Ouro sumir depois de notar o herói. */
-const THIEF_ESCAPE = 18;
-
-const pick = (arr) => arr[Math.floor(rand() * arr.length)];
-const tint = () => TINT[G.biome] || 0x6ad8ff;
-function nearWalkable(x, z, r) {
-  if (walkable(G.L, x, z)) return { x, z };
-  for (let k = 0; k < 16; k++) {
-    const a = rand() * Math.PI * 2, d = rand() * r;
-    if (walkable(G.L, x + Math.cos(a) * d, z + Math.sin(a) * d)) return { x: x + Math.cos(a) * d, z: z + Math.sin(a) * d };
-  }
-  return null;
-}
-/** Um bando do bioma (mesmo tamanho e níveis dos bandos comuns da torre). */
-function spawnPack(size, at, opt) {
-  const B = BIOMES[G.biome], pack = T.pack++, n = size * R.TOWER.monsterMult, kind = pick(B.monsters), out = [];
-  for (let i = 0; i < n; i++) {
-    const q = at(i, n);
-    if (!q) continue;
-    const m = spawnMonster(rand() < 0.7 ? kind : pick(B.monsters), q.x, q.z, T.lvl + Math.floor(rand() * 4), { pack, elite: !!opt.elite && i === 0 });
-    if (opt.aggro) m.aggro = true;
-    if (opt.puff) { emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 }); riseMonster(m); }
-    out.push(m);
-  }
-  return out;
-}
-/** Prêmio de um evento vencido: um punhado de Ouro (com o mesmo multiplicador da torre). */
-function goldReward(x, z, src, piles) {
-  for (let i = 0; i < piles; i++) {
-    const amount = Math.floor(R.goldAmount(T.lvl, src, rand()) * R.TOWER.goldMult * (1 + G.st.goldPct / 100) / piles);
-    dropLoot(x, z, { type: 'gold', amount });
-  }
-  emit(x, 0.6, z, { n: 40, color: 0xffd86a, speed: 3, up: 4, life: 1, size: 0.9, grav: 3, spread: 0.6 });
-  Sfx.loot(2);
-}
-
-/** Monta os eventos do andar (chamado depois dos bandos comuns). */
-function spawnTowerEvents(L, lvl) {
-  clearTower();
-  T.t = 0; T.kills = 0; T.lvl = lvl; T.pack = 3000;
-  for (const e of L.events || []) {
-    const x = e.x * TILE, z = e.z * TILE;
-    if (e.type === 'ambush') T.ambush.push({ x, z, r: e.r * TILE, size: e.size, state: 0, mons: [] });
-    else if (e.type === 'sealed') {
-      const r = e.r * TILE;
-      const mons = spawnPack(e.size, () => nearWalkable(x + (rand() - 0.5) * r, z + (rand() - 0.5) * r, 2) || { x, z }, { elite: true });
-      for (const m of mons) m.sealed = true;
-      T.seals.push({ x, z, r, state: 0, mons, tiles: null, mesh: null, t: 0 });
-    } else if (e.type === 'invasion') T.inv = { state: 0, delay: e.delay, size: e.size, x: 0, z: 0, mons: [], waves: 0, waveT: 0, mesh: null, close: 0 };
-    else if (e.type === 'shrine') spawnShrine(x, z, BLESS[e.kind % BLESS.length]);
-    else if (e.type === 'thief') {
-      const m = spawnMonster('tw_thief', x, z, lvl + 2, { pack: T.pack++ });
-      T.thief = { m, seenT: -1, gone: false };
-    }
-  }
-  T.total = G.monsters.filter((m) => !m.dead && !m.boss).length;
-}
-
-// ---------- emboscadas ----------
-function triggerAmbush(a) {
-  a.state = 1;
-  const p = G.player;
-  // surgem em volta do herói, só em pontos que ele enxerga (nada brota atrás de parede)
-  a.mons = spawnPack(a.size, (i, n) => {
-    for (let k = 0; k < 12; k++) {
-      const ang = (i / n) * Math.PI * 2 + k * 0.55 + rand() * 0.3, d = (2.2 + rand() * 2.8 - k * 0.12) * TILE;
-      const x = p.x + Math.cos(ang) * d, z = p.z + Math.sin(ang) * d;
-      if (walkable(G.L, x, z) && lineClear(G.L, p.x, p.z, x, z, 0.3)) return { x, z };
-    }
-    return nearWalkable(p.x, p.z, TILE);
-  }, { aggro: true, puff: true, elite: rand() < 0.5 });
-  spawnRing(p.x, p.z, 1, 7 * TILE, tint(), 0.8);
-  toast('Emboscada!', AMBUSH_SAY[G.biome] || 'Você foi cercado!');
-  log('Emboscada! Derrote os atacantes para ganhar o Ouro que eles guardavam.', 'warn');
-  shake(0.5); Sfx.boom();
-}
-
-// ---------- círculo selado ----------
-/** Fecha o círculo: os tiles da borda viram parede até o bando de dentro cair. */
-function seal(s) {
-  s.state = 1; s.t = 0;
-  const L = G.L, r = s.r, tiles = [];
-  for (let tz = Math.floor((s.z - r) / TILE) - 2; tz <= Math.ceil((s.z + r) / TILE) + 2; tz++) for (let tx = Math.floor((s.x - r) / TILE) - 2; tx <= Math.ceil((s.x + r) / TILE) + 2; tx++) {
-    if (tx < 0 || tz < 0 || tx >= L.W || tz >= L.H) continue;
-    const d = Math.hypot(tx * TILE - s.x, tz * TILE - s.z);
-    if (d >= r && d < r + TILE * 1.2 && L.grid[tz * L.W + tx] === 1) { L.grid[tz * L.W + tx] = 0; tiles.push(tz * L.W + tx); }
-  }
-  s.tiles = tiles;
-  // quem do bando ficou do lado de fora é puxado para dentro
-  for (const m of s.mons) {
-    m.aggro = true;
-    if (m.dead || Math.hypot(m.x - s.x, m.z - s.z) < r - 1) continue;
-    const q = nearWalkable(s.x + (rand() - 0.5) * r, s.z + (rand() - 0.5) * r, 2) || { x: s.x, z: s.z };
-    m.x = q.x; m.z = q.z; m.path = null;
-    emit(q.x, 0.5, q.z, { n: 14, color: tint(), speed: 3, up: 2, life: 0.6, size: 1 });
-  }
-  const mat = new THREE.MeshBasicMaterial({ color: tint(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(r + TILE * 0.5, r + TILE * 0.5, 2.6, 56, 1, true), mat);
-  wall.position.set(s.x, 1.3, s.z);
-  wall.renderOrder = 4;
-  world.add(wall);
-  s.mesh = wall;
-  spawnRing(s.x, s.z, r * 0.3, r + TILE * 0.5, tint(), 0.7);
-  toast('Círculo selado!', 'Uma barreira se fechou: derrote os guardiões do círculo');
-  log('Círculo selado! A barreira só cai quando os guardiões de dentro forem derrotados.', 'warn');
-  shake(0.4); Sfx.boom();
-}
-function unseal(s, won) {
-  s.state = 2;
-  const L = G.L;
-  if (s.tiles) for (const i of s.tiles) L.grid[i] = 1;
-  s.tiles = null;
-  if (s.mesh) { world.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); s.mesh = null; }
-  emit(s.x, 1, s.z, { n: 60, color: tint(), speed: 6, up: 2, life: 0.8, size: 1.1, spread: s.r });
-  if (!won) return;
-  goldReward(s.x, s.z, 'elite', 4);
-  toast('Círculo quebrado', 'A barreira caiu e deixou um tesouro');
-}
-
-// ---------- invasão ----------
-/** Abre a fenda num ponto andável a uma distância média do herói (fora de círculos selados). */
-function openRift(v) {
-  const p = G.player, L = G.L;
-  let best = null;
-  for (let k = 0; k < 160 && !best; k++) {
-    const tx = 1 + Math.floor(rand() * (L.W - 2)), tz = 1 + Math.floor(rand() * (L.H - 2));
-    if (L.grid[tz * L.W + tx] !== 1) continue;
-    const x = tx * TILE, z = tz * TILE, d = Math.hypot(x - p.x, z - p.z);
-    if (d < (k < 120 ? 16 : 10) || d > (k < 120 ? 30 : 60)) continue;
-    if (T.seals.some((s) => s.state === 1 && Math.hypot(x - s.x, z - s.z) < s.r + TILE * 2)) continue;
-    best = { x, z };
-  }
-  if (!best) return false;
-  v.state = 1; v.x = best.x; v.z = best.z; v.waveT = 0.6;
-  const g = new THREE.Group();
-  const ring = new THREE.Mesh(GEO.torusF, glowShared(tint(), 0.95));
-  ring.scale.setScalar(3.4);
-  const core = new THREE.Mesh(new THREE.CircleGeometry(1.5, 28), new THREE.MeshBasicMaterial({ color: 0x0a0414, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(2.1, 28), glowShared(tint(), 0.35));
-  halo.position.z = -0.02;
-  g.add(halo, core, ring);
-  g.position.set(v.x, 2, v.z);
-  g.rotation.y = Math.PI / 4; // de frente para a câmera
-  g.scale.setScalar(0.01);
-  world.add(g);
-  v.mesh = g; v.ring = ring;
-  spawnRing(v.x, v.z, 0.5, 6, tint(), 1);
-  toast('Invasão!', 'Uma fenda se abriu no andar e os monstros vêm atrás de você');
-  log('Invasão! Uma fenda se abriu e monstros estão atravessando. Feche-a derrotando todos.', 'warn');
-  Sfx.boom();
-  return true;
-}
-function updateInvasion(v, dt) {
-  if (v.state === 0) {
-    const boss = G.boss && G.boss.aggro;
-    if (!boss && G.player.alive && (T.t > v.delay || T.kills >= T.total * 0.4)) openRift(v);
-    return;
-  }
-  const g = v.mesh;
-  if (g) {
-    const k = v.state === 2 ? Math.max(0, 1 - v.close * 2) : Math.min(1, g.scale.x + dt * 2);
-    g.scale.setScalar(Math.max(0.01, k));
-    v.ring.rotation.z += dt * 2.2;
-    if (Math.random() < 0.5) emit(v.x + (rand() - 0.5) * 2, 1 + rand() * 2.4, v.z + (rand() - 0.5) * 2, { n: 1, color: tint(), speed: 0.6, up: 1, life: 0.9, size: 0.7, grav: -0.6 });
-  }
-  if (v.state === 1) {
-    // três ondas, a cada 3,5 s, saindo da fenda
-    if (v.waves < 3) {
-      v.waveT -= dt;
-      if (v.waveT <= 0) {
-        v.waveT = 3.5; v.waves++;
-        const part = Math.ceil(v.size / 3);
-        v.mons.push(...spawnPack(part, () => nearWalkable(v.x + (rand() - 0.5) * 3, v.z + (rand() - 0.5) * 3, 3), { aggro: true, puff: true, elite: v.waves === 3 }));
-        spawnRing(v.x, v.z, 0.5, 4, tint(), 0.6);
-      }
-    } else if (v.mons.every((m) => m.dead)) {
-      v.state = 2; v.close = 0;
-      goldReward(v.x, v.z, 'elite', 3);
-      toast('Invasão repelida', 'A fenda se fechou');
-      log('A fenda se fechou. A invasão foi repelida.', 'sys');
-    }
-  } else if (v.state === 2 && g) {
-    v.close += dt;
-    if (v.close > 0.6) { removeRift(g); v.mesh = null; }
-  }
-}
-
-/** Remove a fenda (o anel usa material compartilhado; o miolo e o halo têm geometria própria). */
-function removeRift(g) {
-  world.remove(g);
-  const [halo, core] = g.children;
-  halo.geometry.dispose(); core.geometry.dispose(); core.material.dispose();
-}
-
-// ---------- santuários ----------
-function spawnShrine(x, z, B) {
-  const g = new THREE.Group();
-  const k = kit('shrine');
-  const m = new THREE.Mesh(k.geo, kitMat());
-  m.castShadow = true; m.receiveShadow = true;
-  const orb = new THREE.Mesh(k.glow, kitGlowMat());
-  orb.renderOrder = 3;
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), glowShared(B.color, 0.5));
-  halo.position.y = 2.1;
-  g.add(m, orb, halo);
-  g.position.set(x, gy(x, z), z);
-  world.add(g);
-  T.shrines.push({ x, z, used: false, g, halo, B });
-}
-function useShrine(s) {
-  s.used = true;
-  const B = s.B;
-  G.buffs = G.buffs.filter((b) => b.id !== 'tower:shrine');
-  G.buffs.push({ id: 'tower:shrine', name: B.name, until: G.time + 60, stats: B.stats });
-  recalc();
-  G.hp = G.st.maxHp; G.mp = G.st.maxMp;
-  const p = G.player;
-  emit(p.x, 0.4, p.z, { n: 70, color: B.color, speed: 3, up: 4, life: 1.2, size: 1, grav: 1.5, spread: 1.2 });
-  spawnRing(s.x, s.z, 0.5, 4, B.color, 0.9);
-  floatText(p.x, 3, p.z, B.name, 'heal');
-  toast(B.name, B.say + ' por 60s · HP e mana cheios');
-  log('Santuário da torre: ' + B.name + ' (' + B.say + ' por 60s).', 'sys');
-  Sfx.level();
-  s.halo.visible = false;
-}
-
-// ---------- Ladrão de Ouro ----------
-function updateThief(th) {
-  const m = th.m;
-  if (th.gone || m.dead) return;
-  if (Math.random() < 0.25) emit(m.x + (rand() - 0.5), 0.6 + rand(), m.z + (rand() - 0.5), { n: 1, color: 0xffd86a, speed: 0.5, up: 1, life: 0.7, size: 0.6, grav: 1 });
-  if (m.aggro && th.seenT < 0) {
-    th.seenT = T.t;
-    toast('Ladrão de Ouro!', 'Pegue-o antes que ele escape com o tesouro');
-    log('Um Ladrão de Ouro! Ele foge e some em ' + THIEF_ESCAPE + 's: derrote-o para pegar o que carrega.', 'loot');
-  }
-  if (th.seenT >= 0 && T.t - th.seenT > THIEF_ESCAPE) {
-    th.gone = true;
-    m.dead = true; m.deadT = 99; m.model.root.visible = false;
-    emit(m.x, 1, m.z, { n: 40, color: 0xffd86a, speed: 5, up: 3, life: 0.7, size: 1 });
-    spawnRing(m.x, m.z, 0.3, 3, 0xffd86a, 0.5);
-    toast('Ele escapou…', 'O Ladrão de Ouro sumiu com o tesouro');
-    log('O Ladrão de Ouro escapou.', 'sys');
-  }
-}
-
-// ---------- mortes e quadro ----------
-/** Qualquer abate na torre: conta para a invasão e paga o Ladrão de Ouro. */
-function onTowerKill(m) {
-  if (!m.boss) T.kills++;
-  if (T.thief && m === T.thief.m) {
-    goldReward(m.x, m.z, 'boss', 6);
-    toast('Ladrão de Ouro derrotado', 'O tesouro dele caiu no chão');
-    log('Você pegou o Ladrão de Ouro! O Ouro que ele carregava se espalhou.', 'loot');
-    Sfx.loot(4);
-  }
-  for (const a of T.ambush) if (a.state === 1 && a.mons.every((o) => o.dead)) {
-    a.state = 2;
-    goldReward(m.x, m.z, 'elite', 2);
-    toast('Emboscada vencida', 'Os atacantes deixaram Ouro para trás');
-  }
-}
-function updateTower(dt) {
-  const p = G.player, L = G.L;
-  if (!p || !L || !L.tower) return;
-  T.t += dt;
-  for (const a of T.ambush) if (a.state === 0 && p.alive && (a.x - p.x) ** 2 + (a.z - p.z) ** 2 < a.r * a.r) triggerAmbush(a);
-  for (const s of T.seals) {
-    if (s.state === 0) {
-      if (p.alive && Math.hypot(p.x - s.x, p.z - s.z) < s.r - TILE && s.mons.some((m) => !m.dead)) seal(s);
-      else if (s.mons.every((m) => m.dead)) s.state = 2; // vencido sem fechar (de longe)
-    } else if (s.state === 1) {
-      s.t += dt;
-      if (s.mesh) { s.mesh.material.opacity = Math.min(0.32, s.t * 0.8) * (0.8 + Math.sin(G.time * 4) * 0.2); s.mesh.rotation.y += dt * 0.4; }
-      // trava de segurança: o herói caiu ou a luta se arrastou demais
-      if (s.mons.every((m) => m.dead)) unseal(s, true);
-      else if (!p.alive || s.t > 90) unseal(s, false);
-    }
-  }
-  if (T.inv) updateInvasion(T.inv, dt);
-  for (const s of T.shrines) {
-    if (s.used) continue;
-    s.halo.position.y = 2.1 + Math.sin(G.time * 2 + s.x) * 0.12;
-    if (Math.random() < 0.3) emit(s.x + (rand() - 0.5), 2.1, s.z + (rand() - 0.5), { n: 1, color: s.B.color, speed: 0.4, up: 1.5, life: 1.2, size: 0.6, grav: -0.5 });
-    if (p.alive && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < 3.2 * 3.2) useShrine(s);
-  }
-  if (T.thief) updateThief(T.thief);
-}
-/** Saída do andar: remove barreiras, fenda e santuários. */
-function clearTower() {
-  for (const s of T.seals) if (s.mesh) { world.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
-  if (T.inv && T.inv.mesh) removeRift(T.inv.mesh);
-  for (const s of T.shrines) { world.remove(s.g); s.halo.geometry.dispose(); }
-  T.ambush = []; T.seals = []; T.shrines = []; T.inv = null; T.thief = null;
-}
-/** Estado dos eventos para testes e depuração. */
-function towerState() { return T; }
-return { clearTower, onTowerKill, spawnTowerEvents, towerState, updateTower };
 })();
 
 // ---- ui/minimap.js ----
@@ -19521,7 +19557,8 @@ function itemSub(it) {
 function itemDesc(it) {
   if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
-  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar e derrota o chefe sozinho. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
+  if (it.kind === 'ticket' && it.id === 'tower') return 'No portal da Torre Infinita, escolha Auto-Limpeza: o herói entra no andar do seu recorde, derrota todos os monstros e o chefe e só então sobe. Cada ticket vale um andar; com mais tickets, ele segue subindo.';
+  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar, derrota o chefe e desce logo depois dele. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
   if (it.kind === 'potion') {
     const P = R.POTIONS[it.id];
     if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Ouro.';
@@ -21051,7 +21088,7 @@ function pickup(l) {
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
-  else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use na Guardiã Nyx (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
+  else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use ' + (l.id === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
   else {
     if (!addToBag(l.item)) return false;
     Sfx.loot(R.RARITY[l.item.rarity].order);
@@ -21786,7 +21823,7 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
-  autoBossDown(); // Auto-Limpeza: termina o andar e desce sozinha se houver ticket
+  autoBossDown(); // Auto-Limpeza: desce logo depois do chefe se houver ticket
   const descend = () => enterDungeon(G.biome, G.floor + 1);
   // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
   G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
@@ -21805,6 +21842,7 @@ function onTowerBossKilled(m) {
   ch.towerBest = Math.max(ch.towerBest || 1, next);
   questEvent('floor');
   toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
+  autoBossDown(); // Auto-Limpeza da torre: sobe depois que todos os monstros caírem
   const climb = () => enterTower(next);
   G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {
     if (!G.loot.length) { climb(); return true; }

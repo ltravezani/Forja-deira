@@ -235,7 +235,7 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
-  autoBossDown(); // Auto-Limpeza: termina o andar e desce sozinha se houver ticket
+  autoBossDown(); // Auto-Limpeza: desce logo depois do chefe se houver ticket
   const descend = () => enterDungeon(G.biome, G.floor + 1);
   // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
   G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {
@@ -254,6 +254,7 @@ function onTowerBossKilled(m) {
   ch.towerBest = Math.max(ch.towerBest || 1, next);
   questEvent('floor');
   toast('Andar ' + G.floor + ' conquistado', m.T.name + ' · recorde: andar ' + ch.towerBest);
+  autoBossDown(); // Auto-Limpeza da torre: sobe depois que todos os monstros caírem
   const climb = () => enterTower(next);
   G.exitPortal = makePortal(m.x, m.z, 0x6ad8ff, 'Subir ao andar ' + next, () => {
     if (!G.loot.length) { climb(); return true; }

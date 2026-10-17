@@ -74,19 +74,19 @@ function sellFromBag(ch, li, n, confirmed) {
   log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' de Ouro.', 'loot');
   Sfx.coin();
 }
-/** Tickets de Auto-Limpeza na Mercadora: um por masmorra, compra com confirmação (são caros). */
+/** Tickets de Auto-Limpeza na Mercadora: um por masmorra e um da torre, compra com confirmação (são caros). */
 function ticketSection(ch) {
-  const P = R.TICKET_PRICE;
   let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
-  R.TICKET_IDS.forEach((k) => {
+  R.TICKET_IDS.concat('tower').forEach((k) => {
+    const P = R.ticketPrice(k), where = k === 'tower' ? 'Torre Infinita · 1 andar automático no portal da torre' : BIOMES[k].name + ' · 1 andar automático na Guardiã Nyx';
     const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k, cn = UI.tkN || 1;
     const btn = (n) => '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + n + '"' + (ch.gold >= P * n ? '' : ' disabled') + '>×' + n + ' · ' + fmt(P * n) + '</button>';
     const a = cf
       ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-n="' + cn + '" data-ok="1">Confirmar ×' + cn + ' · ' + fmt(P * cn) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
       : btn(1) + btn(10);
-    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(where) + ' · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
   });
-  return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
+  return h + '</div><p class="note">Os tickets das masmorras também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
 }
 function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
 /** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
@@ -184,16 +184,20 @@ export function openNpc(id) {
         '<button class="btn sm auto risk-' + rMax + (tk ? ' gold' : '') + '" data-npc="auto" data-b="' + k + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + maxF + ' e segue enquanto houver tickets' : 'Sem tickets desta masmorra') + '">Auto-Limpeza</button></div></div>';
     });
     h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>' +
-      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, recolhe os drops, derrota o chefe e desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, derrota o chefe e, assim que o chefe cai, pega os drops por perto e já desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
   } else if (id === 'tower') {
     const best = ch.towerBest || 1, T = R.TOWER;
     const row = (f, gold) => {
       const B = BIOMES[towerBiome(f, T.biomeEvery)], m = R.towerMod(f);
       return '<div class="dg risk-' + R.levelRisk(R.towerLevel(f), ch.level) + '"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + dec(m.hp, 2) + ' · dano ×' + dec(m.dmg, 2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
     };
-    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') + '</div>';
+    const tk = ticketCount('tower'), TK = R.TICKETS.tower;
+    h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') +
+      '<div class="dg"><div><b>Auto-Limpeza</b><div class="s tk">' + esc(TK.name) + ': <b style="font:inherit;color:' + (tk ? TK.color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · a partir do andar ' + best : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+      '<button class="btn sm auto' + (tk ? ' gold' : '') + '" data-npc="autotower"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + best + ' e segue subindo enquanto houver tickets' : 'Sem Ticket da Torre') + '">Auto-Limpeza</button></div></div></div>';
     h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
-      '<p class="note">Drops: só Ouro (o dobro de um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Joia aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Ouro e Joias.</p>';
+      '<p class="note">Drops: só Ouro (o dobro de um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Joia aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Ouro e Joias.</p>' +
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 Ticket da Torre por andar (' + fmt(R.TOWER_TICKET_PRICE) + ' de Ouro na Mercadora). O herói entra no recorde, derrota todos os monstros do andar e o chefe, recolhe os drops e só então sobe. Usa poções e a Poção da Ressurreição como na Guardiã Nyx; sem ela, para.</p>';
   } else if (id === 'eden') {
     const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = R.edenEntryLevel(ch.level);
     h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível − 15%) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
@@ -292,6 +296,7 @@ function npcAction(e) {
       closeModal(); startAutoClear(k);
       return;
     }
+    case 'autotower': if (!ticketCount('tower')) return; closeModal(); startAutoClear('tower'); return;
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }
@@ -346,11 +351,12 @@ function npcAction(e) {
     case 'buytk': {
       const k = b.dataset.k, n = +b.dataset.n === 10 ? 10 : 1;
       if (!R.TICKETS[k]) break;
-      if (ch.gold < R.TICKET_PRICE * n) { log('Ouro insuficiente.', 'warn'); break; }
+      const cost = R.ticketPrice(k) * n;
+      if (ch.gold < cost) { log('Ouro insuficiente.', 'warn'); break; }
       if (b.dataset.ok !== '1' || UI.tkSel !== k || UI.tkN !== n || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; UI.tkN = n; break; }
       if (!buyTicket(k, n)) break;
       Sfx.coin();
-      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(R.TICKET_PRICE * n) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
+      log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(cost) + ' de Ouro. Use ' + (k === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot');
       break;
     }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;

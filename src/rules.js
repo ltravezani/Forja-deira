@@ -409,8 +409,8 @@
     luck: { name: 'Talismã da Sorte', color: '#7affa0', desc: 'Usado no Ferreiro: se a fusão com Joia do Caos ou a evolução de asa falhar, o item mantém o +nível atual em vez de voltar a +0. Consumido a cada tentativa protegida.' },
   };
   /**
-   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx. Cada ticket limpa um
-   * andar inteiro sozinho (monstros e chefe). Vendidos pela Mercadora ou caem no Éden.
+   * Tickets de Auto-Limpeza: um por masmorra da Guardiã Nyx e um da Torre Infinita.
+   * Cada ticket limpa um andar sozinho. Vendidos pela Mercadora; os das masmorras também caem no Éden.
    */
   const TICKETS = {
     forest: { name: 'Ticket da Floresta', color: '#8ae86a' },
@@ -418,9 +418,13 @@
     ruins: { name: 'Ticket das Ruínas', color: '#e8c88a' },
     castle: { name: 'Ticket do Castelo', color: '#ff7a7a' },
     abyss: { name: 'Ticket do Abismo', color: '#ff9a4a' },
+    tower: { name: 'Ticket da Torre', color: '#6ad8ff' },
   };
-  const TICKET_IDS = Object.keys(TICKETS);
+  /** Tickets das masmorras da Guardiã Nyx (os que caem no Éden). */
+  const TICKET_IDS = ['forest', 'caves', 'ruins', 'castle', 'abyss'];
   const TICKET_PRICE = 1000000;
+  const TOWER_TICKET_PRICE = 5000000;
+  const ticketPrice = (id) => (id === 'tower' ? TOWER_TICKET_PRICE : TICKET_PRICE);
 
   /** Bônus das asas: a evoluída (stage 1) soma +10% de dano, +6% de absorção e +5% de HP. */
   function wingBonus(it) {
@@ -520,7 +524,7 @@
     if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
-    if (it.kind === 'ticket') return TICKET_PRICE * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
+    if (it.kind === 'ticket') return ticketPrice(it.id) * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
     const r = RARITY[it.rarity].order;
     return Math.floor((200 + it.tier * it.tier * 900) * (1 + r * 1.5) * (1 + (it.plus || 0) * 0.3) * (it.stage ? 3 : 1));
   }
@@ -1075,7 +1079,7 @@
     VERSION, RATES, resetGoldCost, mulberry32, hash32, hex, clamp,
     expToNext, expRate, monsterExp, partyShare,
     CLASSES, gearCls, canUse, itemUsers, ROSTER, EVOLUTION, SKILLS, skillsFor, TREES, treeNodeId, treePoints, treeSpent,
-    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE,
+    DROP_LEVEL, SLOTS, SLOT_LABEL, RARITY, EXC_WEAPON, EXC_ARMOR, LEGEND, JEWELS, POTIONS, BUFF_POTIONS, TALISMANS, TICKETS, TICKET_IDS, TICKET_PRICE, TOWER_TICKET_PRICE, ticketPrice,
     plusBonus, rarityAdj, itemGender, itemName, itemReq, itemStats, excOpts, itemLines, itemValue, sellValue,
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
