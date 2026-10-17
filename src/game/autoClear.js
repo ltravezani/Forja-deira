@@ -55,7 +55,7 @@ export function startAutoClear(biome) {
   enterFloor(a);
   const lvl = tower ? R.towerLevel(floor) : floorLevel(biome, floor);
   toast('Auto-Limpeza', placeName(a) + ' · andar ' + floor);
-  log('Auto-Limpeza: ' + placeName(a) + ', andar ' + floor + ' (nv ' + lvl + '). ' + (tower ? 'O herói derrota todos os monstros e o chefe e só então sobe' : 'O herói enfrenta o chefe e desce logo depois dele') + '; mexer nele pausa a automação por um instante.', 'sys');
+  log('Auto-Limpeza: ' + placeName(a) + ', andar ' + floor + ' (nv ' + lvl + '). ' + (tower ? 'O herói derrota todos os monstros e o chefe, recolhe os drops e só então sobe' : 'O herói enfrenta o chefe, recolhe todos os drops do andar e desce') + '; mexer nele pausa a automação por um instante.', 'sys');
   return true;
 }
 export function stopAutoClear(msg, done) {
@@ -70,7 +70,7 @@ export function stopAutoClear(msg, done) {
   toast(done ? 'Auto-Limpeza concluída' : 'Auto-Limpeza encerrada', done ? cleared : msg || cleared);
   persist();
 }
-/** Chefe do andar caiu (combat.js): na masmorra segue para o próximo andar; na torre termina o que sobrou. */
+/** Chefe do andar caiu (combat.js): na masmorra recolhe os drops e segue; na torre termina o que sobrou. */
 export function autoBossDown() { if (G.auto && !G.auto.bossDown) { G.auto.bossDown = true; G.auto.bossT = G.time; } }
 
 const skipped = (a, ref) => (a.skip.get(ref) || 0) > G.time;
@@ -95,19 +95,16 @@ function nearest(list, ok, maxD) {
 }
 /**
  * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
- * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão
- * (na masmorra, só os drops por perto, por poucos segundos, sem caçar os monstros que sobraram).
+ * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe todos os drops do andar
+ * (na masmorra sem caçar os monstros que sobraram, só se defendendo dos que vierem atrás dele).
  */
 function pickTarget(a) {
-  if (a.bossDown && !isTower(a)) {
-    const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), CONFIG.autoClear.lootRadius);
-    return l ? { type: 'loot', l } : null;
-  }
   const ok = (m) => !m.dead && !skipped(a, m);
   const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
   if (fighting) return { type: 'mon', m: fighting };
   const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), a.bossDown ? 1e4 : CONFIG.autoClear.lootRadius);
   if (l) return { type: 'loot', l };
+  if (a.bossDown && !isTower(a)) return null;
   const m = nearest(G.monsters, (x) => ok(x) && !x.boss, 1e4) || nearest(G.monsters, ok, 1e4);
   return m ? { type: 'mon', m } : null;
 }
@@ -115,18 +112,25 @@ function aim(p, t) {
   p.target = t;
   if (t.type === 'mon') p.path = null; else pathTo(t.l.x, t.l.z);
 }
-/** Sem andar nem ferir o alvo por alguns segundos: deixa ele de lado por um tempo. */
+/**
+ * Sem andar nem ferir o alvo por alguns segundos: deixa ele de lado por um tempo.
+ * No fim do andar, um drop travado (atrás de parede) ou que nunca chega (andando em círculos)
+ * é abandonado de vez nesse andar, para a automação não ficar presa.
+ */
 function watchStuck(a, p) {
   const C = CONFIG.autoClear, t = p.target, ref = t.type === 'mon' ? t.m : t.l;
   let s = a.tgt;
-  if (!s || s.ref !== ref) s = a.tgt = { ref, x: p.x, z: p.z, hp: t.type === 'mon' ? t.m.hp : 0, at: G.time };
-  const hp = t.type === 'mon' ? t.m.hp : 0;
-  if (Math.hypot(p.x - s.x, p.z - s.z) > 1.5 || hp < s.hp) { s.x = p.x; s.z = p.z; s.hp = hp; s.at = G.time; return; }
-  if (G.time - s.at > C.stuckTime) {
-    a.skip.set(ref, G.time + C.skipTime);
+  if (!s || s.ref !== ref) s = a.tgt = { ref, x: p.x, z: p.z, hp: t.type === 'mon' ? t.m.hp : 0, at: G.time, from: G.time };
+  const hp = t.type === 'mon' ? t.m.hp : 0, endLoot = a.bossDown && t.type === 'loot';
+  const moved = Math.hypot(p.x - s.x, p.z - s.z) > 1.5 || hp < s.hp;
+  if (moved) { s.x = p.x; s.z = p.z; s.hp = hp; s.at = G.time; }
+  if ((!moved && G.time - s.at > C.stuckTime) || (endLoot && G.time - s.from > C.lootGiveUp)) {
+    a.skip.set(ref, endLoot ? Infinity : G.time + C.skipTime);
     a.tgt = null; p.target = null; p.path = null;
   }
 }
+/** Mochila cheia com drops de equipamento no chão: o pet está fora vendendo e vai abrir espaço? */
+const petFreesBag = () => G.ch.bag.length >= BAG_SIZE && G.pet && G.pet.away > G.time && G.loot.some((l) => l.type === 'item');
 function drinkPotions() {
   const C = CONFIG.autoClear, st = G.st;
   if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
@@ -170,11 +174,12 @@ export function updateAutoClear(dt) {
   if ((a.thinkT -= dt) > 0) return;
   a.thinkT = C.think;
   const tower = isTower(a);
-  // depois do chefe, recolher o que sobrou no chão tem limite de tempo (na masmorra, curto e já conta da queda do chefe)
+  // depois do chefe, recolher o que sobrou no chão tem um limite de tempo largo, só como rede de segurança
   if (a.bossDown && !a.endT && (!tower || towerFloorClear())) a.endT = G.time;
-  const late = a.endT && G.time - a.endT > (tower ? C.lootTimeout : C.bossLootTime);
-  // na masmorra, com o chefe caído, larga o monstro que estava perseguindo; acabou o tempo, larga o drop também
-  if (p.target && (late || (a.bossDown && !tower && p.target.type === 'mon'))) { p.target = null; p.path = null; }
+  const late = a.endT && G.time - a.endT > C.lootTimeout;
+  // na masmorra, com o chefe caído, larga o monstro que estava perseguindo (a não ser que ele esteja atacando);
+  // acabou o tempo, larga o drop também
+  if (p.target && (late || (a.bossDown && !tower && p.target.type === 'mon' && !p.target.m.aggro))) { p.target = null; p.path = null; }
   if (validTarget(p.target)) { watchStuck(a, p); return; }
   const t = late ? null : pickTarget(a);
   if (t) { a.nextT = 0; aim(p, t); return; }
@@ -185,6 +190,8 @@ export function updateAutoClear(dt) {
   if (tower && !towerFloorClear() && G.time - a.bossT < C.towerStuckTimeout) return;
   // drops recém-caídos ainda no ar: espera pousarem antes de dar o andar por limpo
   if (!late && G.loot.some((l) => G.time - l.born <= 0.6 && lootOk2(l))) return;
+  // mochila cheia com equipamento ainda no chão: espera o pet voltar da venda (a venda já liberou espaço ao partir)
+  if (!late && petFreesBag()) return;
   // andar limpo: uma pausa curta para ver o resultado e desce
   if (!a.nextT) a.nextT = G.time + C.nextDelay;
   if (G.time >= a.nextT) nextFloor(a);
@@ -201,7 +208,7 @@ export function updateAutoHud() {
   const a = G.auto;
   if (!a) { if (!hudEl.hidden) { hudEl.hidden = true; lastHtml = ''; } return; }
   const left = G.monsters.reduce((n, m) => n + (m.dead ? 0 : 1), 0), tk = ticketCount(a.biome);
-  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && (!left || !isTower(a)) ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
+  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && G.loot.length && (!left || !isTower(a)) ? 'Recolhendo os drops' : a.bossDown && (!left || !isTower(a)) ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
   const html = '<div class="ac-h"><b>Auto-Limpeza</b><button class="btn sm" data-auto="stop">Parar</button></div>' +
     '<div class="ac-s">' + (isTower(a) ? 'Torre · ' : '') + 'Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
     '<div class="ac-s">Monstros ' + left + ' · tickets ' + tk + ' · andares ' + a.done + '</div>';

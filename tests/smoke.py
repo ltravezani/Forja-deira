@@ -287,15 +287,21 @@ with sync_playwright() as p:
     ev("D.enterTown()")
 
     # Auto-Limpeza: na masmorra desce logo depois do chefe; na torre só sobe sem nenhum monstro vivo
-    ev("(G.player.invulnUntil = 1e9, D.CONFIG.autoClear.bossLootTime = 0.3, D.CONFIG.autoClear.lootTimeout = 0.3, 0)")
+    ev("(G.player.invulnUntil = 1e9, 0)")
     ev("(G.ch.bag = G.ch.bag.filter((x) => x.kind !== 'ticket'), D.G.ch.gold = 20e6, D.buyTicket('forest', 2), D.buyTicket('tower', 2), 0)")
     check(ev('G.ch.gold') == 20e6 - 2 * ev('D.R.TICKET_PRICE') - 2 * ev('D.R.TOWER_TICKET_PRICE') and ev('D.R.TOWER_TICKET_PRICE') == 5000000, 'Ticket da Torre custa 5.000.000')
     f0 = ev("G.ch.unlockedFloors.forest || 1")
     check(ev("D.startAutoClear('forest')") and ev("G.zone === 'dungeon' && D.ticketCount('forest') === 1"), 'Auto-Limpeza da masmorra começa e gasta um ticket')
+    # um drop longe do herói (onde está um monstro, chão alcançável): precisa ser recolhido antes de descer
+    k0 = ev("D.ticketCount('castle')")
+    ev("(function(){ const p = G.player, far = G.monsters.filter((m) => !m.dead && !m.boss).sort((a, b) => ((b.x - p.x) ** 2 + (b.z - p.z) ** 2) - ((a.x - p.x) ** 2 + (a.z - p.z) ** 2))[0]; D.dropLoot(far.x, far.z, { type: 'ticket', id: 'castle' }); return 0; })()")
     ev("(D.killMonster(G.monsters.find((m) => m.boss)), 0)")
-    wait_for(lambda: ev("G.floor === %d" % (f0 + 1)), 60)
-    check(ev("G.zone === 'dungeon' && G.floor === %d && G.auto && G.auto.done === 1" % (f0 + 1)), 'masmorra: desce logo depois do chefe, mesmo com monstros vivos')
-    ev("D.stopAutoClear()")
+    for _ in range(60):  # avança o jogo em passos fixos: em tempo real o herói anda devagar sem GPU
+        if ev("G.floor === %d" % (f0 + 1)): break
+        ev(step + "(100)")
+    check(ev("G.zone === 'dungeon' && G.floor === %d && G.auto && G.auto.done === 1" % (f0 + 1)), 'masmorra: desce depois do chefe, mesmo com monstros vivos')
+    check(ev("D.ticketCount('castle')") == k0 + 1, 'masmorra: recolhe os drops longe do herói antes de descer')
+    ev("(D.stopAutoClear(), D.CONFIG.autoClear.lootTimeout = 0.3, 0)")
     ev("D.openNpc('tower')")
     check(pg.is_visible('[data-npc="autotower"]'), 'portal da torre mostra a Auto-Limpeza')
     pg.click('[data-npc="autotower"]')
@@ -308,7 +314,7 @@ with sync_playwright() as p:
     ev("(G.monsters.slice().forEach((m) => D.killMonster(m)), 0)")
     wait_for(lambda: ev("G.floor === %d" % (tf + 1)), 60)
     check(ev("G.zone === 'tower' && G.floor === %d && G.auto && D.ticketCount('tower') === 0" % (tf + 1)), 'torre: sobe só depois de todos os monstros')
-    ev("(D.stopAutoClear(), G.player.invulnUntil = 0, D.G.loot.length = 0, D.CONFIG.autoClear.bossLootTime = 4, D.CONFIG.autoClear.lootTimeout = 25, 0)")
+    ev("(D.stopAutoClear(), G.player.invulnUntil = 0, D.G.loot.length = 0, D.CONFIG.autoClear.lootTimeout = 90, 0)")
     ev("D.enterTown()")
 
     # trocas de zona repetidas: nada deve acumular
