@@ -111,7 +111,7 @@ export function sanitizeCharacter(ch) {
   ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
-  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]));
+  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]) || (it.kind === 'ticket' && R.TICKETS[it.id]));
   // evolução: inteiro dentro das formas da classe
   ch.tier = Math.min(R.CLASSES[ch.cls].tiers.length - 1, Math.floor(ch.tier));
   sanitizeTree(ch, R);

@@ -26,6 +26,7 @@ import { buildSlots } from '../ui/hud.js';
 import { log, toast } from '../ui/log.js';
 import { confirmDescend, showDeath } from '../ui/npcDialogs.js';
 import { walkableR } from '../world/grid.js';
+import { autoBossDown } from './autoClear.js';
 
 /** Alcance do ataque básico por classe (m), somado ao raio do alvo. */
 const RANGE = { dk: 2.3, dw: 13, elf: 15, de: 2.4, nc: 12 };
@@ -234,6 +235,7 @@ function onBossKilled(m) {
   const key = G.biome;
   ch.unlockedFloors[key] = Math.max(ch.unlockedFloors[key] || 1, G.floor + 1);
   toast('Guardião derrotado', m.T.name + ' · andar ' + (G.floor + 1) + ' liberado');
+  autoBossDown(); // Auto-Limpeza: termina o andar e desce sozinha se houver ticket
   const descend = () => enterDungeon(G.biome, G.floor + 1);
   // Com itens ainda no chão, pergunta antes (devolve false: não trocou de zona).
   G.exitPortal = makePortal(m.x, m.z, 0xff9a40, 'Descer ao andar ' + (G.floor + 1), () => {

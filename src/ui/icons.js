@@ -74,10 +74,12 @@ const ICON_SHAPE = {
   jewel: '<path class="m" d="M32 6 L51 22 L32 59 L13 22 Z"/><path d="M13 22 L51 22 M32 6 L24 22 L32 59 L40 22 Z" stroke="#fff8" stroke-width="1" fill="none"/><path d="M20 14 L26 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
   // Talismã da Sorte: medalhão dourado com trevo de quatro folhas
   talisman: '<path d="M22 4 Q32 14 42 4" stroke="#c9b28a" stroke-width="2" fill="none"/><circle class="g" cx="32" cy="36" r="22"/><circle cx="32" cy="36" r="17" fill="#0a2a16" stroke="#0008"/><g class="m"><circle cx="32" cy="27" r="7"/><circle cx="23" cy="36" r="7"/><circle cx="41" cy="36" r="7"/><circle cx="32" cy="45" r="7"/></g><path d="M32 36 Q36 46 40 52" stroke="#2a6a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="29" cy="24" r="2" fill="#fffc"/>',
+  // Ticket de Auto-Limpeza: bilhete de pergaminho com a borda picotada e o selo da masmorra
+  ticket: '<path d="M8 18 L56 18 L56 27 Q51 32 56 37 L56 46 L8 46 L8 37 Q13 32 8 27 Z" fill="#e8d8b0" stroke="#0009" stroke-width="1.4"/><path d="M19 19 L19 45" stroke="#8a6a3a" stroke-width="1.3" stroke-dasharray="2.5 2"/><circle class="m" cx="38" cy="32" r="8.5"/><path d="M34 32 L37 35 L42.5 28.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 24 L16 24 M11 32 L16 32 M11 40 L16 40" stroke="#8a6a3a" stroke-width="1.5"/>',
   potion: '<path d="M26 7 L38 7 L38 22 Q52 30 50 44 Q48 58 32 58 Q16 58 14 44 Q12 30 26 22Z" fill="#fff2" stroke="#e8e0d0aa" stroke-width="2"/><path class="m" d="M15.5 40 Q32 34 48.5 40 Q48 56 32 56 Q16 56 15.5 40Z"/><rect x="24" y="4" width="16" height="6" rx="2" fill="#8a6a42"/><path d="M20 30 Q18 38 20 44" stroke="#fff9" stroke-width="2" fill="none" stroke-linecap="round"/>',
 };
 /** Fundo por tipo de item: cor base do "tecido"/moldura atrás do ícone. */
-const ICON_BG = { talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
+const ICON_BG = { ticket: '#3a2c18', talisman: '#123a24', sword: '#5a1b17', staff: '#3b1d52', bow: '#1f3f22', helm: '#1d2d45', armor: '#4a3316', gloves: '#34391a', boots: '#3d2616', ring: '#3a1f4a', pendant: '#153c3e', wings: '#27204f', wings2: '#3a2a12', jewel: '#20183a', potion: '#2a1a1a' };
 const _iconCache = {};
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -88,6 +90,7 @@ function iconKind(it) {
   if (it.kind === 'jewel') return 'jewel';
   if (it.kind === 'potion') return 'potion';
   if (it.kind === 'talisman') return 'talisman';
+  if (it.kind === 'ticket') return 'ticket';
   if (it.slot === 'weapon') return it.cls === 'dw' ? 'staff' : it.cls === 'elf' ? 'bow' : 'sword';
   if (it.slot === 'wings' && it.stage) return 'wings2';
   return it.slot;
@@ -106,7 +109,7 @@ export function iconURI(kind, col) {
 export function glyph(it) {
   const kind = iconKind(it);
   const P = it.kind === 'potion' && R.POTIONS[it.id];
-  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
+  const c = it.kind === 'jewel' ? R.JEWELS[it.id].color : it.kind === 'talisman' ? R.TALISMANS[it.id].color : it.kind === 'ticket' ? R.TICKETS[it.id].color : P ? (P.color || (it.id === 'hp' ? '#e8483a' : it.id === 'rez' ? '#ffd24a' : '#3a78e8')) : R.RARITY[it.rarity].color;
   const bg = P ? (P.color ? shade(P.color, -0.78) : it.id === 'hp' ? '#3a1414' : it.id === 'rez' ? '#3a2c10' : '#141e3a') : ICON_BG[kind];
   // armas: ícone 3D (KayKit Fantasy Weapons Bits); sem ele, o desenho SVG
   const d3 = weaponIconURI(it);

@@ -1,4 +1,5 @@
 // ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
+import { CONFIG } from '../core/config.js';
 import { G, persist, UI } from '../core/state.js';
 import { $, dec, esc, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
@@ -8,6 +9,7 @@ import { NPCS } from '../game/data.js';
 import { addToBag, classOk, fmtCP, potionCount } from '../game/inventory.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
+import { buyTicket, startAutoClear, ticketCount } from '../game/autoClear.js';
 import { questEvent } from '../game/quests.js';
 import { openQuestBoard } from './questUi.js';
 import { fmtWait } from '../game/npcs.js';
@@ -23,7 +25,7 @@ const sellCat = (it) => (it.slot ? 'equip' : it.kind === 'jewel' ? 'jewel' : it.
 /** Equipamentos ficam de fora da lista: saem pelo pet ou pelo botão de Comuns/Mágicos. */
 const sellListed = (it) => !it.slot;
 /** Joias pedem confirmação antes de vender. */
-const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman';
+const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket';
 /** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
 const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
 /** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
@@ -43,7 +45,7 @@ function sellSection(ch) {
   h += '<div class="list selllist">';
   idx.forEach((i) => {
     const it = ch.bag[i], g = glyph(it), q = it.qty || 1;
-    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : 'Poção') + ' · você tem ' + q;
+    const sub = (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · você tem ' + q;
     let a;
     if (it.locked) a = '<button class="btn sm" disabled>Trancado</button>';
     else if (cf && cf.it === it) {
@@ -71,6 +73,19 @@ function sellFromBag(ch, li, n, confirmed) {
   UI.sel = null;
   log('Vendeu ' + R.itemName(it) + (n > 1 ? ' ×' + n : '') + ' por ' + fmt(gold) + ' de Ouro.', 'loot');
   Sfx.coin();
+}
+/** Tickets de Auto-Limpeza na Mercadora: um por masmorra, compra com confirmação (são caros). */
+function ticketSection(ch) {
+  const P = R.TICKET_PRICE;
+  let h = '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Tickets de Auto-Limpeza</h4><div class="list">';
+  R.TICKET_IDS.forEach((k) => {
+    const T = R.TICKETS[k], g = glyph({ kind: 'ticket', id: k }), cf = UI.npcConfirm === 'buytk' && UI.tkSel === k;
+    const a = cf
+      ? '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '" data-ok="1">Confirmar · ' + fmt(P) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : '<button class="btn sm gold" data-npc="buytk" data-k="' + k + '"' + (ch.gold >= P ? '' : ' disabled') + '>×1 · ' + fmt(P) + '</button>';
+    h += '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" style="color:' + T.color + '">' + esc(T.name) + '</span></span><span class="a row">' + a + '</span><span class="s">' + esc(BIOMES[k].name) + ' · 1 andar automático na Guardiã Nyx · você tem ' + ticketCount(k) + (cf ? ' · <b style="color:var(--gold)">Tem certeza?</b>' : '') + '</span></div>';
+  });
+  return h + '</div><p class="note">Também caem no Éden (' + Math.round(R.EDEN.ticket * 100) + '% por monstro, de uma masmorra aleatória).</p>';
 }
 function talismanCount() { const t = G.ch.bag.find((b) => b.kind === 'talisman' && b.id === 'luck'); return t ? t.qty : 0; }
 /** Gasta um Talismã da Sorte da mochila; devolve false se não houver. */
@@ -159,12 +174,16 @@ export function openNpc(id) {
       const lv1 = floorLevel(k, 1), lv = floorLevel(k, maxF);
       const r1 = R.levelRisk(lv1, ch.level), rMax = R.levelRisk(lv, ch.level);
       const btn = (f, risk, gold) => '<button class="btn sm risk-' + risk + (gold ? ' gold' : '') + '" data-npc="go" data-b="' + k + '" data-f="' + f + '" title="' + RISK[risk] + '">Andar ' + f + '</button>';
+      const tk = ticketCount(k);
       h += '<div class="dg risk-' + r1 + (k === rec ? ' rec' : '') + '"><div><b>' + esc(B.name) + '</b>' + (k === rec ? ' <span class="tag-rec">Recomendada</span>' : '') +
         '<div class="s">Monstros nv ' + lv1 + '+ · mais fundo liberado: andar ' + maxF + ' (nv ' + lv + ')</div>' +
-        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div></div><div class="row">' +
-        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') + '</div></div>';
+        '<div class="s risk-txt">' + RISK[r1] + (maxF > 1 && rMax !== r1 ? ' · andar ' + maxF + ': ' + RISK[rMax].toLowerCase() : '') + '</div>' +
+        '<div class="s tk">' + esc(R.TICKETS[k].name) + ': <b style="font:inherit;color:' + (tk ? R.TICKETS[k].color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · Auto-Limpeza a partir do andar ' + maxF : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+        btn(1, r1, false) + (maxF > 1 ? btn(maxF, rMax, true) : '') +
+        '<button class="btn sm auto risk-' + rMax + (tk ? ' gold' : '') + '" data-npc="auto" data-b="' + k + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + maxF + ' e segue enquanto houver tickets' : 'Sem tickets desta masmorra') + '">Auto-Limpeza</button></div></div>';
     });
-    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>';
+    h += '</div><p class="note" style="margin-top:10px">Seu nível: ' + ch.level + '. Verde: até 5 níveis acima do seu; amarelo: até 25; vermelho: perigoso. Cada andar soma +8 níveis.</p>' +
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 ticket da masmorra por andar. O herói entra no andar mais fundo liberado, mata os monstros, recolhe os drops, derrota o chefe e desce sozinho enquanto houver tickets. Usa as habilidades automáticas (ou as da barra, se nenhuma estiver marcada), bebe Poções de Vida abaixo de ' + Math.round(CONFIG.autoClear.hpPotionBelow * 100) + '% do HP e de Mana abaixo de ' + Math.round(CONFIG.autoClear.mpPotionBelow * 100) + '%, e usa a Poção da Ressurreição se cair; sem ela, para. O pet vende sozinho quando a mochila enche. Tickets: ' + fmt(R.TICKET_PRICE) + ' de Ouro na Mercadora ou ' + Math.round(R.EDEN.ticket * 100) + '% de chance em cada monstro do Éden.</p>';
   } else if (id === 'tower') {
     const best = ch.towerBest || 1, T = R.TOWER;
     const row = (f, gold) => {
@@ -224,6 +243,7 @@ export function openNpc(id) {
     ['hp', 'mp'].forEach((p) => { const D = R.POTIONS[p]; h += '<div class="li"><span>' + D.name + '</span><span class="a row"><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="10">×10 · ' + fmt(D.price * 10) + '</button><button class="btn sm" data-npc="buy" data-p="' + p + '" data-n="50">×50 · ' + fmt(D.price * 50) + '</button></span><span class="s">Você tem ' + potionCount(p) + '</span></div>'; });
     const RZ = R.POTIONS.rez;
     h += '<div class="li"><span style="color:#ffd24a">' + RZ.name + '</span><span class="a row"><button class="btn sm gold" data-npc="buy" data-p="rez" data-n="1"' + (ch.gold >= RZ.price ? '' : ' disabled') + '>×1 · ' + fmt(RZ.price) + '</button></span><span class="s">Renasce onde caiu, no mesmo andar, sem perder EXP nem Ouro · você tem ' + potionCount('rez') + '</span></div>';
+    h += '</div>' + ticketSection(ch) + '<div class="list">';
     h += '</div><div class="row" style="margin-top:12px">' + (UI.npcConfirm === 'selljunk' && junk.length
       ? '<button class="btn gold" data-npc="selljunk" data-ok="1">Confirmar: vender ' + junk.length + ' · ' + fmt(junkVal) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
       : '<button class="btn gold" data-npc="selljunk"' + (junk.length ? '' : ' disabled') + '>Vender ' + junk.length + ' Comuns/Mágicos · ' + fmt(junkVal) + ' de Ouro</button>') + '</div>';
@@ -263,6 +283,12 @@ function npcAction(e) {
       const k = b.dataset.b;
       if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0) return;
       closeModal(); enterDungeon(k, Math.max(1, Math.min(Math.floor(+b.dataset.f) || 1, ch.unlockedFloors[k] || 1)));
+      return;
+    }
+    case 'auto': {
+      const k = b.dataset.b;
+      if (!BIOMES[k] || DUNGEON_ORDER.indexOf(k) < 0 || !ticketCount(k)) return;
+      closeModal(); startAutoClear(k);
       return;
     }
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
@@ -314,6 +340,16 @@ function npcAction(e) {
       if (!addToBag({ kind: 'potion', id: b.dataset.p, qty: n, uid: 'p' + b.dataset.p })) break;
       ch.gold -= D.price * n; Sfx.coin();
       log('Comprou ' + D.name + ' ×' + n + ' por ' + fmt(D.price * n) + ' de Ouro.', 'loot');
+      break;
+    }
+    case 'buytk': {
+      const k = b.dataset.k;
+      if (!R.TICKETS[k]) break;
+      if (ch.gold < R.TICKET_PRICE) { log('Ouro insuficiente.', 'warn'); break; }
+      if (b.dataset.ok !== '1' || UI.tkSel !== k || !confirmed) { UI.npcConfirm = a; UI.tkSel = k; break; }
+      if (!buyTicket(k)) break;
+      Sfx.coin();
+      log('Comprou ' + R.TICKETS[k].name + ' por ' + fmt(R.TICKET_PRICE) + ' de Ouro. Use na Guardiã Nyx (Auto-Limpeza).', 'loot');
       break;
     }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;

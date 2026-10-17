@@ -18,6 +18,7 @@ import { updateWorld } from './game/world.js';
 import { enterDungeon, enterEden, enterTower, enterTown, inSafe } from './game/zones.js';
 import { edenState } from './game/eden.js';
 import { spawnAlly } from './game/allies.js';
+import { buyTicket, startAutoClear, stopAutoClear, ticketCount } from './game/autoClear.js';
 import { tryDodge } from './game/dodge.js';
 import { questEvent } from './game/quests.js';
 import { openQuestBoard } from './ui/questUi.js';
@@ -37,6 +38,7 @@ export function installDebugHook(loopStats) {
     worldChildren: () => world.children.length, townLifeCount, gltfStats, setGltfEnabled, spawnMonster, cloudDebug,
     enterEden, edenState, towerState, lineClear, gltfHit, gltfRise,
     tryDodge, questEvent, openQuestBoard, spawnAlly, telegraphCircle, telegraphCone,
+    startAutoClear, stopAutoClear, buyTicket, ticketCount,
     warming, applyQuality, currentQuality, dynResScale, activeLights,
   };
 }

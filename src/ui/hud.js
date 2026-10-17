@@ -5,6 +5,7 @@ import { Sfx } from '../engine/audio.js';
 import { potionCount, usePotion } from '../game/inventory.js';
 import { CONFIG } from '../core/config.js';
 import { dodgeLeft, tryDodge } from '../game/dodge.js';
+import { updateAutoHud } from '../game/autoClear.js';
 import { cdLeft, requestCast } from '../game/skills.js';
 import { updateLowHp } from './feedback.js';
 import { iconURI, skillIconURI } from './icons.js';
@@ -120,6 +121,7 @@ export function hudTick() {
   if (tb && last.get('tbItems') !== on) { last.set('tbItems', on); tb.classList.toggle('on', on); tb.setAttribute('aria-pressed', String(on)); }
   updateSlotStates(ch, st);
   updateBossBar();
+  updateAutoHud();
   setHtml('buffs', G.buffs.map((x) => buffHtml(x, x.until - G.time)).join('') +
     (G.pet && G.pet.away > G.time ? buffHtml({ id: 'pet', name: 'Pet vendendo' }, G.pet.away - G.time) : ''));
   updateLowHp(hpFrac, G.player.alive);

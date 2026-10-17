@@ -6,6 +6,7 @@ import { petSellable, sendPetToSell } from './allies.js';
 import { BAG_SIZE, classOk, cpOf, cpWith, reqOk } from './inventory.js';
 import { castSkill, cdLeft, skillUnlocked, visibleMonster } from './skills.js';
 import { inSafe } from './zones.js';
+import { autoClearOn } from './autoClear.js';
 
 /** Habilidades que deslocam o herói: ficam de fora da automação (o movimento é sempre do jogador). */
 const MOVES_HERO = { blink: 1, dash: 1 };
@@ -26,11 +27,16 @@ const reachOf = (sk) => Math.max(sk.range || 0, sk.radius || 0) || CONFIG.auto.s
  * com MP/AG suficientes e um monstro ao alcance. As de recarga longa (buffs,
  * invocações, golpes fortes) têm prioridade; as rápidas preenchem o resto.
  */
+/** Na Auto-Limpeza sem nenhuma habilidade marcada, usa as da barra (menos as que deslocam o herói). */
+function autoList(ch) {
+  if (ch.autoSkills && ch.autoSkills.length) return ch.autoSkills;
+  return autoClearOn() ? ch.skillBar : null;
+}
 function autoCast(dt) {
-  const p = G.player, ch = G.ch, st = G.st;
-  if (!ch.autoSkills || !ch.autoSkills.length || !p || !p.alive || p.dash || G.skillQueue) return;
+  const p = G.player, ch = G.ch, st = G.st, list = autoList(ch);
+  if (!list || !list.length || !p || !p.alive || p.dash || G.skillQueue) return;
   if (G.time < p.lockUntil || G.zone === 'town' || inSafe()) return;
-  const ids = ch.autoSkills.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
+  const ids = list.filter((id) => autoSkillAllowed(id) && skillUnlocked(id) && cdLeft(id) <= 0);
   if (!ids.length) return;
   if ((scanT -= dt) > 0) return;
   scanT = CONFIG.auto.scanInterval;
@@ -67,5 +73,5 @@ export function updateAutomation(dt) {
   if (!G.ch || !G.player) return;
   autoCast(dt);
   sellTick -= dt;
-  if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell) autoPetSell(); }
+  if (sellTick <= 0) { sellTick = 1; if (G.ch.autoPetSell || autoClearOn()) autoPetSell(); } // na Auto-Limpeza o pet vende sozinho
 }

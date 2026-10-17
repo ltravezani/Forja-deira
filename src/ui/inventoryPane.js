@@ -18,10 +18,10 @@ const EQ_RIGHT = ['weapon', 'wings', 'pendant', 'ring'];
 // ---------- InventoryFilter ----------
 export const InventoryFilter = {
   LABELS: { all: 'Todos', equip: 'Equipamentos', mat: 'Materiais', cons: 'Consumíveis', other: 'Outros' },
-  /** Equipamentos: peças da sua classe · Materiais: joias e talismãs · Consumíveis: poções · Outros: o resto (peças de outras classes). */
+  /** Equipamentos: peças da sua classe · Materiais: joias, talismãs e tickets · Consumíveis: poções · Outros: o resto (peças de outras classes). */
   cat(it) {
     if (it.slot) return classOk(it) ? 'equip' : 'other';
-    if (it.kind === 'jewel' || it.kind === 'talisman') return 'mat';
+    if (it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket') return 'mat';
     if (it.kind === 'potion') return 'cons';
     return 'other';
   },
@@ -33,7 +33,7 @@ export const InventoryFilter = {
 
 // ---------- InventoryItem / EquipmentSlot ----------
 /** Brilho discreto para Excelente ou melhor, joias e talismãs. */
-const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman');
+const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 /** Cadeado dos itens trancados (nunca vendidos nem descartados). */
 const LOCK_SVG = '<span class="lk" title="Trancado" style="position:absolute;right:2px;bottom:13px;width:10px;height:11px;line-height:0;filter:drop-shadow(0 1px 1px #000)"><svg viewBox="0 0 10 11" width="10" height="11" aria-hidden="true"><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#e8d9a8" stroke-width="1.4"/><rect x="1" y="5" width="8" height="6" rx="1" fill="#e8d9a8"/></svg></span>';
 /** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
