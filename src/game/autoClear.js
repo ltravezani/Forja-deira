@@ -1,4 +1,4 @@
-// ---------- Auto-Limpeza: tickets da Guardiã Nyx limpam andares de masmorra sozinhos ----------
+// ---------- Auto-Limpeza: tickets da Guardiã Nyx e da Torre Infinita limpam andares sozinhos ----------
 import { CONFIG } from '../core/config.js';
 import { G, persist } from '../core/state.js';
 import { $, esc, R } from '../core/util.js';
@@ -6,12 +6,13 @@ import { KEYS, mouse } from '../input/inputState.js';
 import { revive } from './combat.js';
 import { addToBag, BAG_SIZE, potionCount, usePotion } from './inventory.js';
 import { pathTo } from './movement.js';
-import { enterDungeon } from './zones.js';
+import { towerState } from './tower.js';
+import { enterDungeon, enterTower } from './zones.js';
 import { log, toast } from '../ui/log.js';
 import { closeModal } from '../ui/npcDialogs.js';
 import { BIOMES, DUNGEON_ORDER, floorLevel } from '../world/biomes.js';
 
-/** Tickets de Auto-Limpeza da masmorra na mochila. */
+/** Tickets de Auto-Limpeza da masmorra (ou da torre, 'tower') na mochila. */
 export function ticketCount(biome) {
   const t = G.ch && G.ch.bag.find((b) => b.kind === 'ticket' && b.id === biome);
   return t ? t.qty : 0;
@@ -26,9 +27,10 @@ function takeTicket(biome) {
 export function buyTicket(biome, n = 1) {
   const ch = G.ch;
   n = Math.max(1, Math.floor(n) || 1);
-  if (!R.TICKETS[biome] || ch.gold < R.TICKET_PRICE * n) return false;
+  const cost = R.ticketPrice(biome) * n;
+  if (!R.TICKETS[biome] || ch.gold < cost) return false;
   if (!addToBag({ kind: 'ticket', id: biome, qty: n, uid: 'k' + biome })) return false;
-  ch.gold -= R.TICKET_PRICE * n;
+  ch.gold -= cost;
   return true;
 }
 
@@ -36,18 +38,24 @@ export const autoClearOn = () => !!G.auto;
 /** A Auto-Limpeza decide os alvos agora (não está pausada pelo jogador)? */
 export const autoSteering = () => !!G.auto && G.time >= G.auto.manualT;
 
+const isTower = (a) => a.biome === 'tower';
+const placeName = (a) => (isTower(a) ? 'Torre Infinita' : BIOMES[a.biome].name);
+function enterFloor(a) { if (isTower(a)) enterTower(a.floor); else enterDungeon(a.biome, a.floor); }
+
 /**
- * Começa na masmorra escolhida, no andar mais fundo liberado. Cada andar gasta um
- * ticket ao entrar; com tickets sobrando, o herói desce sozinho depois do chefe.
+ * Começa na masmorra escolhida (ou na torre, biome 'tower'), no andar mais fundo liberado.
+ * Cada andar gasta um ticket ao entrar. Na masmorra, o herói desce logo depois do chefe;
+ * na torre, só sobe depois de derrotar todos os monstros do andar.
  */
 export function startAutoClear(biome) {
-  const ch = G.ch;
-  if (DUNGEON_ORDER.indexOf(biome) < 0 || !takeTicket(biome)) return false;
-  const floor = ch.unlockedFloors[biome] || 1;
-  G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, endT: 0, nextT: 0, skip: new Map(), tgt: null };
-  enterDungeon(biome, floor);
-  toast('Auto-Limpeza', BIOMES[biome].name + ' · andar ' + floor);
-  log('Auto-Limpeza: ' + BIOMES[biome].name + ', andar ' + floor + ' (nv ' + floorLevel(biome, floor) + '). O herói limpa o andar e enfrenta o chefe sozinho; mexer nele pausa a automação por um instante.', 'sys');
+  const ch = G.ch, tower = biome === 'tower';
+  if ((!tower && DUNGEON_ORDER.indexOf(biome) < 0) || !takeTicket(biome)) return false;
+  const floor = tower ? ch.towerBest || 1 : ch.unlockedFloors[biome] || 1;
+  const a = G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, bossT: 0, endT: 0, nextT: 0, skip: new Map(), tgt: null };
+  enterFloor(a);
+  const lvl = tower ? R.towerLevel(floor) : floorLevel(biome, floor);
+  toast('Auto-Limpeza', placeName(a) + ' · andar ' + floor);
+  log('Auto-Limpeza: ' + placeName(a) + ', andar ' + floor + ' (nv ' + lvl + '). ' + (tower ? 'O herói derrota todos os monstros e o chefe e só então sobe' : 'O herói enfrenta o chefe e desce logo depois dele') + '; mexer nele pausa a automação por um instante.', 'sys');
   return true;
 }
 export function stopAutoClear(msg, done) {
@@ -62,8 +70,8 @@ export function stopAutoClear(msg, done) {
   toast(done ? 'Auto-Limpeza concluída' : 'Auto-Limpeza encerrada', done ? cleared : msg || cleared);
   persist();
 }
-/** Chefe do andar caiu (combat.js): termina o que sobrou e segue para o próximo. */
-export function autoBossDown() { if (G.auto) G.auto.bossDown = true; }
+/** Chefe do andar caiu (combat.js): na masmorra segue para o próximo andar; na torre termina o que sobrou. */
+export function autoBossDown() { if (G.auto && !G.auto.bossDown) { G.auto.bossDown = true; G.auto.bossT = G.time; } }
 
 const skipped = (a, ref) => (a.skip.get(ref) || 0) > G.time;
 function validTarget(t) {
@@ -87,9 +95,14 @@ function nearest(list, ok, maxD) {
 }
 /**
  * Próximo alvo: monstros que já estão brigando por perto, drops no caminho,
- * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão.
+ * o monstro mais próximo e, por último, o chefe. Depois do chefe, recolhe o resto do chão
+ * (na masmorra, só os drops por perto, por poucos segundos, sem caçar os monstros que sobraram).
  */
 function pickTarget(a) {
+  if (a.bossDown && !isTower(a)) {
+    const l = nearest(G.loot, (x) => lootOk(x) && !skipped(a, x), CONFIG.autoClear.lootRadius);
+    return l ? { type: 'loot', l } : null;
+  }
   const ok = (m) => !m.dead && !skipped(a, m);
   const fighting = nearest(G.monsters, (m) => ok(m) && m.aggro, 9);
   if (fighting) return { type: 'mon', m: fighting };
@@ -127,16 +140,22 @@ function nextFloor(a) {
   }
   a.used++;
   a.floor++;
-  a.bossDown = false; a.endT = 0; a.nextT = 0; a.tgt = null; a.skip.clear();
-  enterDungeon(a.biome, a.floor);
-  log('Auto-Limpeza: descendo para o andar ' + a.floor + ' (' + ticketCount(a.biome) + ' tickets restantes).', 'sys');
+  a.bossDown = false; a.bossT = 0; a.endT = 0; a.nextT = 0; a.tgt = null; a.skip.clear();
+  enterFloor(a);
+  log('Auto-Limpeza: ' + (isTower(a) ? 'subindo' : 'descendo') + ' para o andar ' + a.floor + ' (' + ticketCount(a.biome) + ' tickets restantes).', 'sys');
+}
+/** Na torre o andar só acaba sem nenhum monstro vivo e sem a fenda da invasão ainda soltando ondas. */
+function towerFloorClear() {
+  if (G.monsters.some((m) => !m.dead)) return false;
+  const inv = towerState().inv;
+  return !inv || inv.state === 2;
 }
 
 export function updateAutoClear(dt) {
   const a = G.auto, p = G.player, C = CONFIG.autoClear;
   if (!a || !p || !G.ch) return;
   // saiu da masmorra (portal para a cidade, renasceu em Aldrena, outra zona): fim
-  if (G.zone !== 'dungeon' || G.biome !== a.biome || G.floor !== a.floor) { stopAutoClear('o herói saiu do andar'); return; }
+  if (isTower(a) ? G.zone !== 'tower' || G.floor !== a.floor : G.zone !== 'dungeon' || G.biome !== a.biome || G.floor !== a.floor) { stopAutoClear('o herói saiu do andar'); return; }
   if (!p.alive) {
     if (!a.deadT) a.deadT = G.time;
     if (G.time - a.deadT < C.reviveDelay) return;
@@ -150,14 +169,20 @@ export function updateAutoClear(dt) {
   if (G.time < a.manualT || G.time < p.lockUntil || p.dash || p.dodge) return;
   if ((a.thinkT -= dt) > 0) return;
   a.thinkT = C.think;
+  const tower = isTower(a);
+  // depois do chefe, recolher o que sobrou no chão tem limite de tempo (na masmorra, curto e já conta da queda do chefe)
+  if (a.bossDown && !a.endT && (!tower || towerFloorClear())) a.endT = G.time;
+  const late = a.endT && G.time - a.endT > (tower ? C.lootTimeout : C.bossLootTime);
+  // na masmorra, com o chefe caído, larga o monstro que estava perseguindo; acabou o tempo, larga o drop também
+  if (p.target && (late || (a.bossDown && !tower && p.target.type === 'mon'))) { p.target = null; p.path = null; }
   if (validTarget(p.target)) { watchStuck(a, p); return; }
-  // depois do chefe, recolher o que sobrou no chão tem limite de tempo
-  if (a.bossDown && !a.endT && !G.monsters.some((m) => !m.dead)) a.endT = G.time;
-  const late = a.endT && G.time - a.endT > C.lootTimeout;
   const t = late ? null : pickTarget(a);
   if (t) { a.nextT = 0; aim(p, t); return; }
   p.target = null;
   if (!a.bossDown) return; // o chefe ainda está vivo mas fora de alcance por enquanto (travado): espera
+  // torre: com monstro vivo (travado e deixado de lado por um tempo) ou onda da invasão por vir, espera;
+  // só um monstro inalcançável por muito tempo libera a subida, para a automação não ficar presa
+  if (tower && !towerFloorClear() && G.time - a.bossT < C.towerStuckTimeout) return;
   // drops recém-caídos ainda no ar: espera pousarem antes de dar o andar por limpo
   if (!late && G.loot.some((l) => G.time - l.born <= 0.6 && lootOk2(l))) return;
   // andar limpo: uma pausa curta para ver o resultado e desce
@@ -176,9 +201,9 @@ export function updateAutoHud() {
   const a = G.auto;
   if (!a) { if (!hudEl.hidden) { hudEl.hidden = true; lastHtml = ''; } return; }
   const left = G.monsters.reduce((n, m) => n + (m.dead ? 0 : 1), 0), tk = ticketCount(a.biome);
-  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && !left ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
+  const state = !G.player.alive ? 'Caído' : G.time < a.manualT ? 'Pausada (você está no controle)' : a.bossDown && (!left || !isTower(a)) ? 'Andar limpo' : a.bossDown ? 'Chefe derrotado · limpando' : 'Limpando o andar';
   const html = '<div class="ac-h"><b>Auto-Limpeza</b><button class="btn sm" data-auto="stop">Parar</button></div>' +
-    '<div class="ac-s">Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
+    '<div class="ac-s">' + (isTower(a) ? 'Torre · ' : '') + 'Andar ' + a.floor + ' · ' + esc(state) + '</div>' +
     '<div class="ac-s">Monstros ' + left + ' · tickets ' + tk + ' · andares ' + a.done + '</div>';
   if (html !== lastHtml) { lastHtml = html; hudEl.innerHTML = html; }
   hudEl.hidden = false;

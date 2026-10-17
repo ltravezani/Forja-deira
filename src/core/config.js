@@ -102,7 +102,7 @@ export const CONFIG = {
     healBelow: 0.7,         // a Cura automática só sai com o HP abaixo disso
     scanInterval: 0.12,     // s entre buscas de alvo à vista (linha de visão custa)
   },
-  // Auto-Limpeza (tickets da Guardiã Nyx): o herói limpa o andar e derrota o chefe sozinho
+  // Auto-Limpeza (tickets da Guardiã Nyx e da Torre): o herói limpa o andar e derrota o chefe sozinho
   autoClear: {
     think: 0.2,             // s entre decisões de alvo
     lootRadius: 10,         // m: drops a essa distância são buscados no caminho entre um monstro e outro
@@ -112,7 +112,9 @@ export const CONFIG = {
     manualPause: 2.5,       // s sem decidir depois que o jogador mexe no herói (teclado ou clique)
     stuckTime: 6,           // s sem andar nem ferir o alvo: desiste dele por um tempo
     skipTime: 30,           // s ignorando um alvo travado (atrás de parede, fora do caminho)
-    lootTimeout: 25,        // s no fim do andar recolhendo o que sobrou no chão
+    lootTimeout: 25,        // s no fim do andar da torre recolhendo o que sobrou no chão
+    bossLootTime: 4,        // s na masmorra depois do chefe pegando os drops por perto antes de descer
+    towerStuckTimeout: 120, // s depois do chefe da torre com monstro vivo inalcançável: sobe mesmo assim
     nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
   monsters: {

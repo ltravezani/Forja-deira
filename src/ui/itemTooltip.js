@@ -50,7 +50,8 @@ function itemSub(it) {
 function itemDesc(it) {
   if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
-  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar e derrota o chefe sozinho. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
+  if (it.kind === 'ticket' && it.id === 'tower') return 'No portal da Torre Infinita, escolha Auto-Limpeza: o herói entra no andar do seu recorde, derrota todos os monstros e o chefe e só então sobe. Cada ticket vale um andar; com mais tickets, ele segue subindo.';
+  if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar, derrota o chefe e desce logo depois dele. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
   if (it.kind === 'potion') {
     const P = R.POTIONS[it.id];
     if (P.revive) return 'Ao cair, permite renascer no mesmo lugar do andar com HP e mana cheios, sem perder EXP nem Ouro.';

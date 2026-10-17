@@ -137,7 +137,7 @@ export function pickup(l) {
   else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
-  else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use na Guardiã Nyx (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
+  else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use ' + (l.id === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
   else {
     if (!addToBag(l.item)) return false;
     Sfx.loot(R.RARITY[l.item.rarity].order);
