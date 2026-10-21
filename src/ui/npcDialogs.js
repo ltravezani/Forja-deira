@@ -192,12 +192,13 @@ export function openNpc(id) {
       return '<div class="dg risk-' + R.levelRisk(R.towerLevel(f), ch.level) + '"><div><b>Andar ' + f + '</b> · ' + esc(B.name) + '<div class="s">Monstros nv ' + R.towerLevel(f) + '+ · HP ×' + dec(m.hp, 2) + ' · dano ×' + dec(m.dmg, 2) + '</div></div><div class="row"><button class="btn sm' + (gold ? ' gold' : '') + '" data-npc="tower" data-f="' + f + '">' + (f === 1 ? 'Entrar' : 'Continuar') + '</button></div></div>';
     };
     const tk = ticketCount('tower'), TK = R.TICKETS.tower;
+    const autoBtn = (f, gold) => '<button class="btn sm auto' + (tk && gold ? ' gold' : '') + '" data-npc="autotower" data-f="' + f + '"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + f + ' e segue subindo enquanto houver tickets' : 'Sem Ticket da Torre') + '">' + (best > 1 ? 'Auto · andar ' + f : 'Auto-Limpeza') + '</button>';
     h += '<div class="dungeons">' + row(1, best === 1) + (best > 1 ? row(best, true) : '') +
-      '<div class="dg"><div><b>Auto-Limpeza</b><div class="s tk">' + esc(TK.name) + ': <b style="font:inherit;color:' + (tk ? TK.color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · a partir do andar ' + best : ' · compre com a Mercadora') + '</div></div><div class="row">' +
-      '<button class="btn sm auto' + (tk ? ' gold' : '') + '" data-npc="autotower"' + (tk ? '' : ' disabled') + ' title="' + (tk ? 'Limpa o andar ' + best + ' e segue subindo enquanto houver tickets' : 'Sem Ticket da Torre') + '">Auto-Limpeza</button></div></div></div>';
+      '<div class="dg"><div><b>Auto-Limpeza</b><div class="s tk">' + esc(TK.name) + ': <b style="font:inherit;color:' + (tk ? TK.color : 'var(--muted)') + '">' + tk + '</b>' + (tk ? ' · a partir do andar 1' + (best > 1 ? ' ou ' + best : '') : ' · compre com a Mercadora') + '</div></div><div class="row">' +
+      autoBtn(1, best === 1) + (best > 1 ? autoBtn(best, true) : '') + '</div></div></div>';
     h += '<p class="note" style="margin-top:10px">Recorde: andar ' + best + '. Cada andar soma +' + T.levelPerFloor + ' níveis e deixa os monstros mais fortes. O bioma muda a cada ' + T.biomeEvery + ' andares.</p>' +
       '<p class="note">Drops: só Ouro (o dobro de um andar de masmorra) e ' + Math.round(T.jewelChance * 100) + '% de chance de uma Joia aleatória por monstro. O chefe no fim de cada andar tem ' + Math.round(T.bossChance * 100) + '% de chance de deixar Ouro e Joias.</p>' +
-      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 Ticket da Torre por andar (' + fmt(R.TOWER_TICKET_PRICE) + ' de Ouro na Mercadora). O herói entra no recorde, derrota todos os monstros do andar e o chefe, recolhe os drops e só então sobe. Usa poções e a Poção da Ressurreição como na Guardiã Nyx; sem ela, para.</p>';
+      '<p class="note"><b style="font:inherit;color:var(--gold)">Auto-Limpeza:</b> gasta 1 Ticket da Torre por andar (' + fmt(R.TOWER_TICKET_PRICE) + ' de Ouro na Mercadora). Escolha começar no andar 1 (para farmar) ou no recorde. O herói derrota todos os monstros do andar e o chefe, recolhe os drops e só então sobe. Usa poções e a Poção da Ressurreição como na Guardiã Nyx; sem ela, para.</p>';
   } else if (id === 'eden') {
     const left = R.edenRemaining(ch, Date.now()), E = R.EDEN, lv = R.edenEntryLevel(ch.level);
     h += '<div class="dungeons"><div class="dg"><div><b>O Éden</b><div class="s">Monstros do nv ' + lv + ' (seu nível − 15%) até o Guardião do Éden, nv ' + R.edenLevel(lv, 'boss') + '</div></div><div class="row">' +
@@ -296,7 +297,7 @@ function npcAction(e) {
       closeModal(); startAutoClear(k);
       return;
     }
-    case 'autotower': if (!ticketCount('tower')) return; closeModal(); startAutoClear('tower'); return;
+    case 'autotower': if (!ticketCount('tower')) return; closeModal(); startAutoClear('tower', +b.dataset.f || ch.towerBest || 1); return;
     case 'eden': closeModal(); if (!R.edenRemaining(ch, Date.now())) enterEden(); return;
     case 'tower': closeModal(); enterTower(Math.max(1, Math.min(+b.dataset.f || 1, ch.towerBest || 1))); return;
     case 'smithsel': { const x = smithItems[+b.dataset.i]; if (owned(ch, x)) UI.smithSel = x; break; }

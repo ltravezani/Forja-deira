@@ -44,13 +44,15 @@ function enterFloor(a) { if (isTower(a)) enterTower(a.floor); else enterDungeon(
 
 /**
  * Começa na masmorra escolhida (ou na torre, biome 'tower'), no andar mais fundo liberado.
+ * Na torre dá para escolher o andar inicial (1 até o recorde), para farmar desde o começo.
  * Cada andar gasta um ticket ao entrar. Na masmorra, o herói desce logo depois do chefe;
  * na torre, só sobe depois de derrotar todos os monstros do andar.
  */
-export function startAutoClear(biome) {
+export function startAutoClear(biome, startFloor) {
   const ch = G.ch, tower = biome === 'tower';
   if ((!tower && DUNGEON_ORDER.indexOf(biome) < 0) || !takeTicket(biome)) return false;
-  const floor = tower ? ch.towerBest || 1 : ch.unlockedFloors[biome] || 1;
+  const best = ch.towerBest || 1;
+  const floor = tower ? (startFloor ? Math.max(1, Math.min(startFloor | 0, best)) : best) : ch.unlockedFloors[biome] || 1;
   const a = G.auto = { biome, floor, done: 0, used: 1, manualT: 0, thinkT: 0, deadT: 0, bossDown: false, bossT: 0, endT: 0, nextT: 0, skip: new Map(), tgt: null };
   enterFloor(a);
   const lvl = tower ? R.towerLevel(floor) : floorLevel(biome, floor);
