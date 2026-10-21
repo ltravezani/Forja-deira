@@ -1,7 +1,7 @@
 // ---------- painéis Personagem, Habilidades, Drops e Opções ----------
 import { gltfEnabled, gltfStats } from '../art/gltfModels.js';
 import { Cloud } from '../core/cloud.js';
-import { CONFIG, uiScale } from '../core/config.js';
+import { batterySaver, CONFIG, fpsLimit, uiScale } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
 import { dec, esc, fmt, R, touchUI } from '../core/util.js';
 import { sfxVolume } from '../engine/audio.js';
@@ -107,11 +107,13 @@ export function paneLoot() {
 export function paneOpts() {
   const s = S.settings;
   let h = '<h3>Opções</h3>';
-  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'celular', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', celular: 'Celular (leve)', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
+  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'celular', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', celular: 'Leve (celular e notebook simples)', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
+    '<select class="fld" id="fpsSel" aria-label="Limite de quadros">' + CONFIG.frames.choices.map((v) => '<option value="' + v + '"' + (fpsLimit(s) === v ? ' selected' : '') + '>' + (v ? 'Até ' + v + ' FPS' : 'FPS sem limite') + '</option>').join('') + '</select>' +
+    '<button class="btn" data-act="toggleBattery">Economia de bateria: ' + (batterySaver(s) ? 'ligada' : 'desligada') + '</button>' +
     '<button class="btn" data-act="toggleOutline">Contorno cartoon: ' + (s.outline === false ? 'desligado' : 'ligado') + '</button>' +
     '<button class="btn" data-act="toggleBloom">Brilho (bloom): ' + (bloomOn() ? 'ligado' : 'desligado') + '</button>' +
     (gltfStats().ready ? '<button class="btn" data-act="toggleAnimChars">Personagens: ' + (gltfEnabled() ? 'animados' : 'simples') + '</button>' : '') + '</div>' +
-    '<p class="note">Personagens simples são mais leves; monstros e moradores trocam de modelo na próxima área.</p>';
+    '<p class="note">Personagens simples são mais leves; monstros e moradores trocam de modelo na próxima área. Economia de bateria: 30 FPS na cidade e com painéis abertos, 45 em combate (esquenta menos o celular). Se o jogo ficar lento, a qualidade escolhida automaticamente baixa sozinha.</p>';
   const vol = (id, label, v) => '<label class="optrange"><span>' + label + '</span><input type="range" id="' + id + '" min="0" max="100" step="5" value="' + v + '" aria-label="' + label + '"><b class="num">' + v + '%</b></label>';
   h += '<h4>Som</h4><div class="row"><button class="btn" data-act="toggleSound">Som: ' + (s.sound ? 'ligado' : 'desligado') + '</button></div>' +
     vol('sfxVol', 'Efeitos', sfxVolume(s)) + vol('musicVol', 'Música', musicVolume(s));

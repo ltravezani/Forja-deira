@@ -13,7 +13,7 @@ import { hurtPlayer } from './combat.js';
 import { AFFIX, MON, monsterName } from './data.js';
 import { face, stepToward, turn } from './movement.js';
 import { spawnProjectile } from './projectiles.js';
-import { inView } from './world.js';
+import { animDt, inView, showRoot } from './world.js';
 import { inSafe } from './zones.js';
 import { log } from '../ui/log.js';
 import { BIOMES } from '../world/biomes.js';
@@ -285,8 +285,9 @@ function updateVisual(m, dt, slow) {
   m.lx = m.x; m.lz = m.z;
   // fora da tela não precisa animar nem desenhar
   const vis = inView(m.x, root.position.y + m.model.height * 0.5, m.z, m.model.height * 0.8 + 1);
-  root.visible = vis;
-  if (vis) animateModel(m.model, { t: G.time + m.id, dt, moving: m.moving, v: dt > 0 ? Math.hypot(mdx, mdz) / dt : 0, attack: m.attackAnim, speed: 9 * slow });
+  showRoot(root, vis);
+  const adt = vis ? animDt(m, dt, m.x, m.z) : -1;
+  if (adt >= 0) animateModel(m.model, { t: G.time + m.id, dt: adt, moving: m.moving, v: dt > 0 ? Math.hypot(mdx, mdz) / dt : 0, attack: m.attackAnim, speed: 9 * slow });
 }
 
 /** Monstro que acaba de aparecer no meio da luta surge do chão (só os animados; os outros já atacam). */

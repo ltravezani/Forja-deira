@@ -3,8 +3,8 @@
 // da tela de título, registra a entrada e inicia o laço único do jogo.
 // =============================================================================
 import { applyCharSetting, loadGltfModels } from './art/gltfModels.js';
-import { applyFeelSettings, autoQuality, CONFIG } from './core/config.js';
-import { loopStats, reportError, startLoop } from './core/loop.js';
+import { applyFeelSettings, autoQuality, CONFIG, frameTarget } from './core/config.js';
+import { loopStats, reportError, setFramePacer, startLoop } from './core/loop.js';
 import { Cloud, cloudTick, initCloud } from './core/cloud.js';
 import { G, loadSave, persist, S, UI } from './core/state.js';
 import { TILE } from './core/util.js';
@@ -15,11 +15,12 @@ import { updateParticles, updateRings } from './engine/effects.js';
 import { Music, musicVolume } from './engine/music.js';
 import { updateFx } from './engine/skillfx.js';
 import { updateTelegraphs } from './engine/telegraph.js';
-import { applyQuality, camTarget, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
+import { applyQuality, camTarget, forceStaticShadows, gpuName, onAutoDrop, renderFrame, resize, setBloom, setOutline } from './engine/renderer.js';
 import { applyWakeLock } from './engine/wakeLock.js';
 import { buildTitleBackdrop, returnToTitle } from './game/session.js';
 import { initInput } from './input/input.js';
 import { initBigMap } from './ui/minimap.js';
+import { startTexPrewarm } from './world/texPrewarm.js';
 import { updatePlayScene } from './scenes/playScene.js';
 import { updateTitleScene } from './scenes/titleScene.js';
 import { initAccount, openAccount, refreshAccountUi, showConflictDialog } from './ui/account.js';
@@ -27,6 +28,7 @@ import { initCursor } from './ui/cursor.js';
 import { initDragDrop } from './ui/dragdrop.js';
 import { initDrawer, openTab } from './ui/drawer.js';
 import { initDialogs } from './ui/npcDialogs.js';
+import { log } from './ui/log.js';
 import { initPaneActions } from './ui/paneActions.js';
 import { initPause } from './ui/pause.js';
 import { initTabLock } from './ui/tabLock.js';
@@ -46,6 +48,7 @@ function frame(dt) {
   updateCombatFx(fxDt);
   updateTelegraphs(fxDt);
   cloudTick();
+  forceStaticShadows(G.mode !== 'play'); // tela de título: a cidade ao fundo com sombra fixa
   const thr = renderThrottled();
   if (thr !== 'skip') renderFrame(thr === 'slow');
 }
@@ -69,9 +72,33 @@ function renderThrottled() {
   return 'slow';
 }
 
-/** Primeiro acesso (ou save sem qualidade válida): escolhe pelo aparelho e guarda a escolha. */
+/**
+ * Primeiro acesso (ou save sem qualidade válida): escolhe pelo aparelho e pela placa de vídeo e
+ * guarda a escolha. qualityAuto marca que foi o jogo quem escolheu (pode rebaixar sozinho).
+ */
 function resolveQuality() {
-  if (!CONFIG.quality[S.settings.quality]) S.settings.quality = autoQuality();
+  if (!CONFIG.quality[S.settings.quality]) { S.settings.quality = autoQuality(gpuName()); S.settings.qualityAuto = true; }
+}
+
+/** Situação do quadro para o limite de quadros (título, cidade, campo; painel ou diálogo aberto). */
+const PACE = { t: 0, panel: false };
+function frameCtx() {
+  const now = performance.now();
+  if (now - PACE.t > 250) {
+    PACE.t = now;
+    const d = document.getElementById('drawer'), m = document.getElementById('modal');
+    PACE.panel = (!!d && !d.hidden) || (!!m && !m.hidden);
+  }
+  return { mode: G.mode !== 'play' ? 'title' : G.zone === 'town' ? 'town' : 'field', panel: PACE.panel };
+}
+
+/** A qualidade automática não segurou o ritmo: desceu um nível (fica salvo; Opções volta atrás). */
+function onQualityDropped(q) {
+  S.settings.quality = q;
+  S.settings.bloom = null;
+  applySettings();
+  persist();
+  if (G.mode === 'play') log('O jogo estava lento neste aparelho: a qualidade gráfica baixou para "' + ({ media: 'Média', celular: 'Leve', baixa: 'Baixa' }[q] || q) + '". Dá para mudar em Opções.', 'sys');
 }
 
 function applySettings() {
@@ -79,7 +106,8 @@ function applySettings() {
   applyCharSetting(S.settings);
   applyFeelSettings(S.settings);
   setBloom(S.settings.bloom);
-  applyQuality(S.settings.quality);
+  // saves antigos (sem a marca) contam como automáticos: só a escolha em Opções fixa a qualidade
+  applyQuality(S.settings.quality, S.settings.qualityAuto !== false);
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
   Sfx.vol = sfxVolume(S.settings) / 100;
@@ -120,8 +148,12 @@ function boot() {
   renderTitle();
   resize();
   installDebugHook(loopStats);
+  setFramePacer(() => frameTarget(S.settings, frameCtx()));
+  onAutoDrop(onQualityDropped);
   startLoop(frame, reportError);
   window.__FORJA_BOOTED = true;
+  // texturas dos biomas geradas aos poucos no ócio (título e cidade): a primeira entrada em cada zona não trava
+  startTexPrewarm(() => G.mode === 'play' && G.zone !== 'town');
   initTabLock();
   // grava ao fechar ou esconder a aba, com ou sem nuvem (o autosave é só a cada 15 s);
   // registrado antes da nuvem, que logo depois tenta o último envio

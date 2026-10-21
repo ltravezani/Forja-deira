@@ -6833,7 +6833,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
 (function () {
 'use strict';
 // ---- core/config.js ----
-const { CONFIG, applyFeelSettings, autoQuality, uiScale } = (() => {
+const { CONFIG, applyFeelSettings, autoQuality, batterySaver, cappedDpr, fpsLimit, frameTarget, gpuTier, uiScale } = (() => {
 // =============================================================================
 // Configuração central do jogo. Valores de "sensação" e de motor ficam aqui;
 // o balanceamento de progressão (EXP, itens, dano base, classes) continua em
@@ -6864,14 +6864,24 @@ const CONFIG = {
   // lite: pós-processo leve (sem contorno por normais nem silhueta larga). dynRes: baixa a resolução
   // sozinha quando o quadro passa de ~20 ms. shadowSize/softShadows: mapa de sombra do sol.
   quality: {
-    alta: { dpr: 2, shadows: true, shadowSize: 2048, softShadows: true, particles: 1, msaa: 4, bloom: true, lights: 9, lite: false, dynRes: false, aniso: 8 },
-    media: { dpr: 1.3, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.8, msaa: 4, bloom: true, lights: 4, lite: false, dynRes: false, aniso: 4 },
-    celular: { dpr: 1.5, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.6, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
-    baixa: { dpr: 1, shadows: false, shadowSize: 1024, softShadows: false, particles: 0.5, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
+    // maxPix: teto de pixels desenhados (a escala do sistema operacional não multiplica o custo);
+    // shadowRate: 1 = sombra refeita todo quadro, 2 = um quadro sim, outro não; 0 = sombra fixa do
+    // cenário (refeita só quando a câmera anda alguns metros), personagens só com a sombra de contato
+    alta: { dpr: 2, maxPix: 3.7e6, shadows: true, shadowSize: 2048, softShadows: true, shadowRate: 1, particles: 1, msaa: 4, bloom: true, lights: 9, lite: false, dynRes: true, aniso: 8 },
+    media: { dpr: 1.3, maxPix: 2.1e6, shadows: true, shadowSize: 1024, softShadows: false, shadowRate: 2, particles: 0.8, msaa: 2, bloom: true, lights: 4, lite: false, dynRes: true, aniso: 4 },
+    celular: { dpr: 1.5, maxPix: 1.0e6, shadows: true, shadowSize: 1024, softShadows: false, shadowRate: 0, particles: 0.6, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
+    baixa: { dpr: 1, maxPix: 0.7e6, shadows: false, shadowSize: 1024, softShadows: false, shadowRate: 0, particles: 0.5, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
   },
-  // resolução dinâmica (qualidades com dynRes): média de quadro acima de `slowMs` por 1 s baixa um
-  // degrau; abaixo de `fastMs` por 3 s sobe um. A escala multiplica o DPR da qualidade.
-  dynRes: { slowMs: 20, fastMs: 14, step: 0.1, min: 0.6 },
+  /** Ordem para rebaixar sozinho quando nem a resolução mínima segura o ritmo. */
+  qualityOrder: ['alta', 'media', 'celular', 'baixa'],
+  // resolução dinâmica: média de quadro acima de `slow` × intervalo-alvo por 1 s baixa um degrau;
+  // até `fast` × intervalo por 3 s sobe um. A escala multiplica o DPR da qualidade. Presa no mínimo
+  // por `dropAfter` s (e com a qualidade escolhida automaticamente), desce um nível de qualidade.
+  dynRes: { slow: 1.25, fast: 1.08, step: 0.1, min: 0.6, dropAfter: 8 },
+  // sombra fixa (shadowRate 0): refeita quando o centro da câmera anda `snap` m ou a cada `refresh` s
+  staticShadow: { snap: 4, refresh: 1.5 },
+  // limite de quadros: `fps` padrão (0 = sem limite); economia de bateria usa `saver` por situação
+  frames: { fps: 60, choices: [30, 45, 60, 0], saver: { title: 30, town: 30, panel: 30, field: 45 } },
   style: {
     ink: 0.16,              // cor do contorno = cor da cena × ink (tinta escura colorida, não preto puro)
     edge0: 0.012, edge1: 0.05, // faixa do laplaciano relativo de profundidade que vira traço
@@ -6953,6 +6963,8 @@ const CONFIG = {
     towerStuckTimeout: 120, // s depois do chefe da torre com monstro vivo inalcançável: sobe mesmo assim
     nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
+  // personagens longe da câmera (m) animam a farHz quadros por segundo em vez de todo quadro
+  anim: { far: 17, farHz: 15 },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
     sleepDistance: 70,      // m: longe disso, monstros ociosos não simulam
@@ -7000,19 +7012,68 @@ function applyFeelSettings(settings) {
 }
 
 /**
- * Qualidade inicial para quem ainda não escolheu (sem save): telas de toque e telas
- * pequenas começam na "celular"; aparelhos com pouca memória (≤ 2 GB), na "baixa".
+ * Classifica a placa de vídeo pelo nome (WEBGL_debug_renderer_info). 'soft' = desenho por
+ * software; 'low' = integradas antigas (Intel HD/UHD, Mali e Adreno de entrada, PowerVR);
+ * 'mid' = o resto que não dá para saber; 'high' = placas dedicadas conhecidas.
  */
-function autoQuality() {
+function gpuTier(name) {
+  const g = String(name || '').toLowerCase();
+  if (!g) return 'mid';
+  if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) return 'soft';
+  if (/intel.*(hd graphics|uhd graphics|gma|haswell|bay ?trail|cherry ?trail)|mali-(4|t)|mali-g(31|51|52|57|68|71|72|76)\b|adreno[^0-9]*[2-5]\d\d\b|adreno[^0-9]*6[0-1]\d\b|powervr|videocore|vivante|radeon\(tm\) r[2-5]|radeon r[2-5]/.test(g)) return 'low';
+  if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|apple m\d|apple gpu/.test(g)) return 'high';
+  return 'mid';
+}
+
+/**
+ * Qualidade inicial para quem ainda não escolheu (sem save): telas de toque e telas
+ * pequenas começam na "celular"; aparelhos com pouca memória (≤ 2 GB) ou desenho por
+ * software, na "baixa"; computador com placa integrada fraca, na "celular" (a leve).
+ */
+function autoQuality(gpu) {
   const nav = typeof navigator === 'object' ? navigator : {};
   const mem = nav.deviceMemory || 4;
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const scr = typeof screen === 'object' ? Math.min(screen.width || 0, screen.height || 0) : 0;
   const small = scr > 0 && scr < 500;
-  if (mem <= 2) return 'baixa';
-  return coarse || small ? 'celular' : 'media';
+  const tier = gpuTier(gpu);
+  if (mem <= 2 || tier === 'soft') return 'baixa';
+  if (coarse || small) return tier === 'low' && mem <= 3 ? 'baixa' : 'celular';
+  return tier === 'low' ? 'celular' : 'media';
 }
-return { CONFIG, applyFeelSettings, autoQuality, uiScale };
+
+/** Economia de bateria: escolha do jogador; sem escolha, ligada em telas de toque. */
+function batterySaver(settings) {
+  if (settings && typeof settings.battery === 'boolean') return settings.battery;
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
+
+/** Limite de quadros escolhido em Opções (0 = sem limite); valores desconhecidos voltam ao padrão. */
+function fpsLimit(settings) {
+  const v = settings && settings.fps;
+  return CONFIG.frames.choices.includes(v) ? v : CONFIG.frames.fps;
+}
+
+/**
+ * Quadros por segundo desejados agora (0 = sem limite). ctx: { mode: 'title'|'town'|'field',
+ * panel: painel/diálogo aberto }. Com economia de bateria, cidade, título e painel a 30 e combate a 45.
+ */
+function frameTarget(settings, ctx) {
+  const cap = fpsLimit(settings);
+  if (!batterySaver(settings)) return cap;
+  const S = CONFIG.frames.saver;
+  const want = ctx.mode === 'title' ? S.title : ctx.panel ? S.panel : ctx.mode === 'town' ? S.town : S.field;
+  return cap ? Math.min(cap, want) : want;
+}
+
+/** DPR final: o da qualidade, limitado para a tela inteira não passar de `maxPix` pixels. */
+function cappedDpr(deviceDpr, qualDpr, w, h, maxPix) {
+  let d = Math.min(deviceDpr || 1, qualDpr);
+  const px = Math.max(1, w * h);
+  if (maxPix && px * d * d > maxPix) d = Math.sqrt(maxPix / px);
+  return Math.max(0.5, d);
+}
+return { CONFIG, applyFeelSettings, autoQuality, batterySaver, cappedDpr, fpsLimit, frameTarget, gpuTier, uiScale };
 })();
 
 // ---- core/util.js ----
@@ -8145,13 +8206,13 @@ return { animateGltf, applyCharSetting, buildGltfHumanoid, deathTime, gltfEnable
 })();
 
 // ---- core/loop.js ----
-const { guard, loopStats, reportError, startLoop } = (() => {
+const { frameFps, guard, loopStats, paceFrame, reportError, setFramePacer, startLoop } = (() => {
 // ---------- laço principal ----------
 // Um único requestAnimationFrame para o jogo inteiro. O próximo quadro é agendado
 // antes de atualizar, então uma exceção num sistema não congela o jogo: ela é
 // registrada (uma vez por mensagem) e o quadro seguinte roda normalmente.
 
-const loop = { running: false, last: 0, step: null, errors: new Map(), onError: null, frames: 0 };
+const loop = { running: false, last: 0, due: 0, step: null, errors: new Map(), onError: null, frames: 0, skipped: 0, pacer: null };
 
 /** Inicia o laço. Chamadas repetidas são ignoradas (evita dois loops simultâneos). */
 function startLoop(step, onError) {
@@ -8164,8 +8225,31 @@ function startLoop(step, onError) {
   return true;
 }
 
+/**
+ * Limite de quadros: `fn()` devolve os quadros por segundo desejados (0 = sem limite). Telas de
+ * 90/120 Hz chamam o requestAnimationFrame mais vezes; os quadros adiantados são pulados (sem
+ * simular nem desenhar), o que corta o trabalho da GPU e da CPU pela metade numa tela de 120 Hz.
+ */
+function setFramePacer(fn) { loop.pacer = fn; }
+
+/** Quadros por segundo desejados no momento (0 = sem limite: segue a tela). */
+function frameFps() { return loop.fps || 0; }
+
+/** true se este quadro deve rodar. Acumula o horário previsto, então 45 numa tela de 60 Hz dá 3 de 4. */
+function paceFrame(st, now, fps) {
+  if (!(fps > 0)) { st.due = now; return true; }
+  const iv = 1000 / fps, tol = Math.min(4, iv * 0.25);
+  if (now < st.due - tol) return false;
+  st.due = now - st.due > iv * 2 ? now + iv : st.due + iv; // atrasado demais (travada, aba voltando): recomeça
+  return true;
+}
+
 function tick(now) {
   requestAnimationFrame(tick);
+  let fps = 0;
+  if (loop.pacer) { try { fps = loop.pacer(); } catch { fps = 0; } }
+  loop.fps = fps;
+  if (!paceFrame(loop, now, fps)) { loop.skipped++; return; }
   const raw = (now - loop.last) / 1000;
   loop.last = now;
   // relógio que volta de uma aba em segundo plano ou de uma travada longa: limita o passo
@@ -8203,9 +8287,9 @@ function reportError(where, err) {
 
 /** Contadores para diagnóstico e testes automatizados. */
 function loopStats() {
-  return { running: loop.running, frames: loop.frames, errors: [...loop.errors.entries()] };
+  return { running: loop.running, frames: loop.frames, skipped: loop.skipped, errors: [...loop.errors.entries()] };
 }
-return { guard, loopStats, reportError, startLoop };
+return { frameFps, guard, loopStats, paceFrame, reportError, setFramePacer, startLoop };
 })();
 
 // ---- core/cloudSync.js ----
@@ -9385,12 +9469,14 @@ function buildHumanoid(o) {
   }
   const S = (o.scale || 1) * CARTOON.humanoid;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, offhand, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
 /** Humanoide com esqueleto e clipes (art/gltfModels.js) mais os enfeites procedurais que o modelo não tem. */
 function buildAnimatedHumanoid(o) {
   const m = buildGltfHumanoid(o, CARTOON.humanoid);
+  m.root.userData.dynCast = true;
   if (o.crown) {
     const cm = toon(0xd8a830, 0x8a5a00, 0.4, { metal: 0.95, rough: 0.3, env: 1.3 });
     const c = pivot(m.head, 0, 0.9, 0.02); // cabeça grande do modelo: coroa maior e mais alta
@@ -9440,6 +9526,7 @@ function buildSpider(o) {
   }
   const S = (o.scale || 1) * CARTOON.spider;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'spider', body, legs, abd, mats, height: 1.4 * S };
 }
 
@@ -9483,6 +9570,7 @@ function buildBeast(o) {
   part(GEO.cap, tm, o.bushy ? 0.3 : 0.16, 0.55, o.bushy ? 0.3 : 0.16, 0, 0.1, -0.32, tail).rotation.x = -(Math.PI / 2 - 0.45);
   const S = (o.scale || 1) * CARTOON.beast;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'beast', body, head, legs, tail, mats, height: 1.4 * S };
 }
 
@@ -9516,6 +9604,7 @@ function buildFloater(o) {
   }
   const S = (o.scale || 1) * CARTOON.floater;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'floater', body, arms, mats, height: 2.3 * S };
 }
 
@@ -9561,6 +9650,7 @@ function buildBat(o) {
   }
   const S = (o.scale || 1) * CARTOON.bat;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'bat', body, wings, mats, height: 2.0 * S };
 }
 
@@ -9606,6 +9696,7 @@ function buildGolem(o) {
   }
   const S = (o.scale || 1) * CARTOON.golem;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'golem', body, torso, legs, arms, mats, height: 2.9 * S };
 }
 
@@ -9897,7 +9988,7 @@ return { findPath, gy, lineClear, walkable, walkableR };
 })();
 
 // ---- engine/renderer.js ----
-const { CAM, activeLights, applyQuality, bloomOn, camTarget, camera, canvas, currentQuality, dynResScale, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, sceneChanged, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, warming, world } = (() => {
+const { CAM, activeLights, applyQuality, bloomOn, camTarget, camera, canvas, currentQuality, dynResScale, forceStaticShadows, gpuName, hemi, heroLight, onAutoDrop, particleScale, renderFrame, renderer, resetCamera, resize, scene, sceneChanged, setBloom, setGrade, setHeightFog, setOutline, shadowDirty, shake, sun, torchLights, updateCamera, warming, world } = (() => {
 // ---------- renderer, cena, luzes e câmera ----------
 
 const canvas = $('#view');
@@ -9908,6 +9999,17 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// a sombra não é refeita sozinha a cada quadro: scheduleShadow decide (todo quadro, um sim outro
+// não, ou sombra fixa do cenário) conforme a qualidade
+renderer.shadowMap.autoUpdate = false;
+
+/** Nome da placa de vídeo (quando o navegador informa), para a qualidade automática. */
+function gpuName() {
+  try {
+    const gl = renderer.getContext(), ex = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ex ? gl.getParameter(ex.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+  } catch { return ''; }
+}
 
 const scene = new THREE.Scene();
 const CC = CONFIG.camera;
@@ -9948,6 +10050,10 @@ const world = new THREE.Group();
 scene.add(world);
 
 let quality = 'media';
+let autoQ = false; // qualidade escolhida pelo jogo (pode descer sozinha se ficar lento)
+let onDrop = null;
+/** Chamado com a qualidade nova quando a automática desce um nível. */
+function onAutoDrop(fn) { onDrop = fn; }
 /** Fração de partículas emitidas no nível de qualidade atual. */
 function particleScale() { return CONFIG.quality[quality].particles; }
 /** Qualidade em uso (já resolvida). */
@@ -9957,11 +10063,13 @@ function currentQuality() { return quality; }
  * recompilam os materiais da cena; o número de luzes recompila sozinho (estado das luzes do
  * Three.js); MSAA recria o alvo da cena; desligar o brilho libera os alvos dele.
  */
-function applyQuality(q) {
+function applyQuality(q, auto) {
   if (!CONFIG.quality[q]) q = 'media';
   quality = q;
+  autoQ = !!auto;
   const Q = CONFIG.quality[q];
-  dyn.scale = 1; dyn.slowT = dyn.fastT = dyn.acc = dyn.n = 0;
+  dyn.scale = 1; dyn.slowT = dyn.fastT = dyn.acc = dyn.n = dyn.minT = 0;
+  shadowState.dirty = true;
   renderer.setPixelRatio(baseDpr());
   const type = Q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   const recompile = renderer.shadowMap.type !== type || renderer.shadowMap.enabled !== Q.shadows;
@@ -9985,10 +10093,13 @@ function applyQuality(q) {
   if (recompile) scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
   resize();
 }
-/** DPR base da qualidade (sem a escala dinâmica). */
-function baseDpr() { return Math.min(window.devicePixelRatio || 1, CONFIG.quality[quality].dpr); }
+/** DPR base da qualidade (sem a escala dinâmica), limitado ao teto de pixels da qualidade. */
+function baseDpr() {
+  const Q = CONFIG.quality[quality];
+  return cappedDpr(window.devicePixelRatio || 1, Q.dpr, window.innerWidth, window.innerHeight, Q.maxPix);
+}
 // ---------- resolução dinâmica (qualidades com dynRes) ----------
-const dyn = { scale: 1, last: 0, acc: 0, n: 0, slowT: 0, fastT: 0 };
+const dyn = { scale: 1, last: 0, acc: 0, n: 0, slowT: 0, fastT: 0, minT: 0 };
 /** Escala atual da resolução dinâmica (1 = DPR cheio da qualidade). */
 function dynResScale() { return dyn.scale; }
 function dynResTick(now) {
@@ -9999,10 +10110,21 @@ function dynResTick(now) {
   if (dyn.acc < 500) return;
   const avg = dyn.acc / dyn.n, D = CONFIG.dynRes;
   dyn.acc = dyn.n = 0;
+  // compara com o intervalo desejado (limite de quadros; sem limite, 60 por segundo): a 30 FPS
+  // um quadro de 33 ms está no ritmo, não lento
+  const fps = frameFps(), target = 1000 / (fps > 0 ? Math.min(fps, 60) : 60);
   let next = dyn.scale;
-  if (avg > D.slowMs) { dyn.fastT = 0; if ((dyn.slowT += 0.5) >= 1) { dyn.slowT = 0; next = Math.max(D.min, dyn.scale - D.step); } }
-  else if (avg < D.fastMs) { dyn.slowT = 0; if ((dyn.fastT += 0.5) >= 3) { dyn.fastT = 0; next = Math.min(1, dyn.scale + D.step); } }
-  else dyn.slowT = dyn.fastT = 0;
+  if (avg > target * D.slow) {
+    dyn.fastT = 0;
+    if ((dyn.slowT += 0.5) >= 1) { dyn.slowT = 0; next = Math.max(D.min, dyn.scale - D.step); }
+    // já na resolução mínima e ainda lento: com a qualidade automática, desce um nível
+    if (dyn.scale <= D.min && (dyn.minT += 0.5) >= D.dropAfter) {
+      dyn.minT = 0;
+      const ord = CONFIG.qualityOrder, i = ord.indexOf(quality);
+      if (autoQ && onDrop && i >= 0 && i < ord.length - 1) { onDrop(ord[i + 1]); return; }
+    }
+  } else if (avg < target * D.fast) { dyn.slowT = dyn.minT = 0; if ((dyn.fastT += 0.5) >= 3) { dyn.fastT = 0; next = Math.min(1, dyn.scale + D.step); } }
+  else dyn.slowT = dyn.fastT = dyn.minT = 0;
   next = Math.round(next * 100) / 100;
   if (next !== dyn.scale) { dyn.scale = next; renderer.setPixelRatio(Math.max(0.5, baseDpr() * next)); resize(); }
 }
@@ -10040,8 +10162,52 @@ function updateCamera(x, z, dt) {
   camTarget.y += (ty - camTarget.y) * Math.min(1, dt * 6);
   camera.position.set(camTarget.x + _off.x + sx, camTarget.y + _off.y, camTarget.z + _off.z + sz);
   camera.lookAt(camTarget.x + sx, camTarget.y + 0.8, camTarget.z + sz);
-  sun.position.set(camTarget.x - 14, 34, camTarget.z + 10);
-  sun.target.position.set(camTarget.x, 0, camTarget.z);
+  // sombra fixa: o sol anda em degraus de alguns metros, e a sombra só é refeita quando ele muda de degrau
+  let sx2 = camTarget.x, sz2 = camTarget.z;
+  if (shadowRate() === 0) { const k = CONFIG.staticShadow.snap; sx2 = Math.round(sx2 / k) * k; sz2 = Math.round(sz2 / k) * k; }
+  sun.position.set(sx2 - 14, 34, sz2 + 10);
+  sun.target.position.set(sx2, 0, sz2);
+}
+
+// ---------- agenda da sombra do sol ----------
+const shadowState = { dirty: true, frame: 0, t: 0, x: NaN, z: NaN, forceStatic: false, excl: false };
+/** Tela de título: a cidade ao fundo usa sombra fixa em qualquer qualidade. */
+function forceStaticShadows(on) { if (shadowState.forceStatic !== !!on) { shadowState.forceStatic = !!on; shadowState.dirty = true; } }
+/** 1 = todo quadro, 2 = um sim outro não, 0 = sombra fixa do cenário. */
+function shadowRate() { return shadowState.forceStatic ? 0 : CONFIG.quality[quality].shadowRate; }
+/** Pede para refazer a sombra no próximo quadro (cenário mudou: porta, adereço novo...). */
+function shadowDirty() { shadowState.dirty = true; }
+/** Decide se a sombra é refeita neste quadro. Devolve true se for sombra fixa (personagens ficam de fora). */
+function scheduleShadow() {
+  const sm = renderer.shadowMap, st = shadowState;
+  if (!sm.enabled) return false;
+  const rate = shadowRate();
+  st.frame++;
+  if (rate === 0) {
+    const now = performance.now(), x = sun.target.position.x, z = sun.target.position.z;
+    if (!(st.dirty || x !== st.x || z !== st.z || now - st.t > CONFIG.staticShadow.refresh * 1000)) return false;
+    st.x = x; st.z = z; st.t = now;
+    st.dirty = false;
+    sm.needsUpdate = true;
+    return true;
+  }
+  if (rate <= 1 || st.dirty || st.frame % rate === 0) { st.dirty = false; sm.needsUpdate = true; }
+  return false;
+}
+const _hidden = [];
+/** Sombra fixa: tira personagens, monstros e loot (userData.dynCast) do passe de sombra; restoreCasters devolve. */
+function hideDynCasters() {
+  scene.traverse((o) => {
+    if (!o.userData.dynCast) return;
+    o.traverse((c) => { if (c.castShadow) { c.castShadow = false; _hidden.push(c); } });
+  });
+}
+function restoreCasters() { for (const c of _hidden) c.castShadow = true; _hidden.length = 0; }
+/** Desenha a cena; na sombra fixa os personagens ficam fora do passe de sombra (só a sombra de contato). */
+function drawScene() {
+  const excl = scheduleShadow();
+  if (excl) hideDynCasters();
+  try { renderer.render(scene, camera); } finally { if (excl) restoreCasters(); }
 }
 
 // =============================================================================
@@ -10119,7 +10285,11 @@ const postMat = new THREE.ShaderMaterial({
         vec3 vp = vpos(vUv);
         vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
         float hf = 1.0 - smoothstep(0.0, uHFogP.y, wp.y);
+        #ifdef POST_LITE
+        float fn = 0.5; // modo leve: névoa sem ondulação (poupa dois senos por pixel)
+        #else
         float fn = sin(wp.x * 0.23 + uTime * 0.21) * sin(wp.z * 0.19 - uTime * 0.17) * 0.5 + 0.5;
+        #endif
         hf *= uHFogP.z * (0.55 + 0.45 * fn) * smoothstep(4.0, 16.0, -vp.z);
         c.rgb = mix(c.rgb, uHFog, clamp(hf, 0.0, 0.35));
       }
@@ -10193,10 +10363,17 @@ function pass(mat, target) {
   renderer.render(postScene, postCam);
 }
 
+/** Tipo de cor que a GPU aceita como alvo HDR (meia precisão) ou, sem suporte, 8 bits. */
 function colorType() {
   const ex = renderer.extensions;
   return ex.has('EXT_color_buffer_float') || ex.has('EXT_color_buffer_half_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
 }
+/**
+ * Tipo do alvo da cena: HDR só quando o brilho (bloom) precisa das partes acima do branco. Sem
+ * brilho, 8 bits (em sRGB, para não criar faixas nos tons escuros) bastam e o tráfego de memória
+ * da GPU cai pela metade, o que mais esquenta celular.
+ */
+function sceneType() { return post.bloom ? colorType() : THREE.UnsignedByteType; }
 function bloomTargets(w, h) {
   const mk = (d) => new THREE.WebGLRenderTarget(Math.max(1, Math.round(w / d)), Math.max(1, Math.round(h / d)), { type: colorType(), depthBuffer: false });
   if (!post.b) post.b = { a0: mk(4), a1: mk(4), b0: mk(8), b1: mk(8) };
@@ -10206,7 +10383,8 @@ function resizePost() {
   renderer.getDrawingBufferSize(post.size);
   const w = Math.max(1, post.size.x), h = Math.max(1, post.size.y);
   if (!post.rt) {
-    post.rt = new THREE.WebGLRenderTarget(w, h, { type: colorType(), samples: post.samples, depthBuffer: true });
+    const type = sceneType();
+    post.rt = new THREE.WebGLRenderTarget(w, h, { type, samples: post.samples, depthBuffer: true, colorSpace: type === THREE.UnsignedByteType ? THREE.SRGBColorSpace : THREE.NoColorSpace });
     post.rt.depthTexture = new THREE.DepthTexture(w, h);
     post.rt.depthTexture.type = THREE.UnsignedIntType;
   } else post.rt.setSize(w, h);
@@ -10234,7 +10412,7 @@ const directToScreen = () => !post.outline && !post.bloom && !post.samples;
  * Avisa que o nível foi trocado: no próximo quadro os shaders da cena são compilados e as
  * texturas enviadas à GPU antes de desenhar (ver warmScene).
  */
-function sceneChanged() { post.dirty = true; }
+function sceneChanged() { post.dirty = true; shadowState.dirty = true; }
 /** true enquanto a cena nova ainda está sendo preparada (o quadro anterior fica na tela). */
 function warming() { return !!post.warm || post.dirty; }
 const TEX_KEYS = ['map', 'normalMap', 'emissiveMap', 'gradientMap', 'alphaMap', 'aoMap', 'bumpMap'];
@@ -10286,10 +10464,10 @@ function renderFrame(lowRate) {
     dyn.last = 0;
   }
   if (lowRate) dyn.last = 0; else dynResTick(performance.now());
-  if (directToScreen()) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+  if (directToScreen()) { renderer.setRenderTarget(null); drawScene(); return; }
   if (!post.rt) resizePost();
   renderer.setRenderTarget(post.rt);
-  renderer.render(scene, camera);
+  drawScene();
   if (post.bloom) { if (!post.b) bloomTargets(post.size.x, post.size.y); renderBloom(); }
   const U = postMat.uniforms;
   U.tColor.value = post.rt.texture;
@@ -10313,6 +10491,7 @@ function updateBloom() {
   post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
   // brilho desligado: libera os quatro alvos dele (voltam a ser criados se ligar de novo)
   if (!post.bloom && post.b) { for (const k in post.b) post.b[k].dispose(); post.b = null; }
+  if (post.rt && post.rt.texture.type !== sceneType()) { post.rt.dispose(); post.rt = null; }
 }
 /** on: true/false = escolha do jogador; null = padrão da qualidade. */
 function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }
@@ -10341,7 +10520,7 @@ function setHeightFog(f) {
   U.uHFog.value.setHex(f[0]);
   U.uHFogP.value.set(0, f[1], f[2] * CONFIG.style.heightFog);
 }
-return { CAM, activeLights, applyQuality, bloomOn, camTarget, camera, canvas, currentQuality, dynResScale, hemi, heroLight, particleScale, renderFrame, renderer, resetCamera, resize, scene, sceneChanged, setBloom, setGrade, setHeightFog, setOutline, shake, sun, torchLights, updateCamera, warming, world };
+return { CAM, activeLights, applyQuality, bloomOn, camTarget, camera, canvas, currentQuality, dynResScale, forceStaticShadows, gpuName, hemi, heroLight, onAutoDrop, particleScale, renderFrame, renderer, resetCamera, resize, scene, sceneChanged, setBloom, setGrade, setHeightFog, setOutline, shadowDirty, shake, sun, torchLights, updateCamera, warming, world };
 })();
 
 // ---- engine/audio.js ----
@@ -15794,8 +15973,9 @@ function updateNpcs(dt) {
   for (const n of G.npcs) {
     if (n.board) continue;
     const vis = inView(n.x, n.model.root.position.y + 1.5, n.z, 3);
-    n.model.root.visible = vis;
-    if (vis) animateModel(n.model, { t: G.time + n.phase, dt, moving: false, attack: 0 });
+    showRoot(n.model.root, vis);
+    const adt = vis ? animDt(n, dt, n.x, n.z) : -1;
+    if (adt >= 0) animateModel(n.model, { t: G.time + n.phase, dt: adt, moving: false, attack: 0 });
   }
 }
 function updatePortals(dt) {
@@ -16051,17 +16231,18 @@ function updateTownLife(dt) {
   for (const o of LIFE.folk) {
     updateFolk(o, dt, p);
     const vis = inView(o.x, 1.2, o.z, 2.5);
-    o.m.root.visible = vis;
+    showRoot(o.m.root, vis);
     place(o);
-    if (vis) animateModel(o.m, { t: G.time + o.phase, dt, moving: o.moving, speed: o.def.child ? 11 : 7, attack: 0 });
+    const adt = vis ? animDt(o, dt, o.x, o.z) : -1;
+    if (adt >= 0) animateModel(o.m, { t: G.time + o.phase, dt: adt, moving: o.moving, speed: o.def.child ? 11 : 7, attack: 0 });
     updateBubble(o, dt);
   }
   for (const o of LIFE.critters) {
     const s = updateCritter(o, dt, p);
     const vis = inView(o.x, (o.y || 0) + 0.5, o.z, o.type === 'horse' ? 3 : 1.5);
-    o.m.root.visible = vis;
+    showRoot(o.m.root, vis);
     place(o);
-    if (vis) animateCritter(o.m, s);
+    if (vis && animDt(o, dt, o.x, o.z) >= 0) animateCritter(o.m, s);
   }
 }
 /** Diagnóstico/testes: quantos moradores e bichos existem. */
@@ -18351,10 +18532,30 @@ return { buildLevel, getLevelMeshes, updateTorchLights };
 })();
 
 // ---- game/world.js ----
-const { inView, updateWorld } = (() => {
+const { animDt, inView, showRoot, updateWorld } = (() => {
 // ---------- simulação de um quadro de jogo ----------
 
 const _frustum = new THREE.Frustum(), _fm = new THREE.Matrix4(), _fs = new THREE.Sphere();
+/**
+ * Mostra/esconde a raiz de um modelo. Escondida, ela também sai da atualização de matrizes do
+ * Three.js (o Éden tem ~6 mil objetos, quase todos peças de monstros fora da tela).
+ */
+function showRoot(root, vis) {
+  if (root.visible !== vis) { root.visible = vis; root.matrixWorldAutoUpdate = vis; }
+}
+/**
+ * Animação por distância: perto da câmera anima todo quadro; longe (CONFIG.anim.far), a
+ * `farHz` vezes por segundo, com o tempo acumulado. Devolve o dt a usar, ou -1 para pular.
+ */
+function animDt(o, dt, x, z) {
+  const A = CONFIG.anim;
+  o._adt = (o._adt || 0) + dt;
+  const dx = x - camTarget.x, dz = z - camTarget.z;
+  if (dx * dx + dz * dz > A.far * A.far && o._adt < 1 / A.farHz) return -1;
+  const d = o._adt;
+  o._adt = 0;
+  return d;
+}
 /** Teste de visibilidade contra a câmera do último quadro. */
 function inView(x, y, z, r) {
   _fs.center.set(x, y, z); _fs.radius = r;
@@ -18426,7 +18627,7 @@ function updateWorld(dt) {
   updateTorchLights(p.x, p.z, G.time);
   ambient(p);
 }
-return { inView, updateWorld };
+return { animDt, inView, showRoot, updateWorld };
 })();
 
 // ---- world/spatial.js ----
@@ -18746,8 +18947,9 @@ function updateVisual(m, dt, slow) {
   m.lx = m.x; m.lz = m.z;
   // fora da tela não precisa animar nem desenhar
   const vis = inView(m.x, root.position.y + m.model.height * 0.5, m.z, m.model.height * 0.8 + 1);
-  root.visible = vis;
-  if (vis) animateModel(m.model, { t: G.time + m.id, dt, moving: m.moving, v: dt > 0 ? Math.hypot(mdx, mdz) / dt : 0, attack: m.attackAnim, speed: 9 * slow });
+  showRoot(root, vis);
+  const adt = vis ? animDt(m, dt, m.x, m.z) : -1;
+  if (adt >= 0) animateModel(m.model, { t: G.time + m.id, dt: adt, moving: m.moving, v: dt > 0 ? Math.hypot(mdx, mdz) / dt : 0, attack: m.attackAnim, speed: 9 * slow });
 }
 
 /** Monstro que acaba de aparecer no meio da luta surge do chão (só os animados; os outros já atacam). */
@@ -19499,11 +19701,13 @@ function paneLoot() {
 function paneOpts() {
   const s = S.settings;
   let h = '<h3>Opções</h3>';
-  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'celular', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', celular: 'Celular (leve)', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
+  h += '<h4>Gráficos</h4><div class="row"><select class="fld" id="qualSel" aria-label="Qualidade gráfica">' + ['alta', 'media', 'celular', 'baixa'].map((q) => '<option value="' + q + '"' + (s.quality === q ? ' selected' : '') + '>' + { alta: 'Alta (sombras, 2× DPR)', media: 'Média', celular: 'Leve (celular e notebook simples)', baixa: 'Baixa (sem sombras)' }[q] + '</option>').join('') + '</select>' +
+    '<select class="fld" id="fpsSel" aria-label="Limite de quadros">' + CONFIG.frames.choices.map((v) => '<option value="' + v + '"' + (fpsLimit(s) === v ? ' selected' : '') + '>' + (v ? 'Até ' + v + ' FPS' : 'FPS sem limite') + '</option>').join('') + '</select>' +
+    '<button class="btn" data-act="toggleBattery">Economia de bateria: ' + (batterySaver(s) ? 'ligada' : 'desligada') + '</button>' +
     '<button class="btn" data-act="toggleOutline">Contorno cartoon: ' + (s.outline === false ? 'desligado' : 'ligado') + '</button>' +
     '<button class="btn" data-act="toggleBloom">Brilho (bloom): ' + (bloomOn() ? 'ligado' : 'desligado') + '</button>' +
     (gltfStats().ready ? '<button class="btn" data-act="toggleAnimChars">Personagens: ' + (gltfEnabled() ? 'animados' : 'simples') + '</button>' : '') + '</div>' +
-    '<p class="note">Personagens simples são mais leves; monstros e moradores trocam de modelo na próxima área.</p>';
+    '<p class="note">Personagens simples são mais leves; monstros e moradores trocam de modelo na próxima área. Economia de bateria: 30 FPS na cidade e com painéis abertos, 45 em combate (esquenta menos o celular). Se o jogo ficar lento, a qualidade escolhida automaticamente baixa sozinha.</p>';
   const vol = (id, label, v) => '<label class="optrange"><span>' + label + '</span><input type="range" id="' + id + '" min="0" max="100" step="5" value="' + v + '" aria-label="' + label + '"><b class="num">' + v + '%</b></label>';
   h += '<h4>Som</h4><div class="row"><button class="btn" data-act="toggleSound">Som: ' + (s.sound ? 'ligado' : 'desligado') + '</button></div>' +
     vol('sfxVol', 'Efeitos', sfxVolume(s)) + vol('musicVol', 'Música', musicVolume(s));
@@ -21023,6 +21227,7 @@ function dropLoot(x, z, l) {
   }
   g.position.set(x, gy(x, z), z);
   world.add(g);
+  g.userData.dynCast = true;
   l.mesh = g; l.item3d = mesh; l.ord = ord;
   const el = document.createElement('div');
   el.className = 'label';
@@ -22347,6 +22552,49 @@ function initInput() {
 return { initInput };
 })();
 
+// ---- world/texPrewarm.js ----
+const { prewarmJobs, startTexPrewarm } = (() => {
+// ---------- texturas procedurais geradas com antecedência ----------
+// As texturas do chão, das paredes e dos detalhes são calculadas pixel a pixel na CPU e ficam em
+// cache (art/textures.js). Na primeira visita a cada bioma isso era 60–70% do tempo de entrada na
+// zona (0,3–0,5 s num PC, 1–2 s num celular, com a tela parada). Aqui elas são geradas aos poucos
+// enquanto o navegador está ocioso (tela de título, cidade), uma por vez, para que a primeira
+// entrada em cada zona já encontre tudo pronto.
+
+const DETAILS = ['skin', 'fur', 'scale', 'metal', 'cloth', 'leather', 'bone', 'membrane', 'stone'];
+const DECALS = ['blood', 'moss', 'crack', 'web', 'ash'];
+
+/** Lista de tarefas (cada uma gera um conjunto de texturas; o cache torna a repetição grátis). */
+function prewarmJobs() {
+  return [
+    ...DETAILS.map((k) => () => texDetail(k)),
+    ...DECALS.map((k) => () => texDecal(k)),
+    ...Object.keys(BIOMES).map((id) => () => biomeTex(id)),
+  ];
+}
+
+/**
+ * Começa a gerar as texturas em segundo plano: uma tarefa por momento ocioso, com folga entre
+ * elas para não roubar quadros. `busy()` = true adia (ex.: em combate).
+ */
+function startTexPrewarm(busy, delayMs) {
+  const jobs = prewarmJobs();
+  const idle = typeof requestIdleCallback === 'function' ? (f) => requestIdleCallback(f, { timeout: 4000 }) : (f) => setTimeout(() => f({ timeRemaining: () => 50 }), 200);
+  const next = () => {
+    if (!jobs.length) return;
+    idle((dl) => {
+      if (busy && busy()) { setTimeout(next, 1500); return; }
+      if (dl && dl.timeRemaining && dl.timeRemaining() < 8 && !dl.didTimeout) { next(); return; }
+      const job = jobs.shift();
+      try { job(); } catch { /* uma textura que falhe é gerada de novo quando a zona precisar */ }
+      setTimeout(next, 250);
+    });
+  };
+  setTimeout(next, delayMs == null ? 2500 : delayMs);
+}
+return { prewarmJobs, startTexPrewarm };
+})();
+
 // ---- ui/dragdrop.js ----
 const { Drag, initDragDrop } = (() => {
 // ---------- arrastar e soltar itens entre mochila e equipamento ----------
@@ -22957,6 +23205,7 @@ function paneAction(e) {
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
     case 'toggleOutline': S.settings.outline = S.settings.outline === false; setOutline(S.settings.outline); break;
+    case 'toggleBattery': S.settings.battery = !batterySaver(S.settings); break;
     case 'toggleBloom': S.settings.bloom = !bloomOn(); setBloom(S.settings.bloom); break;
     case 'toggleAnimChars': S.settings.animChars = !gltfEnabled(); applyCharSetting(S.settings); if (G.player && G.player.model && G.mode === 'play') buildPlayerModel(); break;
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
@@ -23016,7 +23265,8 @@ function initPaneActions() {
   $('#pane').addEventListener('change', (e) => {
     if (RANGES[e.target.id]) { persist(); if (e.target.id === 'sfxVol') Sfx.coin(); }
   });
-  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
+  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'fpsSel') { S.settings.fps = +e.target.value; persist(); return; }
+    if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.qualityAuto = false; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }
 return { initPaneActions };
 })();
@@ -23101,6 +23351,7 @@ function frame(dt) {
   updateCombatFx(fxDt);
   updateTelegraphs(fxDt);
   cloudTick();
+  forceStaticShadows(G.mode !== 'play'); // tela de título: a cidade ao fundo com sombra fixa
   const thr = renderThrottled();
   if (thr !== 'skip') renderFrame(thr === 'slow');
 }
@@ -23124,9 +23375,33 @@ function renderThrottled() {
   return 'slow';
 }
 
-/** Primeiro acesso (ou save sem qualidade válida): escolhe pelo aparelho e guarda a escolha. */
+/**
+ * Primeiro acesso (ou save sem qualidade válida): escolhe pelo aparelho e pela placa de vídeo e
+ * guarda a escolha. qualityAuto marca que foi o jogo quem escolheu (pode rebaixar sozinho).
+ */
 function resolveQuality() {
-  if (!CONFIG.quality[S.settings.quality]) S.settings.quality = autoQuality();
+  if (!CONFIG.quality[S.settings.quality]) { S.settings.quality = autoQuality(gpuName()); S.settings.qualityAuto = true; }
+}
+
+/** Situação do quadro para o limite de quadros (título, cidade, campo; painel ou diálogo aberto). */
+const PACE = { t: 0, panel: false };
+function frameCtx() {
+  const now = performance.now();
+  if (now - PACE.t > 250) {
+    PACE.t = now;
+    const d = document.getElementById('drawer'), m = document.getElementById('modal');
+    PACE.panel = (!!d && !d.hidden) || (!!m && !m.hidden);
+  }
+  return { mode: G.mode !== 'play' ? 'title' : G.zone === 'town' ? 'town' : 'field', panel: PACE.panel };
+}
+
+/** A qualidade automática não segurou o ritmo: desceu um nível (fica salvo; Opções volta atrás). */
+function onQualityDropped(q) {
+  S.settings.quality = q;
+  S.settings.bloom = null;
+  applySettings();
+  persist();
+  if (G.mode === 'play') log('O jogo estava lento neste aparelho: a qualidade gráfica baixou para "' + ({ media: 'Média', celular: 'Leve', baixa: 'Baixa' }[q] || q) + '". Dá para mudar em Opções.', 'sys');
 }
 
 function applySettings() {
@@ -23134,7 +23409,8 @@ function applySettings() {
   applyCharSetting(S.settings);
   applyFeelSettings(S.settings);
   setBloom(S.settings.bloom);
-  applyQuality(S.settings.quality);
+  // saves antigos (sem a marca) contam como automáticos: só a escolha em Opções fixa a qualidade
+  applyQuality(S.settings.quality, S.settings.qualityAuto !== false);
   setOutline(S.settings.outline !== false);
   Sfx.on = S.settings.sound;
   Sfx.vol = sfxVolume(S.settings) / 100;
@@ -23175,8 +23451,12 @@ function boot() {
   renderTitle();
   resize();
   installDebugHook(loopStats);
+  setFramePacer(() => frameTarget(S.settings, frameCtx()));
+  onAutoDrop(onQualityDropped);
   startLoop(frame, reportError);
   window.__FORJA_BOOTED = true;
+  // texturas dos biomas geradas aos poucos no ócio (título e cidade): a primeira entrada em cada zona não trava
+  startTexPrewarm(() => G.mode === 'play' && G.zone !== 'town');
   initTabLock();
   // grava ao fechar ou esconder a aba, com ou sem nuvem (o autosave é só a cada 15 s);
   // registrado antes da nuvem, que logo depois tenta o último envio

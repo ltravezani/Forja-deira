@@ -12,7 +12,7 @@ import { TILE } from '../core/util.js';
 import { overlay, toScreen } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
 import { findPath, walkable } from '../world/grid.js';
-import { inView } from './world.js';
+import { animDt, inView, showRoot } from './world.js';
 
 /** Moradores: aparência e falas quando o herói passa perto. */
 const FOLK = [
@@ -238,17 +238,18 @@ export function updateTownLife(dt) {
   for (const o of LIFE.folk) {
     updateFolk(o, dt, p);
     const vis = inView(o.x, 1.2, o.z, 2.5);
-    o.m.root.visible = vis;
+    showRoot(o.m.root, vis);
     place(o);
-    if (vis) animateModel(o.m, { t: G.time + o.phase, dt, moving: o.moving, speed: o.def.child ? 11 : 7, attack: 0 });
+    const adt = vis ? animDt(o, dt, o.x, o.z) : -1;
+    if (adt >= 0) animateModel(o.m, { t: G.time + o.phase, dt: adt, moving: o.moving, speed: o.def.child ? 11 : 7, attack: 0 });
     updateBubble(o, dt);
   }
   for (const o of LIFE.critters) {
     const s = updateCritter(o, dt, p);
     const vis = inView(o.x, (o.y || 0) + 0.5, o.z, o.type === 'horse' ? 3 : 1.5);
-    o.m.root.visible = vis;
+    showRoot(o.m.root, vis);
     place(o);
-    if (vis) animateCritter(o.m, s);
+    if (vis && animDt(o, dt, o.x, o.z) >= 0) animateCritter(o.m, s);
   }
 }
 /** Diagnóstico/testes: quantos moradores e bichos existem. */

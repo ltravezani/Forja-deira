@@ -1,5 +1,6 @@
 // ---------- renderer, cena, luzes e câmera ----------
-import { CONFIG } from '../core/config.js';
+import { cappedDpr, CONFIG } from '../core/config.js';
+import { frameFps } from '../core/loop.js';
 import { $, V3 } from '../core/util.js';
 import { setTexAnisotropy } from '../art/textures.js';
 import { gy } from '../world/grid.js';
@@ -12,6 +13,17 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// a sombra não é refeita sozinha a cada quadro: scheduleShadow decide (todo quadro, um sim outro
+// não, ou sombra fixa do cenário) conforme a qualidade
+renderer.shadowMap.autoUpdate = false;
+
+/** Nome da placa de vídeo (quando o navegador informa), para a qualidade automática. */
+export function gpuName() {
+  try {
+    const gl = renderer.getContext(), ex = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ex ? gl.getParameter(ex.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+  } catch { return ''; }
+}
 
 export const scene = new THREE.Scene();
 const CC = CONFIG.camera;
@@ -52,6 +64,10 @@ export const world = new THREE.Group();
 scene.add(world);
 
 let quality = 'media';
+let autoQ = false; // qualidade escolhida pelo jogo (pode descer sozinha se ficar lento)
+let onDrop = null;
+/** Chamado com a qualidade nova quando a automática desce um nível. */
+export function onAutoDrop(fn) { onDrop = fn; }
 /** Fração de partículas emitidas no nível de qualidade atual. */
 export function particleScale() { return CONFIG.quality[quality].particles; }
 /** Qualidade em uso (já resolvida). */
@@ -61,11 +77,13 @@ export function currentQuality() { return quality; }
  * recompilam os materiais da cena; o número de luzes recompila sozinho (estado das luzes do
  * Three.js); MSAA recria o alvo da cena; desligar o brilho libera os alvos dele.
  */
-export function applyQuality(q) {
+export function applyQuality(q, auto) {
   if (!CONFIG.quality[q]) q = 'media';
   quality = q;
+  autoQ = !!auto;
   const Q = CONFIG.quality[q];
-  dyn.scale = 1; dyn.slowT = dyn.fastT = dyn.acc = dyn.n = 0;
+  dyn.scale = 1; dyn.slowT = dyn.fastT = dyn.acc = dyn.n = dyn.minT = 0;
+  shadowState.dirty = true;
   renderer.setPixelRatio(baseDpr());
   const type = Q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   const recompile = renderer.shadowMap.type !== type || renderer.shadowMap.enabled !== Q.shadows;
@@ -89,10 +107,13 @@ export function applyQuality(q) {
   if (recompile) scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
   resize();
 }
-/** DPR base da qualidade (sem a escala dinâmica). */
-function baseDpr() { return Math.min(window.devicePixelRatio || 1, CONFIG.quality[quality].dpr); }
+/** DPR base da qualidade (sem a escala dinâmica), limitado ao teto de pixels da qualidade. */
+function baseDpr() {
+  const Q = CONFIG.quality[quality];
+  return cappedDpr(window.devicePixelRatio || 1, Q.dpr, window.innerWidth, window.innerHeight, Q.maxPix);
+}
 // ---------- resolução dinâmica (qualidades com dynRes) ----------
-const dyn = { scale: 1, last: 0, acc: 0, n: 0, slowT: 0, fastT: 0 };
+const dyn = { scale: 1, last: 0, acc: 0, n: 0, slowT: 0, fastT: 0, minT: 0 };
 /** Escala atual da resolução dinâmica (1 = DPR cheio da qualidade). */
 export function dynResScale() { return dyn.scale; }
 function dynResTick(now) {
@@ -103,10 +124,21 @@ function dynResTick(now) {
   if (dyn.acc < 500) return;
   const avg = dyn.acc / dyn.n, D = CONFIG.dynRes;
   dyn.acc = dyn.n = 0;
+  // compara com o intervalo desejado (limite de quadros; sem limite, 60 por segundo): a 30 FPS
+  // um quadro de 33 ms está no ritmo, não lento
+  const fps = frameFps(), target = 1000 / (fps > 0 ? Math.min(fps, 60) : 60);
   let next = dyn.scale;
-  if (avg > D.slowMs) { dyn.fastT = 0; if ((dyn.slowT += 0.5) >= 1) { dyn.slowT = 0; next = Math.max(D.min, dyn.scale - D.step); } }
-  else if (avg < D.fastMs) { dyn.slowT = 0; if ((dyn.fastT += 0.5) >= 3) { dyn.fastT = 0; next = Math.min(1, dyn.scale + D.step); } }
-  else dyn.slowT = dyn.fastT = 0;
+  if (avg > target * D.slow) {
+    dyn.fastT = 0;
+    if ((dyn.slowT += 0.5) >= 1) { dyn.slowT = 0; next = Math.max(D.min, dyn.scale - D.step); }
+    // já na resolução mínima e ainda lento: com a qualidade automática, desce um nível
+    if (dyn.scale <= D.min && (dyn.minT += 0.5) >= D.dropAfter) {
+      dyn.minT = 0;
+      const ord = CONFIG.qualityOrder, i = ord.indexOf(quality);
+      if (autoQ && onDrop && i >= 0 && i < ord.length - 1) { onDrop(ord[i + 1]); return; }
+    }
+  } else if (avg < target * D.fast) { dyn.slowT = dyn.minT = 0; if ((dyn.fastT += 0.5) >= 3) { dyn.fastT = 0; next = Math.min(1, dyn.scale + D.step); } }
+  else dyn.slowT = dyn.fastT = dyn.minT = 0;
   next = Math.round(next * 100) / 100;
   if (next !== dyn.scale) { dyn.scale = next; renderer.setPixelRatio(Math.max(0.5, baseDpr() * next)); resize(); }
 }
@@ -144,8 +176,52 @@ export function updateCamera(x, z, dt) {
   camTarget.y += (ty - camTarget.y) * Math.min(1, dt * 6);
   camera.position.set(camTarget.x + _off.x + sx, camTarget.y + _off.y, camTarget.z + _off.z + sz);
   camera.lookAt(camTarget.x + sx, camTarget.y + 0.8, camTarget.z + sz);
-  sun.position.set(camTarget.x - 14, 34, camTarget.z + 10);
-  sun.target.position.set(camTarget.x, 0, camTarget.z);
+  // sombra fixa: o sol anda em degraus de alguns metros, e a sombra só é refeita quando ele muda de degrau
+  let sx2 = camTarget.x, sz2 = camTarget.z;
+  if (shadowRate() === 0) { const k = CONFIG.staticShadow.snap; sx2 = Math.round(sx2 / k) * k; sz2 = Math.round(sz2 / k) * k; }
+  sun.position.set(sx2 - 14, 34, sz2 + 10);
+  sun.target.position.set(sx2, 0, sz2);
+}
+
+// ---------- agenda da sombra do sol ----------
+const shadowState = { dirty: true, frame: 0, t: 0, x: NaN, z: NaN, forceStatic: false, excl: false };
+/** Tela de título: a cidade ao fundo usa sombra fixa em qualquer qualidade. */
+export function forceStaticShadows(on) { if (shadowState.forceStatic !== !!on) { shadowState.forceStatic = !!on; shadowState.dirty = true; } }
+/** 1 = todo quadro, 2 = um sim outro não, 0 = sombra fixa do cenário. */
+function shadowRate() { return shadowState.forceStatic ? 0 : CONFIG.quality[quality].shadowRate; }
+/** Pede para refazer a sombra no próximo quadro (cenário mudou: porta, adereço novo...). */
+export function shadowDirty() { shadowState.dirty = true; }
+/** Decide se a sombra é refeita neste quadro. Devolve true se for sombra fixa (personagens ficam de fora). */
+function scheduleShadow() {
+  const sm = renderer.shadowMap, st = shadowState;
+  if (!sm.enabled) return false;
+  const rate = shadowRate();
+  st.frame++;
+  if (rate === 0) {
+    const now = performance.now(), x = sun.target.position.x, z = sun.target.position.z;
+    if (!(st.dirty || x !== st.x || z !== st.z || now - st.t > CONFIG.staticShadow.refresh * 1000)) return false;
+    st.x = x; st.z = z; st.t = now;
+    st.dirty = false;
+    sm.needsUpdate = true;
+    return true;
+  }
+  if (rate <= 1 || st.dirty || st.frame % rate === 0) { st.dirty = false; sm.needsUpdate = true; }
+  return false;
+}
+const _hidden = [];
+/** Sombra fixa: tira personagens, monstros e loot (userData.dynCast) do passe de sombra; restoreCasters devolve. */
+function hideDynCasters() {
+  scene.traverse((o) => {
+    if (!o.userData.dynCast) return;
+    o.traverse((c) => { if (c.castShadow) { c.castShadow = false; _hidden.push(c); } });
+  });
+}
+function restoreCasters() { for (const c of _hidden) c.castShadow = true; _hidden.length = 0; }
+/** Desenha a cena; na sombra fixa os personagens ficam fora do passe de sombra (só a sombra de contato). */
+function drawScene() {
+  const excl = scheduleShadow();
+  if (excl) hideDynCasters();
+  try { renderer.render(scene, camera); } finally { if (excl) restoreCasters(); }
 }
 
 // =============================================================================
@@ -223,7 +299,11 @@ const postMat = new THREE.ShaderMaterial({
         vec3 vp = vpos(vUv);
         vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
         float hf = 1.0 - smoothstep(0.0, uHFogP.y, wp.y);
+        #ifdef POST_LITE
+        float fn = 0.5; // modo leve: névoa sem ondulação (poupa dois senos por pixel)
+        #else
         float fn = sin(wp.x * 0.23 + uTime * 0.21) * sin(wp.z * 0.19 - uTime * 0.17) * 0.5 + 0.5;
+        #endif
         hf *= uHFogP.z * (0.55 + 0.45 * fn) * smoothstep(4.0, 16.0, -vp.z);
         c.rgb = mix(c.rgb, uHFog, clamp(hf, 0.0, 0.35));
       }
@@ -297,10 +377,17 @@ function pass(mat, target) {
   renderer.render(postScene, postCam);
 }
 
+/** Tipo de cor que a GPU aceita como alvo HDR (meia precisão) ou, sem suporte, 8 bits. */
 function colorType() {
   const ex = renderer.extensions;
   return ex.has('EXT_color_buffer_float') || ex.has('EXT_color_buffer_half_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
 }
+/**
+ * Tipo do alvo da cena: HDR só quando o brilho (bloom) precisa das partes acima do branco. Sem
+ * brilho, 8 bits (em sRGB, para não criar faixas nos tons escuros) bastam e o tráfego de memória
+ * da GPU cai pela metade, o que mais esquenta celular.
+ */
+function sceneType() { return post.bloom ? colorType() : THREE.UnsignedByteType; }
 function bloomTargets(w, h) {
   const mk = (d) => new THREE.WebGLRenderTarget(Math.max(1, Math.round(w / d)), Math.max(1, Math.round(h / d)), { type: colorType(), depthBuffer: false });
   if (!post.b) post.b = { a0: mk(4), a1: mk(4), b0: mk(8), b1: mk(8) };
@@ -310,7 +397,8 @@ function resizePost() {
   renderer.getDrawingBufferSize(post.size);
   const w = Math.max(1, post.size.x), h = Math.max(1, post.size.y);
   if (!post.rt) {
-    post.rt = new THREE.WebGLRenderTarget(w, h, { type: colorType(), samples: post.samples, depthBuffer: true });
+    const type = sceneType();
+    post.rt = new THREE.WebGLRenderTarget(w, h, { type, samples: post.samples, depthBuffer: true, colorSpace: type === THREE.UnsignedByteType ? THREE.SRGBColorSpace : THREE.NoColorSpace });
     post.rt.depthTexture = new THREE.DepthTexture(w, h);
     post.rt.depthTexture.type = THREE.UnsignedIntType;
   } else post.rt.setSize(w, h);
@@ -338,7 +426,7 @@ const directToScreen = () => !post.outline && !post.bloom && !post.samples;
  * Avisa que o nível foi trocado: no próximo quadro os shaders da cena são compilados e as
  * texturas enviadas à GPU antes de desenhar (ver warmScene).
  */
-export function sceneChanged() { post.dirty = true; }
+export function sceneChanged() { post.dirty = true; shadowState.dirty = true; }
 /** true enquanto a cena nova ainda está sendo preparada (o quadro anterior fica na tela). */
 export function warming() { return !!post.warm || post.dirty; }
 const TEX_KEYS = ['map', 'normalMap', 'emissiveMap', 'gradientMap', 'alphaMap', 'aoMap', 'bumpMap'];
@@ -390,10 +478,10 @@ export function renderFrame(lowRate) {
     dyn.last = 0;
   }
   if (lowRate) dyn.last = 0; else dynResTick(performance.now());
-  if (directToScreen()) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+  if (directToScreen()) { renderer.setRenderTarget(null); drawScene(); return; }
   if (!post.rt) resizePost();
   renderer.setRenderTarget(post.rt);
-  renderer.render(scene, camera);
+  drawScene();
   if (post.bloom) { if (!post.b) bloomTargets(post.size.x, post.size.y); renderBloom(); }
   const U = postMat.uniforms;
   U.tColor.value = post.rt.texture;
@@ -417,6 +505,7 @@ function updateBloom() {
   post.bloom = (post.userBloom == null ? post.qBloom : post.userBloom) && colorType() === THREE.HalfFloatType;
   // brilho desligado: libera os quatro alvos dele (voltam a ser criados se ligar de novo)
   if (!post.bloom && post.b) { for (const k in post.b) post.b[k].dispose(); post.b = null; }
+  if (post.rt && post.rt.texture.type !== sceneType()) { post.rt.dispose(); post.rt = null; }
 }
 /** on: true/false = escolha do jogador; null = padrão da qualidade. */
 export function setBloom(on) { post.userBloom = on == null ? null : !!on; updateBloom(); }

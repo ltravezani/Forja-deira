@@ -3,7 +3,8 @@ import { guard } from '../core/loop.js';
 import { G } from '../core/state.js';
 import { rand, TILE } from '../core/util.js';
 import { emit } from '../engine/effects.js';
-import { camera, updateCamera } from '../engine/renderer.js';
+import { camera, camTarget, updateCamera } from '../engine/renderer.js';
+import { CONFIG } from '../core/config.js';
 import { updateAllies } from './allies.js';
 import { updateLootVisuals } from './loot.js';
 import { rebuildMonsterGrid, updateMonsters } from './monsters.js';
@@ -19,6 +20,26 @@ import { paintMinimapTile } from '../ui/minimap.js';
 import { updateTorchLights } from '../world/level.js';
 
 const _frustum = new THREE.Frustum(), _fm = new THREE.Matrix4(), _fs = new THREE.Sphere();
+/**
+ * Mostra/esconde a raiz de um modelo. Escondida, ela também sai da atualização de matrizes do
+ * Three.js (o Éden tem ~6 mil objetos, quase todos peças de monstros fora da tela).
+ */
+export function showRoot(root, vis) {
+  if (root.visible !== vis) { root.visible = vis; root.matrixWorldAutoUpdate = vis; }
+}
+/**
+ * Animação por distância: perto da câmera anima todo quadro; longe (CONFIG.anim.far), a
+ * `farHz` vezes por segundo, com o tempo acumulado. Devolve o dt a usar, ou -1 para pular.
+ */
+export function animDt(o, dt, x, z) {
+  const A = CONFIG.anim;
+  o._adt = (o._adt || 0) + dt;
+  const dx = x - camTarget.x, dz = z - camTarget.z;
+  if (dx * dx + dz * dz > A.far * A.far && o._adt < 1 / A.farHz) return -1;
+  const d = o._adt;
+  o._adt = 0;
+  return d;
+}
 /** Teste de visibilidade contra a câmera do último quadro. */
 export function inView(x, y, z, r) {
   _fs.center.set(x, y, z); _fs.radius = r;
