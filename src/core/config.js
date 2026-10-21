@@ -28,14 +28,24 @@ export const CONFIG = {
   // lite: pós-processo leve (sem contorno por normais nem silhueta larga). dynRes: baixa a resolução
   // sozinha quando o quadro passa de ~20 ms. shadowSize/softShadows: mapa de sombra do sol.
   quality: {
-    alta: { dpr: 2, shadows: true, shadowSize: 2048, softShadows: true, particles: 1, msaa: 4, bloom: true, lights: 9, lite: false, dynRes: false, aniso: 8 },
-    media: { dpr: 1.3, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.8, msaa: 4, bloom: true, lights: 4, lite: false, dynRes: false, aniso: 4 },
-    celular: { dpr: 1.5, shadows: true, shadowSize: 1024, softShadows: false, particles: 0.6, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
-    baixa: { dpr: 1, shadows: false, shadowSize: 1024, softShadows: false, particles: 0.5, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
+    // maxPix: teto de pixels desenhados (a escala do sistema operacional não multiplica o custo);
+    // shadowRate: 1 = sombra refeita todo quadro, 2 = um quadro sim, outro não; 0 = sombra fixa do
+    // cenário (refeita só quando a câmera anda alguns metros), personagens só com a sombra de contato
+    alta: { dpr: 2, maxPix: 3.7e6, shadows: true, shadowSize: 2048, softShadows: true, shadowRate: 1, particles: 1, msaa: 4, bloom: true, lights: 9, lite: false, dynRes: true, aniso: 8 },
+    media: { dpr: 1.3, maxPix: 2.1e6, shadows: true, shadowSize: 1024, softShadows: false, shadowRate: 2, particles: 0.8, msaa: 2, bloom: true, lights: 4, lite: false, dynRes: true, aniso: 4 },
+    celular: { dpr: 1.5, maxPix: 1.0e6, shadows: true, shadowSize: 1024, softShadows: false, shadowRate: 0, particles: 0.6, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
+    baixa: { dpr: 1, maxPix: 0.7e6, shadows: false, shadowSize: 1024, softShadows: false, shadowRate: 0, particles: 0.5, msaa: 0, bloom: false, lights: 2, lite: true, dynRes: true, aniso: 2 },
   },
-  // resolução dinâmica (qualidades com dynRes): média de quadro acima de `slowMs` por 1 s baixa um
-  // degrau; abaixo de `fastMs` por 3 s sobe um. A escala multiplica o DPR da qualidade.
-  dynRes: { slowMs: 20, fastMs: 14, step: 0.1, min: 0.6 },
+  /** Ordem para rebaixar sozinho quando nem a resolução mínima segura o ritmo. */
+  qualityOrder: ['alta', 'media', 'celular', 'baixa'],
+  // resolução dinâmica: média de quadro acima de `slow` × intervalo-alvo por 1 s baixa um degrau;
+  // até `fast` × intervalo por 3 s sobe um. A escala multiplica o DPR da qualidade. Presa no mínimo
+  // por `dropAfter` s (e com a qualidade escolhida automaticamente), desce um nível de qualidade.
+  dynRes: { slow: 1.25, fast: 1.08, step: 0.1, min: 0.6, dropAfter: 8 },
+  // sombra fixa (shadowRate 0): refeita quando o centro da câmera anda `snap` m ou a cada `refresh` s
+  staticShadow: { snap: 4, refresh: 1.5 },
+  // limite de quadros: `fps` padrão (0 = sem limite); economia de bateria usa `saver` por situação
+  frames: { fps: 60, choices: [30, 45, 60, 0], saver: { title: 30, town: 30, panel: 30, field: 45 } },
   style: {
     ink: 0.16,              // cor do contorno = cor da cena × ink (tinta escura colorida, não preto puro)
     edge0: 0.012, edge1: 0.05, // faixa do laplaciano relativo de profundidade que vira traço
@@ -117,6 +127,8 @@ export const CONFIG = {
     towerStuckTimeout: 120, // s depois do chefe da torre com monstro vivo inalcançável: sobe mesmo assim
     nextDelay: 1.6,         // s depois do andar limpo antes de descer
   },
+  // personagens longe da câmera (m) animam a farHz quadros por segundo em vez de todo quadro
+  anim: { far: 17, farHz: 15 },
   monsters: {
     aggroRange: 10, aggroRangeBoss: 12,
     sleepDistance: 70,      // m: longe disso, monstros ociosos não simulam
@@ -164,15 +176,64 @@ export function applyFeelSettings(settings) {
 }
 
 /**
- * Qualidade inicial para quem ainda não escolheu (sem save): telas de toque e telas
- * pequenas começam na "celular"; aparelhos com pouca memória (≤ 2 GB), na "baixa".
+ * Classifica a placa de vídeo pelo nome (WEBGL_debug_renderer_info). 'soft' = desenho por
+ * software; 'low' = integradas antigas (Intel HD/UHD, Mali e Adreno de entrada, PowerVR);
+ * 'mid' = o resto que não dá para saber; 'high' = placas dedicadas conhecidas.
  */
-export function autoQuality() {
+export function gpuTier(name) {
+  const g = String(name || '').toLowerCase();
+  if (!g) return 'mid';
+  if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) return 'soft';
+  if (/intel.*(hd graphics|uhd graphics|gma|haswell|bay ?trail|cherry ?trail)|mali-(4|t)|mali-g(31|51|52|57|68|71|72|76)\b|adreno[^0-9]*[2-5]\d\d\b|adreno[^0-9]*6[0-1]\d\b|powervr|videocore|vivante|radeon\(tm\) r[2-5]|radeon r[2-5]/.test(g)) return 'low';
+  if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|apple m\d|apple gpu/.test(g)) return 'high';
+  return 'mid';
+}
+
+/**
+ * Qualidade inicial para quem ainda não escolheu (sem save): telas de toque e telas
+ * pequenas começam na "celular"; aparelhos com pouca memória (≤ 2 GB) ou desenho por
+ * software, na "baixa"; computador com placa integrada fraca, na "celular" (a leve).
+ */
+export function autoQuality(gpu) {
   const nav = typeof navigator === 'object' ? navigator : {};
   const mem = nav.deviceMemory || 4;
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const scr = typeof screen === 'object' ? Math.min(screen.width || 0, screen.height || 0) : 0;
   const small = scr > 0 && scr < 500;
-  if (mem <= 2) return 'baixa';
-  return coarse || small ? 'celular' : 'media';
+  const tier = gpuTier(gpu);
+  if (mem <= 2 || tier === 'soft') return 'baixa';
+  if (coarse || small) return tier === 'low' && mem <= 3 ? 'baixa' : 'celular';
+  return tier === 'low' ? 'celular' : 'media';
+}
+
+/** Economia de bateria: escolha do jogador; sem escolha, ligada em telas de toque. */
+export function batterySaver(settings) {
+  if (settings && typeof settings.battery === 'boolean') return settings.battery;
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
+
+/** Limite de quadros escolhido em Opções (0 = sem limite); valores desconhecidos voltam ao padrão. */
+export function fpsLimit(settings) {
+  const v = settings && settings.fps;
+  return CONFIG.frames.choices.includes(v) ? v : CONFIG.frames.fps;
+}
+
+/**
+ * Quadros por segundo desejados agora (0 = sem limite). ctx: { mode: 'title'|'town'|'field',
+ * panel: painel/diálogo aberto }. Com economia de bateria, cidade, título e painel a 30 e combate a 45.
+ */
+export function frameTarget(settings, ctx) {
+  const cap = fpsLimit(settings);
+  if (!batterySaver(settings)) return cap;
+  const S = CONFIG.frames.saver;
+  const want = ctx.mode === 'title' ? S.title : ctx.panel ? S.panel : ctx.mode === 'town' ? S.town : S.field;
+  return cap ? Math.min(cap, want) : want;
+}
+
+/** DPR final: o da qualidade, limitado para a tela inteira não passar de `maxPix` pixels. */
+export function cappedDpr(deviceDpr, qualDpr, w, h, maxPix) {
+  let d = Math.min(deviceDpr || 1, qualDpr);
+  const px = Math.max(1, w * h);
+  if (maxPix && px * d * d > maxPix) d = Math.sqrt(maxPix / px);
+  return Math.max(0.5, d);
 }

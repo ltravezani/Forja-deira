@@ -56,6 +56,7 @@ export function dropLoot(x, z, l) {
   }
   g.position.set(x, gy(x, z), z);
   world.add(g);
+  g.userData.dynCast = true;
   l.mesh = g; l.item3d = mesh; l.ord = ord;
   const el = document.createElement('div');
   el.className = 'label';

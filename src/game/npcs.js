@@ -11,7 +11,7 @@ import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
 import { NPCS } from './data.js';
 import { pathTo } from './movement.js';
-import { inView } from './world.js';
+import { animDt, inView, showRoot } from './world.js';
 import { openNpc } from '../ui/npcDialogs.js';
 import { gy } from '../world/grid.js';
 import { kit, kitGlowMat } from '../world/kit.js';
@@ -204,8 +204,9 @@ export function updateNpcs(dt) {
   for (const n of G.npcs) {
     if (n.board) continue;
     const vis = inView(n.x, n.model.root.position.y + 1.5, n.z, 3);
-    n.model.root.visible = vis;
-    if (vis) animateModel(n.model, { t: G.time + n.phase, dt, moving: false, attack: 0 });
+    showRoot(n.model.root, vis);
+    const adt = vis ? animDt(n, dt, n.x, n.z) : -1;
+    if (adt >= 0) animateModel(n.model, { t: G.time + n.phase, dt: adt, moving: false, attack: 0 });
   }
 }
 export function updatePortals(dt) {

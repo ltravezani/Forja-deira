@@ -1,7 +1,7 @@
 // ---------- ações dos painéis (cliques delegados por data-act) ----------
 import { applyCharSetting, gltfEnabled } from '../art/gltfModels.js';
 import { forgetCloudLocal } from '../core/cloud.js';
-import { applyFeelSettings, CONFIG } from '../core/config.js';
+import { applyFeelSettings, batterySaver, CONFIG } from '../core/config.js';
 import { G, persist, S, SAVE_KEY, SaveGuard, UI } from '../core/state.js';
 import { $, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
@@ -106,6 +106,7 @@ function paneAction(e) {
     case 'cycleMusic': S.settings.music = (musicLevel(S.settings) + 1) % MUSIC_LEVELS.length; Music.setVolume(MUSIC_LEVELS[S.settings.music].v); break;
     case 'toggleLabels': S.settings.labels = !S.settings.labels; break;
     case 'toggleOutline': S.settings.outline = S.settings.outline === false; setOutline(S.settings.outline); break;
+    case 'toggleBattery': S.settings.battery = !batterySaver(S.settings); break;
     case 'toggleBloom': S.settings.bloom = !bloomOn(); setBloom(S.settings.bloom); break;
     case 'toggleAnimChars': S.settings.animChars = !gltfEnabled(); applyCharSetting(S.settings); if (G.player && G.player.model && G.mode === 'play') buildPlayerModel(); break;
     case 'cycleShake': { const cur = S.settings.shake == null ? 1 : S.settings.shake; S.settings.shake = cur === 1 ? 0.5 : cur === 0.5 ? 0 : 1; applyFeelSettings(S.settings); break; }
@@ -165,5 +166,6 @@ export function initPaneActions() {
   $('#pane').addEventListener('change', (e) => {
     if (RANGES[e.target.id]) { persist(); if (e.target.id === 'sfxVol') Sfx.coin(); }
   });
-  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
+  $('#pane').addEventListener('change', (e) => { if (e.target.id === 'fpsSel') { S.settings.fps = +e.target.value; persist(); return; }
+    if (e.target.id === 'qualSel') { S.settings.quality = e.target.value; S.settings.qualityAuto = false; S.settings.bloom = null; setBloom(null); S.settings.animChars = null; applyCharSetting(S.settings); applyQuality(e.target.value); persist(); renderPane(); } });
 }

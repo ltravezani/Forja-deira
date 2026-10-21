@@ -295,12 +295,14 @@ export function buildHumanoid(o) {
   }
   const S = (o.scale || 1) * CARTOON.humanoid;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'humanoid', body, torso, head, legs, arms, weapon, offhand, cape, mats, armorMat: armor, trimMat: trim, height: 2.45 * S };
 }
 
 /** Humanoide com esqueleto e clipes (art/gltfModels.js) mais os enfeites procedurais que o modelo não tem. */
 function buildAnimatedHumanoid(o) {
   const m = buildGltfHumanoid(o, CARTOON.humanoid);
+  m.root.userData.dynCast = true;
   if (o.crown) {
     const cm = toon(0xd8a830, 0x8a5a00, 0.4, { metal: 0.95, rough: 0.3, env: 1.3 });
     const c = pivot(m.head, 0, 0.9, 0.02); // cabeça grande do modelo: coroa maior e mais alta
@@ -350,6 +352,7 @@ function buildSpider(o) {
   }
   const S = (o.scale || 1) * CARTOON.spider;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'spider', body, legs, abd, mats, height: 1.4 * S };
 }
 
@@ -393,6 +396,7 @@ export function buildBeast(o) {
   part(GEO.cap, tm, o.bushy ? 0.3 : 0.16, 0.55, o.bushy ? 0.3 : 0.16, 0, 0.1, -0.32, tail).rotation.x = -(Math.PI / 2 - 0.45);
   const S = (o.scale || 1) * CARTOON.beast;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'beast', body, head, legs, tail, mats, height: 1.4 * S };
 }
 
@@ -426,6 +430,7 @@ function buildFloater(o) {
   }
   const S = (o.scale || 1) * CARTOON.floater;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'floater', body, arms, mats, height: 2.3 * S };
 }
 
@@ -471,6 +476,7 @@ function buildBat(o) {
   }
   const S = (o.scale || 1) * CARTOON.bat;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'bat', body, wings, mats, height: 2.0 * S };
 }
 
@@ -516,6 +522,7 @@ function buildGolem(o) {
   }
   const S = (o.scale || 1) * CARTOON.golem;
   root.scale.setScalar(S);
+  root.userData.dynCast = true; // personagem: fora da sombra fixa do cenário (engine/renderer.js)
   return { root, kind: 'golem', body, torso, legs, arms, mats, height: 2.9 * S };
 }
 
