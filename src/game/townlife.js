@@ -25,7 +25,7 @@ const FOLK = [
   { look: { skin: 0xd8a878, cloth: 0xb03a3a, cloth2: 0xe8e0cc, hair: 0x3a2a1a, hairStyle: 'long', dress: true, scale: 0.6, child: true }, child: true, says: ['Hihi!', 'O cachorro é seu?', 'Minha mãe mandou eu voltar cedo.'] },
   { look: { skin: 0xd8b890, cloth: 0x5a5a6a, cloth2: 0x4a4a58, hat: 'hood', beard: true, hair: 0xd8d8d8, carry: 'lantern', dress: true }, says: ['Que a luz te guie.', 'Eu era jovem quando ergueram a fonte.', 'Aldrena já viu dias piores.'] },
   { look: { skin: 0xb07a50, cloth: 0x5a3a2a, cloth2: 0x3a2a20, hair: 0x1a1210, apron: true, beard: true }, says: ['O mestre Hanzo não dorme nunca.', 'Carvão para a forja!', 'Essa lâmina aí precisa de um reparo.'] },
-  { look: { skin: 0xf0c8a0, cloth: 0x4a7a6a, cloth2: 0x3a3a2a, hair: 0xa04a2a, hairStyle: 'bun', dress: true, carry: 'basket' }, says: ['Pão quentinho!', 'Já foi à arena da Kora?', 'Boa noite!'] },
+  { look: { skin: 0xf0c8a0, cloth: 0x4a7a6a, cloth2: 0x3a3a2a, hair: 0xa04a2a, hairStyle: 'bun', dress: true, carry: 'basket' }, says: ['Pão quentinho!', 'A Morgana encanta qualquer coisa!', 'Boa noite!'] },
 ];
 const GUARD = { look: { gltf: 'knight', skin: 0xd0a080, cloth: 0x2a4a7a, armor: 0x6a6e7a, trim: 0xb0903a, head: 'helm', weapon: 'sword', shield: true, shieldColor: 0x2a4a7a, scale: 1.0 }, says: ['Ronda da noite. Tudo em ordem.', 'Circulando, circulando.', 'Nenhum monstro passa da paliçada.'] };
 

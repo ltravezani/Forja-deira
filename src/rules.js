@@ -391,6 +391,7 @@
     soul: { name: 'Joia da Alma', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
     chaos: { name: 'Joia do Caos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
     life: { name: 'Joia da Vida', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
+    dark: { name: 'Joia da Escuridão', color: '#b98aff', desc: 'Adiciona um encantamento aleatório a um equipamento (até 3). Use com a Encantadora Morgana.' },
   };
   const POTIONS = {
     hp: { name: 'Poção de Vida', pct: 0.3, flat: 60, price: 60 },
@@ -505,6 +506,7 @@
     excOpts(it).forEach((e) => { const d = excSet[e]; if (d) for (const k in d.s) add(k, d.s[k]); });
     if (it.anc) add(it.anc.stat, it.anc.value);
     if (it.legend && LEGEND[it.legend]) for (const k in LEGEND[it.legend].s) add(k, LEGEND[it.legend].s[k]);
+    (it.ench || []).forEach((e) => { const E = ENCHANTS[e.id]; if (E) add(E.stat, E.v[e.g] || 0); });
     return o;
   }
   function itemLines(it) {
@@ -523,7 +525,7 @@
     return L;
   }
   function itemValue(it) {
-    if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
+    if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000, dark: 1200000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     if (it.kind === 'ticket') return ticketPrice(it.id) * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
@@ -648,8 +650,15 @@
     }
     const rp = rnd();
     if (rp < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    if (darkDrop(seed, 'other')) out.jewels.push('dark');
     return out;
   }
+  /**
+   * Joia da Escuridão: 0,5% por monstro no Éden e 0,1% nos outros mapas (masmorras e
+   * torre). Sorteio próprio pela seed do drop, sem mexer nos outros sorteios.
+   */
+  const DARK_DROP = { eden: 0.005, other: 0.001 };
+  const darkDrop = (seed, where) => mulberry32(hash32(seed, 'dark'))() < DARK_DROP[where];
 
   /** Gold de um abate (mesma fórmula nas masmorras e na torre). */
   function goldAmount(mLevel, src, r) {
@@ -694,10 +703,12 @@
         const n = 1 + Math.floor(rnd() * 3);
         for (let i = 0; i < n; i++) out.jewels.push(pick());
       }
+      if (darkDrop(seed, 'other')) out.jewels.push('dark');
       return out;
     }
     if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd()) * TOWER.goldMult;
     if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
+    if (darkDrop(seed, 'other')) out.jewels.push('dark');
     return out;
   }
 
@@ -770,7 +781,82 @@
     const rk = rnd();
     out.log.push({ what: 'ticket', roll: rk, threshold: EDEN.ticket });
     if (rk < EDEN.ticket) out.tickets.push(TICKET_IDS[Math.floor(rnd() * TICKET_IDS.length)]);
+    if (darkDrop(seed, 'eden')) out.jewels.push('dark');
     return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Encantamento (Encantadora Morgana): cada Joia da Escuridão adiciona uma linha
+  // aleatória ao equipamento (até 3, sem repetir o atributo). Cada linha tem um grau
+  // (Menor 70%, Maior 25%, Supremo 5%) e pode ser retirada com Ouro.
+  // ---------------------------------------------------------------------------
+  const ENCHANTS = {
+    dmg: { t: 'Dano +{v}%', stat: 'dmgPct', v: [2, 4, 7], pool: 'off' },
+    crit: { t: 'Chance de golpe crítico +{v}%', stat: 'critPct', v: [2, 4, 6], pool: 'off' },
+    exc: { t: 'Chance de golpe excelente +{v}%', stat: 'excPct', v: [2, 3, 5], pool: 'off' },
+    aspd: { t: 'Velocidade de ataque +{v}%', stat: 'atkSpeedPct', v: [2, 4, 6], pool: 'off' },
+    skill: { t: 'Dano das habilidades +{v}%', stat: 'skillDmgPct', v: [3, 6, 10], pool: 'off' },
+    leech: { t: 'Roubo de vida +{v}%', stat: 'lifeSteal', v: [1, 2, 3], pool: 'off' },
+    hp: { t: 'HP máximo +{v}%', stat: 'hpPct', v: [2, 4, 7], pool: 'def' },
+    def: { t: 'Defesa +{v}%', stat: 'defPct', v: [3, 6, 10], pool: 'def' },
+    red: { t: 'Absorção de dano +{v}%', stat: 'dmgRed', v: [1, 2, 4], pool: 'def' },
+    refl: { t: 'Reflete {v}% do dano recebido', stat: 'reflect', v: [2, 4, 6], pool: 'def' },
+    move: { t: 'Velocidade de movimento +{v}%', stat: 'moveSpeedPct', v: [2, 4, 6], pool: 'def' },
+    mf: { t: 'Encontrar Magia +{v}', stat: 'mf', v: [5, 10, 20], pool: 'all' },
+    gold: { t: 'Ouro obtido +{v}%', stat: 'goldPct', v: [5, 10, 20], pool: 'all' },
+    cd: { t: 'Recarga de habilidades -{v}%', stat: 'cdPct', v: [-2, -4, -6], pool: 'all' },
+  };
+  const ENCH_GRADES = [
+    { name: 'Menor', chance: 0.7, color: '#c9b3ff', mult: 1 },
+    { name: 'Maior', chance: 0.25, color: '#a46bff', mult: 2 },
+    { name: 'Supremo', chance: 0.05, color: '#ff6bd6', mult: 3 },
+  ];
+  const ENCH = { max: 3, removeGold: 1000000, removeTierPct: 25 };
+  /** Linhas que o slot aceita: armas e colares, ofensivas; armaduras e anéis, defensivas; asas, todas. */
+  function enchantPool(it) {
+    if (!it || !it.slot) return [];
+    const off = it.slot === 'weapon' || it.slot === 'pendant', both = it.slot === 'wings';
+    return Object.keys(ENCHANTS).filter((k) => { const p = ENCHANTS[k].pool; return p === 'all' || both || (p === 'off') === off; });
+  }
+  /** Linhas ainda possíveis no item (o atributo de uma linha existente não repete). */
+  function enchantOptions(it) {
+    const have = (it.ench || []).map((e) => e.id);
+    return enchantPool(it).filter((k) => have.indexOf(k) < 0);
+  }
+  function canEnchant(it) { return !!(it && it.slot) && (it.ench || []).length < ENCH.max && enchantOptions(it).length > 0; }
+  /** Sorteia uma linha nova (rnd: () => 0..1); não altera o item. */
+  function rollEnchant(it, rnd) {
+    const opts = enchantOptions(it);
+    if (!opts.length) return null;
+    const id = opts[Math.floor(rnd() * opts.length)];
+    const r = rnd();
+    let g = 0, acc = 0;
+    for (let i = ENCH_GRADES.length - 1; i >= 0; i--) { acc += ENCH_GRADES[i].chance; if (r < acc) { g = i; break; } }
+    return { id, g };
+  }
+  /** Aplica uma Joia da Escuridão: adiciona a linha sorteada. */
+  function applyEnchant(it, rnd) {
+    if (!canEnchant(it)) return { ok: false };
+    const e = rollEnchant(it, rnd);
+    it.ench = (it.ench || []).concat([e]);
+    return { ok: true, ench: e };
+  }
+  function enchantText(e) {
+    const E = ENCHANTS[e.id];
+    return E ? E.t.replace('{v}', String(Math.abs(E.v[e.g]))) : '';
+  }
+  /** Ouro para retirar uma linha: 1M, +25% por tier do item, ×1/×2/×3 pelo grau. */
+  function enchantRemoveCost(it, e) {
+    return Math.round(ENCH.removeGold * (1 + (it.tier || 0) * ENCH.removeTierPct / 100) * ENCH_GRADES[e.g].mult / 1000) * 1000;
+  }
+  /**
+   * Combinar Joias: 3 joias comuns (Bênção, Alma, Caos ou Vida, misturadas ou não) viram
+   * 1 joia aleatória. Joia da Escuridão: 5%; as outras dividem os 95% igualmente.
+   */
+  const COMBINE = { inputs: ['bless', 'soul', 'chaos', 'life'], n: 3, darkChance: 0.05, fee: 100000 };
+  function rollCombine(rnd) {
+    if (rnd() < COMBINE.darkChance) return 'dark';
+    return COMBINE.inputs[Math.floor(rnd() * COMBINE.inputs.length)];
   }
 
   // ---------------------------------------------------------------------------
@@ -1102,6 +1188,7 @@
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
+    DARK_DROP, ENCHANTS, ENCH_GRADES, ENCH, enchantPool, enchantOptions, canEnchant, rollEnchant, applyEnchant, enchantText, enchantRemoveCost, COMBINE, rollCombine,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, activeItems, itemActive, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, bagPages, bagSize, canExpandBag, applyExpandBag, levelRisk, canEvolve, autoDistribute, today,

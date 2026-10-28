@@ -13,6 +13,7 @@ import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
 import { buyTicket, startAutoClear, ticketCount } from '../game/autoClear.js';
 import { questEvent } from '../game/quests.js';
 import { openQuestBoard } from './questUi.js';
+import { enchantAction, enchantSection } from './enchantDialog.js';
 import { fmtWait } from '../game/npcs.js';
 import { buildSlots, hudTick } from './hud.js';
 import { glyph, iconHtml } from './icons.js';
@@ -240,7 +241,7 @@ export function openNpc(id) {
       (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
     h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
-      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
+      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro. A rara <b style="font:inherit;color:' + R.JEWELS.dark.color + '">' + R.JEWELS.dark.name + '</b> cai aqui com ' + String(R.DARK_DROP.eden * 100).replace('.', ',') + '% por monstro (' + String(R.DARK_DROP.other * 100).replace('.', ',') + '% nos outros mapas).</p>';
   } else if (id === 'smith') {
     const all = smithList(ch);
     const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
@@ -310,6 +311,8 @@ export function openNpc(id) {
           : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
   } else if (id === 'chest') {
     h += chestSection(ch);
+  } else if (id === 'enchant') {
+    h += enchantSection(ch, { list: smithList, card: smithCard, selHtml: smithSelHtml });
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -471,6 +474,7 @@ function npcAction(e) {
       log('Mestre Orvan expandiu sua mochila: página 2 liberada (' + R.bagSize(ch) + ' espaços, I).', 'sys');
       break;
     }
+    default: enchantAction(a, b, ch, confirmed);
   }
   persist();
   const dlg = $('#dialog'), sl = dlg.querySelector('.smithlist');

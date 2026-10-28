@@ -327,6 +327,20 @@ html.touch .buff { width: 30px; height: 30px; }
 @keyframes rfSweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
+.cell .en { position: absolute; right: 2px; bottom: 0; font-size: 9px; letter-spacing: -1px; text-shadow: 0 0 3px #6a2aff, 0 1px 2px #000; }
+.ench-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px; }
+.ench-pool .ep { display: flex; justify-content: space-between; gap: 8px; padding: 4px 8px; border: 1px solid rgba(185,138,255,.25); border-radius: 4px; font-size: 12px; background: rgba(40,20,70,.35); }
+.ench-pool .ep.have { opacity: .45; text-decoration: line-through; }
+.ench-pool .ep b { font-family: var(--f-num); }
+.combo { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.combo .cslot { width: 64px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px dashed rgba(185,138,255,.5); border-radius: 6px; background: rgba(30,16,50,.5); color: var(--muted); font-size: 20px; padding: 4px; }
+.combo .cslot.on { border-style: solid; cursor: pointer; }
+.combo .cslot.res { border-color: #b98aff; box-shadow: 0 0 10px rgba(185,138,255,.45) inset; }
+.combo .cslot .gl { width: 36px; height: 36px; }
+.combo .cslot small { font-size: 10px; line-height: 1.1; text-align: center; color: #d8c8f0; }
+.combo .cplus { color: var(--muted); font-size: 18px; }
+@media (max-width: 760px) { .combo { flex-wrap: nowrap; gap: 3px; } .combo .cslot { width: 54px; height: 64px; } .combo .cslot .gl { width: 30px; height: 30px; } .combo .cplus { font-size: 14px; } }
+.ln.ench small { opacity: .75; font-size: .85em; }
 .cell .u { position: absolute; right: 3px; top: 1px; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }

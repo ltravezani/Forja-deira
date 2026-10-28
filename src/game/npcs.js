@@ -30,7 +30,7 @@ export function spawnNpcs(L) {
     world.add(model.root);
     const label = document.createElement('div');
     label.className = 'label npc';
-    // NPC ainda sem função (Kora, arena): selo "Em breve" claro no rótulo
+    // NPC ainda sem função: selo "Em breve" claro no rótulo
     label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + (D.soon ? ' <em class="soon">Em breve</em>' : '') + '</small>';
     label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
     overlay.appendChild(label);

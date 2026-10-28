@@ -158,6 +158,13 @@ function sanitizeItem(it, R) {
     it.tier = int(it.tier, 0, R.DROP_LEVEL.length - 1, 0);
     it.plus = int(it.plus, 0, 15, 0);
     it.addOpt = int(it.addOpt, 0, 28, 0);
+    // encantamentos: só linhas conhecidas do slot, grau válido, sem repetir e no máximo R.ENCH.max
+    if (Array.isArray(it.ench)) {
+      const pool = R.enchantPool(it), seen = [];
+      it.ench = it.ench.filter((e) => e && pool.includes(e.id) && !seen.includes(e.id) && seen.push(e.id)).slice(0, R.ENCH.max)
+        .map((e) => ({ id: e.id, g: int(e.g, 0, R.ENCH_GRADES.length - 1, 0) }));
+      if (!it.ench.length) delete it.ench;
+    } else delete it.ench;
   } else it.qty = int(it.qty, 1, 1e9, 1);
   if (it.locked !== true) delete it.locked;
 }

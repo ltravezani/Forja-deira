@@ -327,6 +327,20 @@ html.touch .buff { width: 30px; height: 30px; }
 @keyframes rfSweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
 .cell.bad::after { content: ''; position: absolute; inset: 0; background: rgba(120,20,20,.18); pointer-events: none; }
 .cell .c { position: absolute; left: 2px; bottom: 0; font-size: 9px; font-family: var(--f-num); color: #d8cba8; text-shadow: 0 1px 2px #000; }
+.cell .en { position: absolute; right: 2px; bottom: 0; font-size: 9px; letter-spacing: -1px; text-shadow: 0 0 3px #6a2aff, 0 1px 2px #000; }
+.ench-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px; }
+.ench-pool .ep { display: flex; justify-content: space-between; gap: 8px; padding: 4px 8px; border: 1px solid rgba(185,138,255,.25); border-radius: 4px; font-size: 12px; background: rgba(40,20,70,.35); }
+.ench-pool .ep.have { opacity: .45; text-decoration: line-through; }
+.ench-pool .ep b { font-family: var(--f-num); }
+.combo { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.combo .cslot { width: 64px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px dashed rgba(185,138,255,.5); border-radius: 6px; background: rgba(30,16,50,.5); color: var(--muted); font-size: 20px; padding: 4px; }
+.combo .cslot.on { border-style: solid; cursor: pointer; }
+.combo .cslot.res { border-color: #b98aff; box-shadow: 0 0 10px rgba(185,138,255,.45) inset; }
+.combo .cslot .gl { width: 36px; height: 36px; }
+.combo .cslot small { font-size: 10px; line-height: 1.1; text-align: center; color: #d8c8f0; }
+.combo .cplus { color: var(--muted); font-size: 18px; }
+@media (max-width: 760px) { .combo { flex-wrap: nowrap; gap: 3px; } .combo .cslot { width: 54px; height: 64px; } .combo .cslot .gl { width: 30px; height: 30px; } .combo .cplus { font-size: 14px; } }
+.ln.ench small { opacity: .75; font-size: .85em; }
 .cell .u { position: absolute; right: 3px; top: 1px; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px #000; }
 .u.up, .up { color: #6fe07a; } .u.dn, .dn { color: #e0605a; } .u.r { color: #ffb347; }
 .cell.dragging { opacity: .35; }
@@ -6133,6 +6147,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     soul: { name: 'Joia da Alma', color: '#ffd36b', desc: 'Aprimora de +6 até +9 (50%, +25% com Sorte). Falha: -1.' },
     chaos: { name: 'Joia do Caos', color: '#ff6b9a', desc: 'Fusão +9 até +15 (+10 custa 1, +11 custa 2 … +15 custa 6). Falha: volta a +0 (nunca destrói).' },
     life: { name: 'Joia da Vida', color: '#b0ff8a', desc: 'Opção adicional +4 (até +16).' },
+    dark: { name: 'Joia da Escuridão', color: '#b98aff', desc: 'Adiciona um encantamento aleatório a um equipamento (até 3). Use com a Encantadora Morgana.' },
   };
   const POTIONS = {
     hp: { name: 'Poção de Vida', pct: 0.3, flat: 60, price: 60 },
@@ -6247,6 +6262,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     excOpts(it).forEach((e) => { const d = excSet[e]; if (d) for (const k in d.s) add(k, d.s[k]); });
     if (it.anc) add(it.anc.stat, it.anc.value);
     if (it.legend && LEGEND[it.legend]) for (const k in LEGEND[it.legend].s) add(k, LEGEND[it.legend].s[k]);
+    (it.ench || []).forEach((e) => { const E = ENCHANTS[e.id]; if (E) add(E.stat, E.v[e.g] || 0); });
     return o;
   }
   function itemLines(it) {
@@ -6265,7 +6281,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     return L;
   }
   function itemValue(it) {
-    if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000 }[it.id] * (it.qty || 1);
+    if (it.kind === 'jewel') return { bless: 90000, soul: 60000, chaos: 45000, life: 70000, dark: 1200000 }[it.id] * (it.qty || 1);
     if (it.kind === 'potion') return Math.floor(POTIONS[it.id].price * 0.3) * (it.qty || 1);
     if (it.kind === 'talisman') return 150000 * (it.qty || 1);
     if (it.kind === 'ticket') return ticketPrice(it.id) * 0.4 * (it.qty || 1); // vende por 20% do preço da Mercadora
@@ -6390,8 +6406,15 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     }
     const rp = rnd();
     if (rp < DROP_CHANCE.potion) out.potions.push(rnd() < 0.6 ? 'hp' : 'mp');
+    if (darkDrop(seed, 'other')) out.jewels.push('dark');
     return out;
   }
+  /**
+   * Joia da Escuridão: 0,5% por monstro no Éden e 0,1% nos outros mapas (masmorras e
+   * torre). Sorteio próprio pela seed do drop, sem mexer nos outros sorteios.
+   */
+  const DARK_DROP = { eden: 0.005, other: 0.001 };
+  const darkDrop = (seed, where) => mulberry32(hash32(seed, 'dark'))() < DARK_DROP[where];
 
   /** Gold de um abate (mesma fórmula nas masmorras e na torre). */
   function goldAmount(mLevel, src, r) {
@@ -6436,10 +6459,12 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
         const n = 1 + Math.floor(rnd() * 3);
         for (let i = 0; i < n; i++) out.jewels.push(pick());
       }
+      if (darkDrop(seed, 'other')) out.jewels.push('dark');
       return out;
     }
     if (rnd() < DROP_CHANCE.gold) out.gold = goldAmount(mLevel, src, rnd()) * TOWER.goldMult;
     if (rnd() < TOWER.jewelChance) out.jewels.push(pick());
+    if (darkDrop(seed, 'other')) out.jewels.push('dark');
     return out;
   }
 
@@ -6512,7 +6537,82 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     const rk = rnd();
     out.log.push({ what: 'ticket', roll: rk, threshold: EDEN.ticket });
     if (rk < EDEN.ticket) out.tickets.push(TICKET_IDS[Math.floor(rnd() * TICKET_IDS.length)]);
+    if (darkDrop(seed, 'eden')) out.jewels.push('dark');
     return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Encantamento (Encantadora Morgana): cada Joia da Escuridão adiciona uma linha
+  // aleatória ao equipamento (até 3, sem repetir o atributo). Cada linha tem um grau
+  // (Menor 70%, Maior 25%, Supremo 5%) e pode ser retirada com Ouro.
+  // ---------------------------------------------------------------------------
+  const ENCHANTS = {
+    dmg: { t: 'Dano +{v}%', stat: 'dmgPct', v: [2, 4, 7], pool: 'off' },
+    crit: { t: 'Chance de golpe crítico +{v}%', stat: 'critPct', v: [2, 4, 6], pool: 'off' },
+    exc: { t: 'Chance de golpe excelente +{v}%', stat: 'excPct', v: [2, 3, 5], pool: 'off' },
+    aspd: { t: 'Velocidade de ataque +{v}%', stat: 'atkSpeedPct', v: [2, 4, 6], pool: 'off' },
+    skill: { t: 'Dano das habilidades +{v}%', stat: 'skillDmgPct', v: [3, 6, 10], pool: 'off' },
+    leech: { t: 'Roubo de vida +{v}%', stat: 'lifeSteal', v: [1, 2, 3], pool: 'off' },
+    hp: { t: 'HP máximo +{v}%', stat: 'hpPct', v: [2, 4, 7], pool: 'def' },
+    def: { t: 'Defesa +{v}%', stat: 'defPct', v: [3, 6, 10], pool: 'def' },
+    red: { t: 'Absorção de dano +{v}%', stat: 'dmgRed', v: [1, 2, 4], pool: 'def' },
+    refl: { t: 'Reflete {v}% do dano recebido', stat: 'reflect', v: [2, 4, 6], pool: 'def' },
+    move: { t: 'Velocidade de movimento +{v}%', stat: 'moveSpeedPct', v: [2, 4, 6], pool: 'def' },
+    mf: { t: 'Encontrar Magia +{v}', stat: 'mf', v: [5, 10, 20], pool: 'all' },
+    gold: { t: 'Ouro obtido +{v}%', stat: 'goldPct', v: [5, 10, 20], pool: 'all' },
+    cd: { t: 'Recarga de habilidades -{v}%', stat: 'cdPct', v: [-2, -4, -6], pool: 'all' },
+  };
+  const ENCH_GRADES = [
+    { name: 'Menor', chance: 0.7, color: '#c9b3ff', mult: 1 },
+    { name: 'Maior', chance: 0.25, color: '#a46bff', mult: 2 },
+    { name: 'Supremo', chance: 0.05, color: '#ff6bd6', mult: 3 },
+  ];
+  const ENCH = { max: 3, removeGold: 1000000, removeTierPct: 25 };
+  /** Linhas que o slot aceita: armas e colares, ofensivas; armaduras e anéis, defensivas; asas, todas. */
+  function enchantPool(it) {
+    if (!it || !it.slot) return [];
+    const off = it.slot === 'weapon' || it.slot === 'pendant', both = it.slot === 'wings';
+    return Object.keys(ENCHANTS).filter((k) => { const p = ENCHANTS[k].pool; return p === 'all' || both || (p === 'off') === off; });
+  }
+  /** Linhas ainda possíveis no item (o atributo de uma linha existente não repete). */
+  function enchantOptions(it) {
+    const have = (it.ench || []).map((e) => e.id);
+    return enchantPool(it).filter((k) => have.indexOf(k) < 0);
+  }
+  function canEnchant(it) { return !!(it && it.slot) && (it.ench || []).length < ENCH.max && enchantOptions(it).length > 0; }
+  /** Sorteia uma linha nova (rnd: () => 0..1); não altera o item. */
+  function rollEnchant(it, rnd) {
+    const opts = enchantOptions(it);
+    if (!opts.length) return null;
+    const id = opts[Math.floor(rnd() * opts.length)];
+    const r = rnd();
+    let g = 0, acc = 0;
+    for (let i = ENCH_GRADES.length - 1; i >= 0; i--) { acc += ENCH_GRADES[i].chance; if (r < acc) { g = i; break; } }
+    return { id, g };
+  }
+  /** Aplica uma Joia da Escuridão: adiciona a linha sorteada. */
+  function applyEnchant(it, rnd) {
+    if (!canEnchant(it)) return { ok: false };
+    const e = rollEnchant(it, rnd);
+    it.ench = (it.ench || []).concat([e]);
+    return { ok: true, ench: e };
+  }
+  function enchantText(e) {
+    const E = ENCHANTS[e.id];
+    return E ? E.t.replace('{v}', String(Math.abs(E.v[e.g]))) : '';
+  }
+  /** Ouro para retirar uma linha: 1M, +25% por tier do item, ×1/×2/×3 pelo grau. */
+  function enchantRemoveCost(it, e) {
+    return Math.round(ENCH.removeGold * (1 + (it.tier || 0) * ENCH.removeTierPct / 100) * ENCH_GRADES[e.g].mult / 1000) * 1000;
+  }
+  /**
+   * Combinar Joias: 3 joias comuns (Bênção, Alma, Caos ou Vida, misturadas ou não) viram
+   * 1 joia aleatória. Joia da Escuridão: 5%; as outras dividem os 95% igualmente.
+   */
+  const COMBINE = { inputs: ['bless', 'soul', 'chaos', 'life'], n: 3, darkChance: 0.05, fee: 100000 };
+  function rollCombine(rnd) {
+    if (rnd() < COMBINE.darkChance) return 'dark';
+    return COMBINE.inputs[Math.floor(rnd() * COMBINE.inputs.length)];
   }
 
   // ---------------------------------------------------------------------------
@@ -6844,6 +6944,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     BASE_RARITY, MF_SOFTCAP, mfEffective, rarityTable, DROP_CHANCE, tierForLevel, makeEquip, rollDrop,
     goldAmount, TOWER, towerLevel, towerMod, rollTowerDrop,
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
+    DARK_DROP, ENCHANTS, ENCH_GRADES, ENCH, enchantPool, enchantOptions, canEnchant, rollEnchant, applyEnchant, enchantText, enchantRemoveCost, COMBINE, rollCombine,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, activeItems, itemActive, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
     canReset, applyReset, bagPages, bagSize, canExpandBag, applyExpandBag, levelRisk, canEvolve, autoDistribute, today,
@@ -7835,7 +7936,7 @@ const WEAPON = {
   knight: { sword: 'sword_1handed', club: 'sword_1handed', staff: 'sword_2handed', rod: 'staff' },
   mage: { staff: 'staff', sword: 'wand', rod: 'staff' },
   rogue: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
-  rogueFem: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
+  rogueFem: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed', staff: 'staff' },
   barbarian: { club: 'axe_1handed', sword: 'axe_1handed' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
@@ -8441,9 +8542,9 @@ const NPCS = {
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore · Mochila', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
   chest: { name: 'Dalva', role: 'Guardiã do Baú · itens compartilhados entre os seus personagens', look: { gltf: 'rogueFem', skin: 0xe8c0a0, cloth: 0x6a4a2a, armor: 0x8a6a3a, trim: 0xd8b060, head: 'hair', hair: 0x4a2a1a }, say: 'O que entra neste baú fica guardado para a sua conta inteira. Guarde com um herói e retire com outro: aqui nada se perde, só o espaço é que acaba.' },
   tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { gltf: 'knight', skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra Ouro e Joias. Derrote o guardião de cada andar e suba o quanto aguentar.' },
-  // não é um NPC na praça: cabeçalho da janela do portal (entre Kora e Varek)
+  // não é um NPC na praça: cabeçalho da janela do portal (entre Morgana e Varek)
   eden: { name: 'Portal do Éden', role: 'Uma entrada a cada 3 horas', look: {}, say: 'Além deste portal há uma terra que nunca conheceu o inverno. Três caminhos levam ao Coração do Éden, onde o Guardião vela a Árvore-Mãe. O portal adormece por três horas depois que alguém o atravessa.' },
-  duel: { name: 'Kora', role: 'Arena de Duelo · Em breve', soon: true, look: { gltf: 'knight', skin: 0xe0a880, cloth: 0x3a3a3a, armor: 0x8a2a2a, head: 'helm', weapon: 'sword', shield: true }, say: 'A arena ainda está sendo erguida. Em breve, desafios contra os campeões de Aldrena. Até lá, afie a lâmina nas masmorras.' },
+  enchant: { name: 'Morgana', role: 'Encantadora · encantamentos com a Joia da Escuridão e combinação de joias', look: { gltf: 'rogueFem', skin: 0xe8c8b8, cloth: 0x5a2a8a, armor: 0x6a3a9a, trim: 0xb98aff, capeColor: 0x4a2070, head: 'hair', hair: 0xe0d8f0, hoodColor: 0x6a3aa0, weapon: 'staff', weaponGlow: 0xb98aff, robe: true, eye: 0xd8b0ff }, say: 'A escuridão não é ausência de luz: é poder guardado. Traga-me uma Joia da Escuridão e eu desperto o que dorme no seu equipamento. E se tiver joias sobrando, posso fundir três em uma… com sorte, numa das minhas.' },
 };
 return { AFFIX, EDEN_MINI, EDEN_MON, MON, NPCS, monsterName };
 })();
@@ -8848,6 +8949,13 @@ function sanitizeItem(it, R) {
     it.tier = int(it.tier, 0, R.DROP_LEVEL.length - 1, 0);
     it.plus = int(it.plus, 0, 15, 0);
     it.addOpt = int(it.addOpt, 0, 28, 0);
+    // encantamentos: só linhas conhecidas do slot, grau válido, sem repetir e no máximo R.ENCH.max
+    if (Array.isArray(it.ench)) {
+      const pool = R.enchantPool(it), seen = [];
+      it.ench = it.ench.filter((e) => e && pool.includes(e.id) && !seen.includes(e.id) && seen.push(e.id)).slice(0, R.ENCH.max)
+        .map((e) => ({ id: e.id, g: int(e.g, 0, R.ENCH_GRADES.length - 1, 0) }));
+      if (!it.ench.length) delete it.ench;
+    } else delete it.ench;
   } else it.qty = int(it.qty, 1, 1e9, 1);
   if (it.locked !== true) delete it.locked;
 }
@@ -15070,6 +15178,245 @@ function initQuestUi() {
 return { initQuestUi, openQuestBoard, questTargetPos, questUiTick };
 })();
 
+// ---- game/enchant.js ----
+const { combineJewels, combineTimes, enchantItem, jewelCount, ownsItem, removeEnchant } = (() => {
+// ---------- Encantamento e Combinar Joias (Encantadora Morgana) ----------
+// A Joia da Escuridão adiciona uma linha aleatória ao equipamento (até 3); cada
+// linha pode ser retirada com Ouro. Três joias comuns viram uma joia aleatória.
+// Funções puras sobre o personagem `ch` (sem tocar na cena), para os testes.
+
+/** Quantas joias `id` o herói tem na mochila. */
+const jewelCount = (ch, id) => { const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === id); return x ? x.qty : 0; };
+function takeJewels(ch, id, n) {
+  const x = ch.bag.find((b) => b.kind === 'jewel' && b.id === id);
+  x.qty -= n;
+  if (x.qty <= 0) ch.bag.splice(ch.bag.indexOf(x), 1);
+}
+/** O equipamento ainda é do herói (equipado ou na mochila)? */
+const ownsItem = (ch, it) => !!it && !!it.slot && (ch.equip[it.slot] === it || ch.bag.includes(it));
+
+/**
+ * Gasta 1 Joia da Escuridão e adiciona um encantamento aleatório.
+ * why: 'gone' | 'nojewel' | 'full' (3 linhas ou nada mais a sortear).
+ */
+function enchantItem(ch, it, rnd) {
+  if (!ownsItem(ch, it)) return { ok: false, why: 'gone' };
+  if (!R.canEnchant(it)) return { ok: false, why: 'full' };
+  if (jewelCount(ch, 'dark') < 1) return { ok: false, why: 'nojewel' };
+  takeJewels(ch, 'dark', 1);
+  return R.applyEnchant(it, rnd);
+}
+/** Retira a linha `idx` pagando Ouro (R.enchantRemoveCost). why: 'gone' | 'none' | 'gold'. */
+function removeEnchant(ch, it, idx) {
+  if (!ownsItem(ch, it)) return { ok: false, why: 'gone' };
+  const e = it.ench && it.ench[idx];
+  if (!e) return { ok: false, why: 'none' };
+  const cost = R.enchantRemoveCost(it, e);
+  if (ch.gold < cost) return { ok: false, why: 'gold', cost };
+  ch.gold -= cost;
+  it.ench.splice(idx, 1);
+  if (!it.ench.length) delete it.ench;
+  return { ok: true, ench: e, cost };
+}
+
+/** Joias pedidas por uma receita (lista de 3 ids) → { id: quantidade }. */
+function need(picks) { const n = {}; picks.forEach((j) => (n[j] = (n[j] || 0) + 1)); return n; }
+/** Quantas vezes a receita pode ser feita com as joias e o Ouro do herói. */
+function combineTimes(ch, picks) {
+  if (!validPicks(picks)) return 0;
+  const n = need(picks);
+  let t = Math.floor(ch.gold / R.COMBINE.fee);
+  for (const j in n) t = Math.min(t, Math.floor(jewelCount(ch, j) / n[j]));
+  return Math.max(0, t);
+}
+const validPicks = (picks) => Array.isArray(picks) && picks.length === R.COMBINE.n && picks.every((j) => R.COMBINE.inputs.includes(j));
+/**
+ * Combina `times` vezes a receita `picks` (3 joias comuns, misturadas ou não).
+ * Cada vez cobra R.COMBINE.fee de Ouro e devolve 1 joia aleatória (R.rollCombine).
+ * `cap`: espaços da mochila (a joia nova precisa de uma pilha ou de um espaço livre).
+ * why: 'picks' | 'short' (faltam joias ou Ouro) | 'full'. Devolve as joias obtidas.
+ */
+function combineJewels(ch, picks, rnd, cap, times = 1) {
+  if (!validPicks(picks)) return { ok: false, why: 'picks' };
+  times = Math.max(1, Math.floor(times) || 1);
+  if (combineTimes(ch, picks) < times) return { ok: false, why: 'short' };
+  // espaço: pior caso, a joia sorteada não tem pilha; as pilhas que se esgotam liberam espaço
+  const n = need(picks);
+  const freed = Object.keys(n).filter((j) => jewelCount(ch, j) === n[j] * times).length;
+  const outs = R.COMBINE.inputs.concat('dark');
+  const missing = outs.filter((j) => !jewelCount(ch, j) || (n[j] && jewelCount(ch, j) === n[j] * times)).length;
+  if (missing && ch.bag.length - freed + Math.min(missing, times) > cap) return { ok: false, why: 'full' };
+  const got = [];
+  for (let i = 0; i < times; i++) {
+    ch.gold -= R.COMBINE.fee;
+    for (const j in n) takeJewels(ch, j, n[j]);
+    const id = R.rollCombine(rnd);
+    const ex = ch.bag.find((b) => b.kind === 'jewel' && b.id === id);
+    if (ex) ex.qty++;
+    else ch.bag.push({ kind: 'jewel', id, qty: 1, uid: 'j' + id });
+    got.push(id);
+  }
+  return { ok: true, got };
+}
+return { combineJewels, combineTimes, enchantItem, jewelCount, ownsItem, removeEnchant };
+})();
+
+// ---- ui/enchantDialog.js ----
+const { enchantAction, enchantSection } = (() => {
+// ---------- diálogo da Encantadora Morgana: Encantar e Combinar Joias ----------
+
+const TABS = { ench: 'Encantar', combine: 'Combinar joias' };
+const h4 = (t) => '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">' + t + '</h4>';
+const pct = (v) => String(Math.round(v * 1000) / 10).replace('.', ',') + '%';
+const DARK = () => R.JEWELS.dark;
+/** Nome curto da joia ("Bênção", "Caos") para a forja e listas apertadas no celular. */
+const short = (j) => R.JEWELS[j].name.replace(/^Joia d[ao] /, '');
+/** Equipamentos listados na última renderização (os botões guardam a posição nesta lista). */
+let enchItems = [];
+
+/** Linha da joia com ícone e cor. */
+const jewelTag = (j, extra, name) => '<span class="nm"><span class="ic">' + iconHtml(glyph({ kind: 'jewel', id: j })) + '</span><span class="t" style="color:' + R.JEWELS[j].color + '">' + esc(name || R.JEWELS[j].name) + (extra || '') + '</span></span>';
+
+/**
+ * Conteúdo do diálogo. `kit` traz do diálogo do Ferreiro a lista de equipamentos,
+ * o cartão de item e o cabeçalho do item escolhido (mesmo visual nos dois NPCs).
+ */
+function enchantSection(ch, kit) {
+  const tab = TABS[UI.enchTab] ? UI.enchTab : 'ench';
+  let h = '<div class="btabs">' + Object.keys(TABS).map((k) => '<button class="btab' + (tab === k ? ' on' : '') + '" data-npc="enchtab" data-k="' + k + '">' + TABS[k] + (k === 'ench' ? ' <span>' + jewelCount(ch, 'dark') + '</span>' : '') + '</button>').join('') + '</div>';
+  return h + (tab === 'ench' ? enchantTab(ch, kit) : combineTab(ch));
+}
+
+function enchantTab(ch, kit) {
+  const items = kit.list(ch);
+  enchItems = items;
+  const sel = items.find((x) => x === UI.enchSel) || items[0];
+  UI.enchSel = sel;
+  const dk = jewelCount(ch, 'dark');
+  let h = '<div class="list"><div class="li">' + jewelTag('dark', ' ×' + dk) + '<span class="s">' + (dk ? 'Cada joia adiciona 1 encantamento aleatório (até ' + R.ENCH.max + ' por item).' : 'Cai no Éden (' + pct(R.DARK_DROP.eden) + ' por monstro) e, mais rara, nos outros mapas (' + pct(R.DARK_DROP.other) + '). Também sai ao combinar joias (' + pct(R.COMBINE.darkChance) + ').') + '</span></div></div>';
+  if (!sel) return h + '<p class="note">Você não tem equipamentos.</p>';
+  h += '<div class="smithlist">' + items.map((x, i) => kit.card(ch, x, i, sel).replace('data-npc="smithsel"', 'data-npc="enchsel"')).join('') + '</div>';
+  h += h4('Encantamentos do item') + kit.selHtml(ch, sel);
+  const ench = sel.ench || [];
+  h += '<div class="list" style="margin-top:6px">';
+  for (let i = 0; i < R.ENCH.max; i++) {
+    const e = ench[i];
+    if (!e) { h += '<div class="li"><span class="t" style="color:var(--muted)">✧ Espaço livre ' + (i + 1) + ' de ' + R.ENCH.max + '</span><span class="s">Use uma ' + esc(DARK().name) + ' para sortear uma linha.</span></div>'; continue; }
+    const G2 = R.ENCH_GRADES[e.g], cost = R.enchantRemoveCost(sel, e), cf = UI.npcConfirm === 'enchrm' && UI.enchRm === i;
+    const a = cf
+      ? '<button class="btn sm gold" data-npc="enchrm" data-i="' + i + '" data-ok="1">Confirmar · ' + fmt(cost) + '</button><button class="btn sm" data-npc="npcno">Cancelar</button>'
+      : '<button class="btn sm" data-npc="enchrm" data-i="' + i + '"' + (ch.gold >= cost ? '' : ' disabled') + '>Retirar · ' + fmt(cost) + '</button>';
+    h += '<div class="li"><span class="t" style="color:' + G2.color + '">✦ ' + esc(R.enchantText(e)) + '</span><span class="a row">' + a + '</span><span class="s">Grau ' + G2.name + (cf ? ' · <b style="color:var(--gold)">Tem certeza? A linha some e o Ouro não volta.</b>' : ' · retirar custa Ouro e libera o espaço') + '</span></div>';
+  }
+  h += '</div>';
+  const can = R.canEnchant(sel), cf = UI.npcConfirm === 'ench';
+  const why = !can ? (ench.length >= R.ENCH.max ? 'Os ' + R.ENCH.max + ' espaços estão ocupados: retire uma linha para encantar de novo.' : 'Não há mais encantamentos possíveis para este item.') : !dk ? 'Você não tem ' + esc(DARK().name) + '.' : '';
+  h += '<div class="row" style="margin-top:10px">' + (cf && can && dk
+    ? '<button class="btn gold" data-npc="ench" data-ok="1">Confirmar · gastar 1 ' + esc(DARK().name) + '</button><button class="btn" data-npc="npcno">Cancelar</button>'
+    : '<button class="btn gold" data-npc="ench"' + (can && dk ? '' : ' disabled') + '>Encantar · 1 ' + esc(DARK().name) + '</button>') + '</div>';
+  if (why) h += '<p class="note">' + why + '</p>';
+  // tabela pública: linhas possíveis no slot e chance de cada grau
+  const opts = R.enchantOptions(sel), have = ench.map((e) => e.id);
+  h += h4('Possíveis encantamentos · ' + esc(R.SLOT_LABEL[sel.slot])) + '<p class="note">Sorteio entre as linhas que o item ainda não tem (' + opts.length + '), todas com a mesma chance. Grau: ' + R.ENCH_GRADES.map((g) => '<b style="font:inherit;color:' + g.color + '">' + g.name + ' ' + pct(g.chance) + '</b>').join(' · ') + '.</p>';
+  h += '<div class="ench-pool">' + R.enchantPool(sel).map((k) => {
+    const E = R.ENCHANTS[k];
+    return '<div class="ep' + (have.includes(k) ? ' have' : '') + '"><span>' + esc(E.t.replace('{v}', '…')) + '</span><span>' + E.v.map((v, g) => '<b style="color:' + R.ENCH_GRADES[g].color + '">' + Math.abs(v) + '</b>').join(' / ') + '</span></div>';
+  }).join('') + '</div>';
+  return h + '<p class="note">O encantamento fica no item: vai junto para o baú e para outro personagem, e soma no CP.</p>';
+}
+
+function combineTab(ch) {
+  const C = R.COMBINE;
+  const picks = (UI.combo || []).filter((j) => C.inputs.includes(j)).slice(0, C.n);
+  // o que já está na forja conta como reservado
+  const used = (j) => picks.filter((x) => x === j).length;
+  UI.combo = picks;
+  let h = '<p class="note">Coloque ' + C.n + ' joias (iguais ou misturadas) e receba 1 joia aleatória. Taxa: ' + fmt(C.fee) + ' de Ouro por combinação. A ' + esc(DARK().name) + ' não entra na receita.</p>';
+  h += '<div class="combo">' + Array.from({ length: C.n }, (_, i) => {
+    const j = picks[i];
+    return j ? '<button class="cslot on" data-npc="combout" data-i="' + i + '" title="Tirar ' + esc(R.JEWELS[j].name) + '">' + iconHtml(glyph({ kind: 'jewel', id: j })) + '<small style="color:' + R.JEWELS[j].color + '">' + esc(short(j)) + '</small></button>' : '<div class="cslot">?</div>';
+  }).join('<span class="cplus">+</span>') + '<span class="cplus">→</span><div class="cslot res">' + iconHtml(glyph({ kind: 'jewel', id: 'dark' })) + '<small>Aleatória</small></div></div>';
+  h += '<div class="list">';
+  C.inputs.forEach((j) => {
+    const n = jewelCount(ch, j), left = n - used(j);
+    h += '<div class="li">' + jewelTag(j, ' ×' + n, short(j)) + '<span class="a row"><button class="btn sm" data-npc="combin" data-j="' + j + '"' + (left > 0 && picks.length < C.n ? '' : ' disabled') + '>Colocar</button><button class="btn sm" data-npc="combsame" data-j="' + j + '"' + (n >= C.n ? '' : ' disabled') + '>' + C.n + ' iguais</button></span></div>';
+  });
+  h += '</div>';
+  const full = picks.length === C.n, t = full ? combineTimes(ch, picks) : 0, cf = UI.npcConfirm === 'combine' && UI.comboN === 10;
+  const btn = (n, gold) => '<button class="btn' + (gold ? ' gold' : '') + '" data-npc="combine" data-n="' + n + '"' + (t >= n ? '' : ' disabled') + '>Combinar' + (n > 1 ? ' ×' + n : '') + ' · ' + fmt(C.fee * n) + '</button>';
+  h += '<div class="row" style="margin-top:10px">' + (cf && t >= 10
+    ? '<button class="btn gold" data-npc="combine" data-n="10" data-ok="1">Confirmar ×10 · ' + fmt(C.fee * 10) + ' de Ouro</button><button class="btn" data-npc="npcno">Cancelar</button>'
+    : btn(1, true) + btn(10, false)) + '</div>';
+  if (full && !t) h += '<p class="note">Faltam joias ou Ouro para esta receita.</p>';
+  const other = (1 - C.darkChance) / C.inputs.length;
+  h += '<p class="note">Resultado: <b style="font:inherit;color:' + DARK().color + '">' + esc(DARK().name) + ' ' + pct(C.darkChance) + '</b> · ' + C.inputs.map((j) => '<span style="color:' + R.JEWELS[j].color + '">' + esc(short(j)) + ' ' + pct(other) + '</span>').join(' · ') + '.</p>';
+  if (UI.comboLast && UI.comboLast.length) {
+    const cnt = {};
+    UI.comboLast.forEach((j) => (cnt[j] = (cnt[j] || 0) + 1));
+    h += '<p class="note">Última combinação: ' + Object.keys(cnt).map((j) => '<b style="font:inherit;color:' + R.JEWELS[j].color + '">' + esc(R.JEWELS[j].name) + (cnt[j] > 1 ? ' ×' + cnt[j] : '') + '</b>').join(', ') + '.</p>';
+  }
+  return h;
+}
+
+/** Botões do diálogo da Morgana; devolve false se a ação não é daqui. */
+function enchantAction(a, b, ch, confirmed) {
+  switch (a) {
+    case 'enchtab': UI.enchTab = b.dataset.k; UI.comboLast = null; return true;
+    case 'enchsel': { const x = enchItems[+b.dataset.i]; if (ownsItem(ch, x)) UI.enchSel = x; return true; }
+    case 'ench': {
+      const it = UI.enchSel;
+      if (!ownsItem(ch, it)) { log('Este item não está mais com você.', 'warn'); UI.enchSel = null; return true; }
+      if (!R.canEnchant(it) || jewelCount(ch, 'dark') < 1) return true;
+      if (!confirmed) { UI.npcConfirm = a; return true; }
+      const r = enchantItem(ch, it, Math.random);
+      if (!r.ok) return true;
+      const g = R.ENCH_GRADES[r.ench.g], txt = R.enchantText(r.ench);
+      log('Encantamento ' + g.name + ': ' + txt + ' em ' + R.itemName(it) + '.', 'loot');
+      toast('Encantamento ' + g.name, txt);
+      r.ench.g >= 2 ? Sfx.level() : Sfx.loot(4);
+      if (G.player) emit(G.player.x, 1.2, G.player.z, { n: 40 + r.ench.g * 40, color: parseInt(g.color.slice(1), 16), speed: 2.6, up: 2.6, life: 1.1, size: 0.9, grav: 0.6, spread: 1.2 });
+      recalc();
+      return true;
+    }
+    case 'enchrm': {
+      const it = UI.enchSel, i = +b.dataset.i;
+      if (!ownsItem(ch, it) || !it.ench || !it.ench[i]) return true;
+      if (!confirmed || UI.enchRm !== i) { UI.npcConfirm = a; UI.enchRm = i; return true; }
+      const r = removeEnchant(ch, it, i);
+      if (!r.ok) { if (r.why === 'gold') log('Ouro insuficiente: retirar custa ' + fmt(r.cost) + '.', 'warn'); return true; }
+      log('Retirou ' + R.enchantText(r.ench) + ' de ' + R.itemName(it) + ' por ' + fmt(r.cost) + ' de Ouro.', 'sys');
+      Sfx.coin();
+      recalc();
+      return true;
+    }
+    case 'combin': {
+      const j = b.dataset.j, picks = UI.combo || [];
+      if (!R.COMBINE.inputs.includes(j) || picks.length >= R.COMBINE.n) return true;
+      if (jewelCount(ch, j) - picks.filter((x) => x === j).length > 0) UI.combo = picks.concat(j);
+      UI.comboLast = null;
+      return true;
+    }
+    case 'combsame': if (R.COMBINE.inputs.includes(b.dataset.j)) UI.combo = Array(R.COMBINE.n).fill(b.dataset.j); UI.comboLast = null; return true;
+    case 'combout': { const p = (UI.combo || []).slice(); p.splice(+b.dataset.i, 1); UI.combo = p; UI.comboLast = null; return true; }
+    case 'combine': {
+      const n = +b.dataset.n === 10 ? 10 : 1, picks = UI.combo || [];
+      if (n > 1 && (!confirmed || UI.comboN !== n)) { UI.npcConfirm = a; UI.comboN = n; return true; }
+      const r = combineJewels(ch, picks, Math.random, bagCap(ch), n);
+      if (!r.ok) { log(r.why === 'full' ? 'Mochila cheia: libere um espaço para a joia nova.' : 'Faltam joias ou Ouro para combinar.', 'warn'); return true; }
+      UI.comboLast = r.got;
+      // a receita continua na forja se ainda houver joias para repetir
+      if (!combineTimes(ch, picks)) UI.combo = picks.filter((j, i) => jewelCount(ch, j) > picks.slice(0, i).filter((x) => x === j).length);
+      const dk = r.got.filter((j) => j === 'dark').length;
+      if (dk) { log('A combinação revelou ' + (dk > 1 ? dk + ' Joias da Escuridão!' : 'uma Joia da Escuridão!'), 'loot'); toast(DARK().name, 'Saiu na combinação!'); Sfx.level(); }
+      else { log('Combinou joias: ' + r.got.map((j) => R.JEWELS[j].name).join(', ') + '.', 'loot'); Sfx.loot(3); }
+      return true;
+    }
+  }
+  return false;
+}
+return { enchantAction, enchantSection };
+})();
+
 // ---- ui/cursor.js ----
 const { MCUR, initCursor, mcurSet } = (() => {
 // Cursor medieval desenhado pelo jogo: sempre visível (o sistema pode esconder o
@@ -15670,7 +16017,7 @@ function openNpc(id) {
       (left ? '<button class="btn sm" disabled>Adormecido · ' + fmtWait(left) + '</button>' : '<button class="btn sm gold" data-npc="eden">Entrar</button>') + '</div></div></div>';
     h += '<p class="note" style="margin-top:10px">' + (left ? 'O portal volta a abrir em <b>' + fmtWait(left) + '</b>.' : 'Ao entrar, o portal adormece por 3 horas, mesmo que você saia antes ou caia lá dentro.') + '</p>' +
       '<p class="note">Três caminhos (Floresta, Raízes e Rio) levam ao Coração do Éden. A dificuldade se ajusta ao seu nível na entrada.</p>' +
-      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro.</p>';
+      '<p class="note">Drops: ' + Math.round(E.rare.normal * 100) + '% de joia ou item Ancestral (mais nos mini chefes e no Guardião), ' + Math.round(E.legend.boss * 100) + '% de item Lendário nos mini chefes e no Guardião, ' + Math.round(E.talisman * 100) + '% de Talismã da Sorte (sempre no Guardião) e ' + Math.round(E.buffPotion.normal * 100) + '% de poções de reforço em qualquer monstro. A rara <b style="font:inherit;color:' + R.JEWELS.dark.color + '">' + R.JEWELS.dark.name + '</b> cai aqui com ' + String(R.DARK_DROP.eden * 100).replace('.', ',') + '% por monstro (' + String(R.DARK_DROP.other * 100).replace('.', ',') + '% nos outros mapas).</p>';
   } else if (id === 'smith') {
     const all = smithList(ch);
     const nEq = R.SLOTS.filter((s) => ch.equip[s]).length;
@@ -15740,6 +16087,8 @@ function openNpc(id) {
           : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
   } else if (id === 'chest') {
     h += chestSection(ch);
+  } else if (id === 'enchant') {
+    h += enchantSection(ch, { list: smithList, card: smithCard, selHtml: smithSelHtml });
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -15901,6 +16250,7 @@ function npcAction(e) {
       log('Mestre Orvan expandiu sua mochila: página 2 liberada (' + R.bagSize(ch) + ' espaços, I).', 'sys');
       break;
     }
+    default: enchantAction(a, b, ch, confirmed);
   }
   persist();
   const dlg = $('#dialog'), sl = dlg.querySelector('.smithlist');
@@ -15952,7 +16302,7 @@ function spawnNpcs(L) {
     world.add(model.root);
     const label = document.createElement('div');
     label.className = 'label npc';
-    // NPC ainda sem função (Kora, arena): selo "Em breve" claro no rótulo
+    // NPC ainda sem função: selo "Em breve" claro no rótulo
     label.innerHTML = esc(D.name) + '<small>' + esc(D.role.split(' · ')[0]) + (D.soon ? ' <em class="soon">Em breve</em>' : '') + '</small>';
     label.addEventListener('pointerdown', (e) => { e.stopPropagation(); targetNpc(npc); });
     overlay.appendChild(label);
@@ -16171,7 +16521,7 @@ const FOLK = [
   { look: { skin: 0xd8a878, cloth: 0xb03a3a, cloth2: 0xe8e0cc, hair: 0x3a2a1a, hairStyle: 'long', dress: true, scale: 0.6, child: true }, child: true, says: ['Hihi!', 'O cachorro é seu?', 'Minha mãe mandou eu voltar cedo.'] },
   { look: { skin: 0xd8b890, cloth: 0x5a5a6a, cloth2: 0x4a4a58, hat: 'hood', beard: true, hair: 0xd8d8d8, carry: 'lantern', dress: true }, says: ['Que a luz te guie.', 'Eu era jovem quando ergueram a fonte.', 'Aldrena já viu dias piores.'] },
   { look: { skin: 0xb07a50, cloth: 0x5a3a2a, cloth2: 0x3a2a20, hair: 0x1a1210, apron: true, beard: true }, says: ['O mestre Hanzo não dorme nunca.', 'Carvão para a forja!', 'Essa lâmina aí precisa de um reparo.'] },
-  { look: { skin: 0xf0c8a0, cloth: 0x4a7a6a, cloth2: 0x3a3a2a, hair: 0xa04a2a, hairStyle: 'bun', dress: true, carry: 'basket' }, says: ['Pão quentinho!', 'Já foi à arena da Kora?', 'Boa noite!'] },
+  { look: { skin: 0xf0c8a0, cloth: 0x4a7a6a, cloth2: 0x3a3a2a, hair: 0xa04a2a, hairStyle: 'bun', dress: true, carry: 'basket' }, says: ['Pão quentinho!', 'A Morgana encanta qualquer coisa!', 'Boa noite!'] },
 ];
 const GUARD = { look: { gltf: 'knight', skin: 0xd0a080, cloth: 0x2a4a7a, armor: 0x6a6e7a, trim: 0xb0903a, head: 'helm', weapon: 'sword', shield: true, shieldColor: 0x2a4a7a, scale: 1.0 }, says: ['Ronda da noite. Tudo em ordem.', 'Circulando, circulando.', 'Nenhum monstro passa da paliçada.'] };
 
@@ -18303,7 +18653,7 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
-    // moldura viva do Portal do Éden, no fundo da rua entre a Kora e o Varek
+    // moldura viva do Portal do Éden, no fundo da rua entre a Morgana e o Varek
     if (L.eden) { placeKit('edenArch', [L.eden], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 })); torches.push({ x: L.eden.x * T, y: 2.4, z: L.eden.z * T, green: true }); }
     // luz fria na porta da Torre Infinita (a porta olha para a praça)
     if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }
@@ -19924,14 +20274,14 @@ const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.id] && !
 
 function itemColor(it) { return it.rarity ? R.RARITY[it.rarity].color : glyph(it).c; }
 function itemSub(it) {
-  if (it.kind === 'jewel') return 'Joia · material de refino';
+  if (it.kind === 'jewel') return it.id === 'dark' ? 'Joia · encantamento' : 'Joia · material de refino';
   if (it.kind === 'talisman') return 'Talismã · material de refino';
   if (it.kind === 'ticket') return 'Ticket · Auto-Limpeza';
   if (it.kind === 'potion') return 'Consumível';
   return R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · Tier ' + (it.tier + 1) + (it.plus ? ' · <b class="lv">+' + it.plus + '</b>' : '');
 }
 function itemDesc(it) {
-  if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + (it.id === 'dark' ? '' : ' Use no Ferreiro Hanzo. Três joias também viram uma aleatória na Encantadora Morgana.');
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'ticket' && it.id === 'tower') return 'No portal da Torre Infinita, escolha Auto-Limpeza: o herói começa no andar 1 ou no seu recorde (você escolhe), derrota todos os monstros e o chefe e só então sobe. Cada ticket vale um andar; com mais tickets, ele segue subindo.';
   if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar, derrota o chefe e desce logo depois dele. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
@@ -19961,6 +20311,7 @@ function itemInfoHtml(it, where) {
     if (it.anc) a += '<div class="ln anc">Ancestral: ' + statLabel(it.anc.stat) + ' +' + it.anc.value + '</div>';
     if (it.legend) a += '<div class="ln leg">Lendário: ' + esc(R.LEGEND[it.legend].t) + '</div>';
     if (a) h += '<div class="sec">' + a + '</div>';
+    if (it.ench && it.ench.length) h += '<div class="sec">' + it.ench.map((e) => '<div class="ln ench" style="color:' + R.ENCH_GRADES[e.g].color + '">✦ ' + esc(R.enchantText(e)) + ' <small>(' + R.ENCH_GRADES[e.g].name + ')</small></div>').join('') + '</div>';
     const req = R.itemReq(it);
     let r = '';
     if (req) {
@@ -20134,6 +20485,8 @@ const InventoryPages = {
 /** Brilho discreto para Excelente ou melhor, joias e talismãs. */
 const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 /** Cadeado dos itens trancados (nunca vendidos nem descartados). */
+/** Encantamentos (Joia da Escuridão): uma estrela por linha, na cor do maior grau. */
+const enchMark = (it) => (it.ench && it.ench.length ? '<span class="en" title="' + it.ench.length + (it.ench.length > 1 ? ' encantamentos' : ' encantamento') + '" style="color:' + R.ENCH_GRADES[Math.max(...it.ench.map((e) => e.g))].color + '">' + '✦'.repeat(it.ench.length) + '</span>' : '');
 const LOCK_SVG = '<span class="lk" title="Trancado" style="position:absolute;right:2px;bottom:13px;width:10px;height:11px;line-height:0;filter:drop-shadow(0 1px 1px #000)"><svg viewBox="0 0 10 11" width="10" height="11" aria-hidden="true"><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#e8d9a8" stroke-width="1.4"/><rect x="1" y="5" width="8" height="6" rx="1" fill="#e8d9a8"/></svg></span>';
 /** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
 function InventoryItem(it, attrs, ctx) {
@@ -20156,7 +20509,7 @@ function InventoryItem(it, attrs, ctx) {
   const pl = it.plus || 0, rf = pl >= 10 ? '#' + refineColor(pl).toString(16).padStart(6, '0') : '';
   return '<button class="cell' + (isRare(it) ? ' rare' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + 'aa;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + (it.locked ? LOCK_SVG : '') + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + enchMark(it) + (it.locked ? LOCK_SVG : '') + '</button>';
 }
 function EquipmentSlot(s, it, cls) {
   if (it) return InventoryItem(it, ' data-act="seleq" data-slot="' + s + '"').replace('class="cell', 'class="cell eq');
@@ -20775,7 +21128,7 @@ function genTown() {
   const tower = { x: cx + 11, z: cz + 11 };
   block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
   for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
-  // Portal do Éden: no fim da rua de baixo, entre a Kora (arena) e o Varek (torre)
+  // Portal do Éden: no fim da rua de baixo, entre a Morgana (encantadora) e o Varek (torre)
   const eden = { x: cx + 1, z: cz + 14 };
   for (let i = props.length - 1; i >= 0; i--) {
     const p = props[i];
@@ -20789,7 +21142,7 @@ function genTown() {
     { id: 'merchant', x: cx + 6, z: cz - 7 },
     { id: 'portal', x: cx + 1, z: cz - 9 },
     { id: 'master', x: cx - 9, z: cz + 3 },
-    { id: 'duel', x: cx - 5, z: cz + 9 },
+    { id: 'enchant', x: cx - 5, z: cz + 9 },
     { id: 'chest', x: cx + 9, z: cz + 4 },
   ];
   // Baú da conta ao lado da Dalva (sólido; a tampa fica fechada)
@@ -21391,7 +21744,8 @@ function dropLoot(x, z, l) {
   mesh.position.y = 0.12;
   mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
-  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' || l.type === 'ticket' ? 3 : 0;
+  // Joia da Escuridão (rara): feixe forte como o de um Lendário
+  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' && l.id === 'dark' ? 4 : l.type === 'jewel' || l.type === 'talisman' || l.type === 'ticket' ? 3 : 0;
   // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
   if (ord >= 1) {
     const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
@@ -21419,6 +21773,7 @@ function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+  if (l.type === 'jewel' && l.id === 'dark') { log('Uma Joia da Escuridão caiu!', 'loot'); Sfx.loot(4); }
   if (G.loot.length > CONFIG.loot.maxGround) trimLoot(G.loot.length - CONFIG.loot.maxGround);
 }
 /** Remove `n` objetos do chão: primeiro os de menor raridade, entre eles os mais antigos. */
@@ -21488,7 +21843,7 @@ function removeLootVisual(l) {
 function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
-  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
+  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; const dk = l.id === 'dark'; log('Obteve ' + R.JEWELS[l.id].name + (dk ? '! Leve à Encantadora Morgana.' : '.'), 'loot'); Sfx.loot(dk ? 4 : 3); if (dk) toast(R.JEWELS.dark.name, 'Encante um equipamento com a Morgana'); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use ' + (l.id === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot'); Sfx.loot(4); }
@@ -22212,7 +22567,7 @@ function dropTowerLoot(m, src, seed) {
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   if (src !== 'boss') return;
-  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
+  if (drop.gold) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
   else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
 }
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */

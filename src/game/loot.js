@@ -13,7 +13,7 @@ import { pathTo } from './movement.js';
 import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { glyph } from '../ui/icons.js';
-import { log } from '../ui/log.js';
+import { log, toast } from '../ui/log.js';
 import { gy, walkable } from '../world/grid.js';
 
 function lootLabel(l) {
@@ -38,7 +38,8 @@ export function dropLoot(x, z, l) {
   mesh.position.y = 0.12;
   mesh.scale.setScalar(kind === 'gold' ? 1.5 : 1.6);
   g.add(mesh);
-  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' || l.type === 'talisman' || l.type === 'ticket' ? 3 : 0;
+  // Joia da Escuridão (rara): feixe forte como o de um Lendário
+  const ord = l.type === 'item' ? R.RARITY[l.item.rarity].order : l.type === 'jewel' && l.id === 'dark' ? 4 : l.type === 'jewel' || l.type === 'talisman' || l.type === 'ticket' ? 3 : 0;
   // mancha de luz da raridade no chão: acha o item de longe sem poluir o cenário
   if (ord >= 1) {
     const pool = new THREE.Mesh(GEO.disc, glowShared(col, ord >= 2 ? 0.16 : 0.1));
@@ -66,6 +67,7 @@ export function dropLoot(x, z, l) {
   overlay.appendChild(el);
   l.el = el;
   G.loot.push(l);
+  if (l.type === 'jewel' && l.id === 'dark') { log('Uma Joia da Escuridão caiu!', 'loot'); Sfx.loot(4); }
   if (G.loot.length > CONFIG.loot.maxGround) trimLoot(G.loot.length - CONFIG.loot.maxGround);
 }
 /** Remove `n` objetos do chão: primeiro os de menor raridade, entre eles os mais antigos. */
@@ -135,7 +137,7 @@ function removeLootVisual(l) {
 export function pickup(l) {
   const ch = G.ch;
   if (l.type === 'gold') { ch.gold += Number.isFinite(l.amount) ? l.amount : 0; Sfx.coin(); }
-  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; log('Obteve ' + R.JEWELS[l.id].name + '.', 'loot'); Sfx.loot(3); questEvent('jewel', l.id); }
+  else if (l.type === 'jewel') { if (!addToBag({ kind: 'jewel', id: l.id, qty: 1, uid: 'j' + l.id })) return false; const dk = l.id === 'dark'; log('Obteve ' + R.JEWELS[l.id].name + (dk ? '! Leve à Encantadora Morgana.' : '.'), 'loot'); Sfx.loot(dk ? 4 : 3); if (dk) toast(R.JEWELS.dark.name, 'Encante um equipamento com a Morgana'); questEvent('jewel', l.id); }
   else if (l.type === 'potion') { if (!addToBag({ kind: 'potion', id: l.id, qty: 1, uid: 'p' + l.id })) return false; if (R.POTIONS[l.id].buff) log('Obteve ' + R.POTIONS[l.id].name + '.', 'loot'); }
   else if (l.type === 'talisman') { if (!addToBag({ kind: 'talisman', id: l.id, qty: 1, uid: 't' + l.id })) return false; log('Obteve ' + R.TALISMANS[l.id].name + '!', 'loot'); Sfx.loot(4); }
   else if (l.type === 'ticket') { if (!addToBag({ kind: 'ticket', id: l.id, qty: 1, uid: 'k' + l.id })) return false; log('Obteve ' + R.TICKETS[l.id].name + '! Use ' + (l.id === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot'); Sfx.loot(4); }

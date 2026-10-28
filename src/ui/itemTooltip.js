@@ -41,14 +41,14 @@ export const drinkable = (it) => !!(it && it.kind === 'potion' && R.POTIONS[it.i
 
 function itemColor(it) { return it.rarity ? R.RARITY[it.rarity].color : glyph(it).c; }
 function itemSub(it) {
-  if (it.kind === 'jewel') return 'Joia · material de refino';
+  if (it.kind === 'jewel') return it.id === 'dark' ? 'Joia · encantamento' : 'Joia · material de refino';
   if (it.kind === 'talisman') return 'Talismã · material de refino';
   if (it.kind === 'ticket') return 'Ticket · Auto-Limpeza';
   if (it.kind === 'potion') return 'Consumível';
   return R.RARITY[it.rarity].name + ' · ' + R.SLOT_LABEL[it.slot] + ' · Tier ' + (it.tier + 1) + (it.plus ? ' · <b class="lv">+' + it.plus + '</b>' : '');
 }
 function itemDesc(it) {
-  if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + ' Use no Ferreiro Hanzo.';
+  if (it.kind === 'jewel') return esc(R.JEWELS[it.id].desc) + (it.id === 'dark' ? '' : ' Use no Ferreiro Hanzo. Três joias também viram uma aleatória na Encantadora Morgana.');
   if (it.kind === 'talisman') return esc(R.TALISMANS[it.id].desc) + ' Use no Ferreiro Hanzo.';
   if (it.kind === 'ticket' && it.id === 'tower') return 'No portal da Torre Infinita, escolha Auto-Limpeza: o herói começa no andar 1 ou no seu recorde (você escolhe), derrota todos os monstros e o chefe e só então sobe. Cada ticket vale um andar; com mais tickets, ele segue subindo.';
   if (it.kind === 'ticket') return 'Na Guardiã Nyx, escolha Auto-Limpeza: o herói entra no andar mais fundo liberado desta masmorra, limpa o andar, derrota o chefe e desce logo depois dele. Cada ticket vale um andar; com mais tickets, ele segue descendo.';
@@ -78,6 +78,7 @@ export function itemInfoHtml(it, where) {
     if (it.anc) a += '<div class="ln anc">Ancestral: ' + statLabel(it.anc.stat) + ' +' + it.anc.value + '</div>';
     if (it.legend) a += '<div class="ln leg">Lendário: ' + esc(R.LEGEND[it.legend].t) + '</div>';
     if (a) h += '<div class="sec">' + a + '</div>';
+    if (it.ench && it.ench.length) h += '<div class="sec">' + it.ench.map((e) => '<div class="ln ench" style="color:' + R.ENCH_GRADES[e.g].color + '">✦ ' + esc(R.enchantText(e)) + ' <small>(' + R.ENCH_GRADES[e.g].name + ')</small></div>').join('') + '</div>';
     const req = R.itemReq(it);
     let r = '';
     if (req) {

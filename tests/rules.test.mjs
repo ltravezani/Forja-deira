@@ -76,11 +76,13 @@ test('torre: só Gold e Jewels; monstros ~10% de Jewel, chefe ~20% de tesouro', 
   for (let i = 0; i < N; i++) {
     const d = R.rollTowerDrop({ seed: R.hash32('tw', i), mLevel: 60, src: 'normal' });
     assert.deepEqual(Object.keys(d).sort(), ['bossRoll', 'gold', 'jewels']);
-    assert.ok(d.jewels.length <= 1);
+    const dj = d.jewels.filter((j) => j !== 'dark');
+    assert.ok(dj.length <= 1);
     for (const j of d.jewels) assert.ok(R.JEWELS[j]);
-    jewels += d.jewels.length; if (d.gold) gold++;
+    jewels += dj.length; if (d.gold) gold++;
     const b = R.rollTowerDrop({ seed: R.hash32('twb', i), mLevel: 60, src: 'boss' });
-    if (b.gold || b.jewels.length) { bossHit++; assert.ok(b.gold > 0 && b.jewels.length >= 1 && b.jewels.length <= 3); }
+    const bj = b.jewels.filter((j) => j !== 'dark'); // Joia da Escuridão: sorteio à parte (0,1%)
+    if (b.gold || bj.length) { bossHit++; assert.ok(b.gold > 0 && bj.length >= 1 && bj.length <= 3); }
   }
   assert.ok(Math.abs(jewels / N - 0.1) < 0.015, 'jewel ' + jewels / N);
   assert.ok(Math.abs(bossHit / N - 0.2) < 0.015, 'chefe ' + bossHit / N);
