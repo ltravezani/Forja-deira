@@ -6,7 +6,7 @@ import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
 import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
-import { addToBag, BAG_SIZE, classOk, fmtCP, potionCount } from '../game/inventory.js';
+import { addToBag, bagCap, classOk, fmtCP, potionCount } from '../game/inventory.js';
 import { CHEST_SIZE, deposit, withdraw } from '../game/chest.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
@@ -62,7 +62,7 @@ function chestSection(ch) {
   h += head('Baú da conta', chest.length, CHEST_SIZE) + top.h;
   const bot = chestList(ch.bag, 'chestin', 'Guardar', 'Nada ' + (f === 'all' ? '' : 'desta categoria ') + 'na mochila.');
   chestBagRows = bot.rows;
-  h += head('Mochila de ' + esc(ch.name), ch.bag.length, BAG_SIZE) + bot.h;
+  h += head('Mochila de ' + esc(ch.name), ch.bag.length, bagCap(ch)) + bot.h;
   return h + '<p class="note" style="margin-top:10px">O baú é da conta: todos os seus personagens guardam e retiram os mesmos itens, e ele vai junto no save da nuvem. Joias, poções, talismãs e tickets do mesmo tipo empilham num espaço só. Itens equipados não aparecem aqui: tire-os no inventário (I) antes de guardar.</p>';
 }
 function sellSection(ch) {
@@ -301,6 +301,13 @@ export function openNpc(id) {
     h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
       ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
       : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 de Ouro</button>');
+    const bx = R.canExpandBag(ch);
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Expansão da mochila</h4>' + (ch.bagExp
+      ? '<p class="note">Mochila expandida: páginas 1 e 2 liberadas (' + R.bagSize(ch) + ' espaços).</p>'
+      : '<p class="note">Libera a página 2 do inventário (I): +' + R.RATES.bagPage + ' espaços, ' + R.bagSize(ch) + ' → ' + R.RATES.bagPage * 2 + '. Vale só para este personagem.</p>' +
+        (UI.npcConfirm === 'bagexp' && bx.ok
+          ? '<div class="row"><button class="btn sm gold" data-npc="bagexp" data-ok="1">Confirmar expansão · ' + fmt(bx.cost) + ' de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
+          : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
   } else if (id === 'chest') {
     h += chestSection(ch);
   } else if (NPCS[id] && NPCS[id].soon) {
@@ -401,7 +408,7 @@ function npcAction(e) {
     case 'chestin': case 'chestout': {
       const out = a === 'chestout', it = (out ? chestRows : chestBagRows)[+b.dataset.i];
       if (!it) break;
-      const r = out ? withdraw(ch, S.chest, it, +b.dataset.n, BAG_SIZE) : deposit(ch, S.chest, it, +b.dataset.n);
+      const r = out ? withdraw(ch, S.chest, it, +b.dataset.n, bagCap(ch)) : deposit(ch, S.chest, it, +b.dataset.n);
       if (!r.ok) { if (r.why === 'full') log(out ? 'Mochila cheia: libere espaço para retirar do baú.' : 'O baú está cheio (' + CHEST_SIZE + ' espaços).', 'warn'); break; }
       if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
       log((out ? 'Retirou do baú: ' : 'Guardou no baú: ') + R.itemName(it) + (r.n > 1 ? ' ×' + fmt(r.n) : '') + '.', 'loot');
@@ -452,6 +459,16 @@ function npcAction(e) {
       if (!confirmed) { UI.npcConfirm = a; break; }
       ch.gold -= 100000; ch.tree = {}; recalc();
       log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
+      break;
+    }
+    case 'bagexp': {
+      const c = R.canExpandBag(ch);
+      if (!c.ok) { log('Expansão da mochila: ' + c.reasons.join(', ') + '.', 'warn'); break; }
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      if (!R.applyExpandBag(ch).ok) break;
+      UI.bagPage = 1;
+      Sfx.level(); toast('Mochila expandida', 'Página 2 liberada · ' + R.bagSize(ch) + ' espaços');
+      log('Mestre Orvan expandiu sua mochila: página 2 liberada (' + R.bagSize(ch) + ' espaços, I).', 'sys');
       break;
     }
   }

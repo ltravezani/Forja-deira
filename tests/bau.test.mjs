@@ -45,6 +45,21 @@ test('Baú: respeita o limite de espaços do baú e da mochila', async () => {
   assert.equal(deposit(ch, chest, sword('fora'), 1).why, 'gone');
 });
 
+test('Baú: retirar usa a mochila expandida (página 2 do Mestre Orvan)', async () => {
+  const { withdraw } = await load('game/chest.js');
+  const ch = R.newCharacter('T', 'dk');
+  ch.bag = Array.from({ length: R.RATES.bagPage }, (_, i) => sword('b' + i));
+  const chest = [sword('c1'), sword('c2')];
+  assert.equal(withdraw(ch, chest, chest[0], 1, R.bagSize(ch)).why, 'full');
+  ch.gold = R.RATES.bagExpandGold;
+  assert.ok(R.applyExpandBag(ch).ok);
+  assert.ok(withdraw(ch, chest, chest[0], 1, R.bagSize(ch)).ok);
+  assert.equal(ch.bag.length, R.RATES.bagPage + 1);
+  ch.bag.length = R.bagSize(ch);
+  ch.bag.fill(sword('z'), R.RATES.bagPage + 1);
+  assert.equal(withdraw(ch, chest, chest[0], 1, R.bagSize(ch)).why, 'full');
+});
+
 test('loadSave: baú vem vazio em saves antigos e descarta itens desconhecidos', async () => {
   const { loadSave, S } = await load('core/state.js');
   loadSave({ chars: [{ name: 'A', cls: 'dk', bag: [], equip: {} }], active: 0 });

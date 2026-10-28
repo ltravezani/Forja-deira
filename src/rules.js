@@ -29,6 +29,8 @@
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
     chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
+    bagPage: 48,                // células por página da mochila
+    bagExpandGold: 10000000,    // Mestre Orvan: libera a página 2 da mochila (por personagem)
   };
   const resetGoldCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
 
@@ -1044,6 +1046,22 @@
     ch.tree = {}; // a árvore de maestria é zerada; os pontos voltam para redistribuir
     return { ok: true, points: ch.points };
   }
+  /** Páginas da mochila liberadas (1 base + expansões do Mestre Orvan, máximo 2). */
+  function bagPages(ch) { return 1 + (ch.bagExp ? 1 : 0); }
+  function bagSize(ch) { return bagPages(ch) * RATES.bagPage; }
+  function canExpandBag(ch) {
+    const reasons = [];
+    if (ch.bagExp) reasons.push('Mochila já expandida');
+    else if (ch.gold < RATES.bagExpandGold) reasons.push(RATES.bagExpandGold.toLocaleString('pt-BR') + ' de Ouro');
+    return { ok: reasons.length === 0, reasons, cost: RATES.bagExpandGold };
+  }
+  function applyExpandBag(ch) {
+    const c = canExpandBag(ch);
+    if (!c.ok) return c;
+    ch.gold -= c.cost;
+    ch.bagExp = 1;
+    return { ok: true, size: bagSize(ch) };
+  }
   /**
    * Risco de enfrentar monstros de nível `monLevel` com um herói de nível `heroLevel`
    * (cor do portal): 'easy' 40+ níveis abaixo (pouca EXP), 'ok' até 5 acima, 'hard' até 25, 'deadly' além disso.
@@ -1086,7 +1104,7 @@
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, activeItems, itemActive, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
-    canReset, applyReset, levelRisk, canEvolve, autoDistribute, today,
+    canReset, applyReset, bagPages, bagSize, canExpandBag, applyExpandBag, levelRisk, canEvolve, autoDistribute, today,
   };
 });
 

@@ -148,7 +148,6 @@ export const CONFIG = {
   audio: {
     maxVoicesPerFrame: 6,   // sons iniciados por quadro (evita estouro em AoE)
   },
-  bag: { size: 48 },
   // Baú da conta (NPC Dalva): espaços compartilhados por todos os personagens do save
   chest: { size: 40 },
   // Save na nuvem (Supabase). Só a chave PÚBLICA (anon/publishable) pode ficar aqui:

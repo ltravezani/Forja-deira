@@ -3,7 +3,7 @@ import { CONFIG } from '../core/config.js';
 import { G } from '../core/state.js';
 import { dist2, R } from '../core/util.js';
 import { petSellable, sendPetToSell } from './allies.js';
-import { BAG_SIZE, classOk, cpOf, cpWith, reqOk } from './inventory.js';
+import { bagCap, classOk, cpOf, cpWith, reqOk } from './inventory.js';
 import { castSkill, cdLeft, skillUnlocked, visibleMonster } from './skills.js';
 import { inSafe } from './zones.js';
 import { autoClearOn } from './autoClear.js';
@@ -64,7 +64,7 @@ function autoPetSell() {
   if (!pet || pet.away > G.time || G.autoEqT > 0) return;
   const base = cpOf(ch);
   const n = ch.bag.filter((it) => autoSellable(it, base)).length;
-  if (!n || (n < CONFIG.loot.autoPetSellMin && ch.bag.length < BAG_SIZE - 2)) return;
+  if (!n || (n < CONFIG.loot.autoPetSellMin && ch.bag.length < bagCap(ch) - 2)) return;
   sendPetToSell((it) => autoSellable(it, base));
 }
 
