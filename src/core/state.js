@@ -74,7 +74,7 @@ export function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, smithView: 'all', smithSlot: 'all', confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
+export const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, smithView: 'all', smithSlot: 'all', confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', bagPage: 0, merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -95,6 +95,7 @@ export function sanitizeCharacter(ch) {
   for (const k of ['level', 'exp', 'gold', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
   ch.level = Math.max(1, Math.floor(ch.level));
   if (!Array.isArray(ch.bag)) ch.bag = [];
+  ch.bagExp = ch.bagExp ? 1 : 0; // página 2 da mochila (Mestre Orvan)
   ch.bag = ch.bag.filter((it) => it && typeof it === 'object' && (it.slot || it.kind));
   if (!ch.equip || typeof ch.equip !== 'object') ch.equip = {};
   for (const k of Object.keys(ch.equip)) if (!ch.equip[k] || !ch.equip[k].slot) delete ch.equip[k];

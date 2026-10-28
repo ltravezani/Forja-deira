@@ -417,6 +417,11 @@ input.fld, select.fld { background: #0f0b15; border: 1px solid var(--edge); colo
 .btab { font: inherit; font-size: 12px; padding: 4px 9px; background: #120e19; color: var(--muted); border: 1px solid #3a2f48; border-radius: 3px; cursor: pointer; flex: 0 1 auto; white-space: nowrap; }
 .btab span { font-family: var(--f-num); opacity: .7; }
 .btab.on { color: var(--gold); border-color: var(--gold); background: rgba(214,178,94,.1); }
+.bagpages { align-items: center; }
+.bagpages:empty { display: none; }
+.btab.pg.lockd { border-style: dashed; }
+.bagpages .pgnote { font-size: 12px; color: var(--muted); flex: 1 1 160px; }
+.cell.lockd { opacity: .35; background: repeating-linear-gradient(135deg, #120e19 0 6px, #1b1524 6px 12px); }
 .bag { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cellMin, 62px), 1fr)); gap: 5px; }
 @media (min-width: 761px) and (max-width: 999px) { .bag { --cellMin: 84px; } }
 @media (max-width: 760px) { .bag { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -5766,6 +5771,8 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     resetBonusPerLevel: 3,      // bônus por nível acima de 400 no momento do reset
     maxResets: 100,
     chaosFeeGold: 1000000,       // taxa em Gold da fusão Chaos (+10..+15)
+    bagPage: 48,                // células por página da mochila
+    bagExpandGold: 10000000,    // Mestre Orvan: libera a página 2 da mochila (por personagem)
   };
   const resetGoldCost = (resets) => Math.min(500000 * (resets + 1), 20000000);
 
@@ -6781,6 +6788,22 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     ch.tree = {}; // a árvore de maestria é zerada; os pontos voltam para redistribuir
     return { ok: true, points: ch.points };
   }
+  /** Páginas da mochila liberadas (1 base + expansões do Mestre Orvan, máximo 2). */
+  function bagPages(ch) { return 1 + (ch.bagExp ? 1 : 0); }
+  function bagSize(ch) { return bagPages(ch) * RATES.bagPage; }
+  function canExpandBag(ch) {
+    const reasons = [];
+    if (ch.bagExp) reasons.push('Mochila já expandida');
+    else if (ch.gold < RATES.bagExpandGold) reasons.push(RATES.bagExpandGold.toLocaleString('pt-BR') + ' de Ouro');
+    return { ok: reasons.length === 0, reasons, cost: RATES.bagExpandGold };
+  }
+  function applyExpandBag(ch) {
+    const c = canExpandBag(ch);
+    if (!c.ok) return c;
+    ch.gold -= c.cost;
+    ch.bagExp = 1;
+    return { ok: true, size: bagSize(ch) };
+  }
   /**
    * Risco de enfrentar monstros de nível `monLevel` com um herói de nível `heroLevel`
    * (cor do portal): 'easy' 40+ níveis abaixo (pouca EXP), 'ok' até 5 acima, 'hard' até 25, 'deadly' além disso.
@@ -6823,7 +6846,7 @@ window.THREE_GLTF = { GLTFLoader, cloneSkinned: clone };
     EDEN, edenRemaining, edenEntryLevel, edenLevel, rollEdenDrop,
     upgradeChance, upgradeCost, applyUpgrade, talismanUseful, WING_UP, wingUpgradeChance, applyWingUpgrade, wingBonus, monsterStats,
     newCharacter, className, activeItems, itemActive, deriveStats, combatPower, itemCP, rollDamage, skillCost, gainExp,
-    canReset, applyReset, levelRisk, canEvolve, autoDistribute, today,
+    canReset, applyReset, bagPages, bagSize, canExpandBag, applyExpandBag, levelRisk, canEvolve, autoDistribute, today,
   };
 });
 
@@ -6984,7 +7007,6 @@ const CONFIG = {
   audio: {
     maxVoicesPerFrame: 6,   // sons iniciados por quadro (evita estouro em AoE)
   },
-  bag: { size: 48 },
   // Save na nuvem (Supabase). Só a chave PÚBLICA (anon/publishable) pode ficar aqui:
   // quem protege os dados é o Row Level Security da tabela `saves`
   // (supabase/migrations/). Chave vazia = nuvem desligada, o jogo segue só local.
@@ -8414,7 +8436,7 @@ const NPCS = {
   smith: { name: 'Hanzo', role: 'Ferreiro · aprimoramento com Joias e evolução de asas', look: { gltf: 'barbarian', skin: 0xc08a60, cloth: 0x5a3a2a, armor: 0x6a5a4a, head: 'human', weapon: 'club', bulky: true }, say: 'A Bênção leva até +6 sem falhar. A Alma é sorte. O Caos… o Caos é fé. Mas aqui ninguém perde item: no pior caso volta a +0. Com um Talismã da Sorte, nem isso.' },
   merchant: { name: 'Lira', role: 'Mercadora · vende poções e tickets de Auto-Limpeza; compra joias, poções e equipamentos Comuns e Mágicos', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas e tickets para a Guardiã Nyx! E se o seu pet estiver ocupado, eu compro suas joias, poções e os equipamentos Comuns e Mágicos.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
-  master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
+  master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore · Mochila', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
   tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { gltf: 'knight', skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra Ouro e Joias. Derrote o guardião de cada andar e suba o quanto aguentar.' },
   // não é um NPC na praça: cabeçalho da janela do portal (entre Kora e Varek)
   eden: { name: 'Portal do Éden', role: 'Uma entrada a cada 3 horas', look: {}, say: 'Além deste portal há uma terra que nunca conheceu o inverno. Três caminhos levam ao Coração do Éden, onde o Guardião vela a Árvore-Mãe. O portal adormece por três horas depois que alguém o atravessa.' },
@@ -8739,7 +8761,7 @@ function persist() {
 }
 
 /** Estado da interface (aba aberta, seleção no inventário, tela de título). */
-const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, smithView: 'all', smithSlot: 'all', confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
+const UI = { tab: null, sel: null, paneDirty: false, pickedClass: 'dk', smithSel: null, smithView: 'all', smithSlot: 'all', confirmDel: -1, confirmWipe: false, titleMode: 'select', titleIdx: null, bagFilter: 'all', bagPage: 0, merchFilter: 'all', merchConfirm: null, itemConfirm: null, npcConfirm: null, ptr: false, lastCell: null, smithTalisman: false, tipOpen: false, tipAt: 0 };
 
 const num = (v, d) => (Number.isFinite(v) ? v : d);
 /**
@@ -8760,6 +8782,7 @@ function sanitizeCharacter(ch) {
   for (const k of ['level', 'exp', 'gold', 'points', 'resets', 'tier', 'bossKills']) ch[k] = Math.max(0, num(ch[k], base[k] || 0));
   ch.level = Math.max(1, Math.floor(ch.level));
   if (!Array.isArray(ch.bag)) ch.bag = [];
+  ch.bagExp = ch.bagExp ? 1 : 0; // página 2 da mochila (Mestre Orvan)
   ch.bag = ch.bag.filter((it) => it && typeof it === 'object' && (it.slot || it.kind));
   if (!ch.equip || typeof ch.equip !== 'object') ch.equip = {};
   for (const k of Object.keys(ch.equip)) if (!ch.equip[k] || !ch.equip[k].slot) delete ch.equip[k];
@@ -14636,7 +14659,7 @@ function validTarget(t) {
   return false;
 }
 /** Drops que valem a viagem: itens só com espaço na mochila. */
-const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < BAG_SIZE;
+const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < bagCap();
 const lootOk = (l) => G.time - l.born > 0.6 && lootOk2(l);
 function nearest(list, ok, maxD) {
   const p = G.player;
@@ -14689,7 +14712,7 @@ function watchStuck(a, p) {
   }
 }
 /** Mochila cheia com drops de equipamento no chão: o pet está fora vendendo e vai abrir espaço? */
-const petFreesBag = () => G.ch.bag.length >= BAG_SIZE && G.pet && G.pet.away > G.time && G.loot.some((l) => l.type === 'item');
+const petFreesBag = () => G.ch.bag.length >= bagCap() && G.pet && G.pet.away > G.time && G.loot.some((l) => l.type === 'item');
 function drinkPotions() {
   const C = CONFIG.autoClear, st = G.st;
   if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
@@ -15610,6 +15633,13 @@ function openNpc(id) {
     h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
       ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
       : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 de Ouro</button>');
+    const bx = R.canExpandBag(ch);
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Expansão da mochila</h4>' + (ch.bagExp
+      ? '<p class="note">Mochila expandida: páginas 1 e 2 liberadas (' + R.bagSize(ch) + ' espaços).</p>'
+      : '<p class="note">Libera a página 2 do inventário (I): +' + R.RATES.bagPage + ' espaços, ' + R.bagSize(ch) + ' → ' + R.RATES.bagPage * 2 + '. Vale só para este personagem.</p>' +
+        (UI.npcConfirm === 'bagexp' && bx.ok
+          ? '<div class="row"><button class="btn sm gold" data-npc="bagexp" data-ok="1">Confirmar expansão · ' + fmt(bx.cost) + ' de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
+          : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -15748,6 +15778,16 @@ function npcAction(e) {
       if (!confirmed) { UI.npcConfirm = a; break; }
       ch.gold -= 100000; ch.tree = {}; recalc();
       log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
+      break;
+    }
+    case 'bagexp': {
+      const c = R.canExpandBag(ch);
+      if (!c.ok) { log('Expansão da mochila: ' + c.reasons.join(', ') + '.', 'warn'); break; }
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      if (!R.applyExpandBag(ch).ok) break;
+      UI.bagPage = 1;
+      Sfx.level(); toast('Mochila expandida', 'Página 2 liberada · ' + R.bagSize(ch) + ' espaços');
+      log('Mestre Orvan expandiu sua mochila: página 2 liberada (' + R.bagSize(ch) + ' espaços, I).', 'sys');
       break;
     }
   }
@@ -19591,7 +19631,7 @@ function autoPetSell() {
   if (!pet || pet.away > G.time || G.autoEqT > 0) return;
   const base = cpOf(ch);
   const n = ch.bag.filter((it) => autoSellable(it, base)).length;
-  if (!n || (n < CONFIG.loot.autoPetSellMin && ch.bag.length < BAG_SIZE - 2)) return;
+  if (!n || (n < CONFIG.loot.autoPetSellMin && ch.bag.length < bagCap(ch) - 2)) return;
   sendPetToSell((it) => autoSellable(it, base));
 }
 
@@ -19935,7 +19975,7 @@ return { ContextMenu, ItemTooltip, bagSel, closeItemPopups, drinkable, itemInfoH
 })();
 
 // ---- ui/inventoryPane.js ----
-const { EquipmentSlot, InventoryFilter, InventoryItem, InventoryUI } = (() => {
+const { EquipmentSlot, InventoryFilter, InventoryItem, InventoryPages, InventoryUI } = (() => {
 // ---------- painel Inventário: personagem com equipamento, mochila com filtros ----------
 // O esqueleto do painel é montado uma vez; cada atualização só troca as células
 // (slots e itens) cujo HTML mudou, e a prévia 3D só refaz o modelo quando o
@@ -19958,6 +19998,22 @@ const InventoryFilter = {
   current() { return this.LABELS[UI.bagFilter] ? UI.bagFilter : 'all'; },
   html(cnt, f) {
     return Object.keys(this.LABELS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '" aria-pressed="' + (f === k) + '">' + this.LABELS[k] + ' <span>' + cnt[k] + '</span></button>').join('');
+  },
+};
+
+// ---------- InventoryPages ----------
+/** Páginas da mochila no filtro "Todos": a página 2 é liberada com o Mestre Orvan. */
+const InventoryPages = {
+  current() { return UI.bagPage === 1 ? 1 : 0; },
+  html(ch, p) {
+    let h = '';
+    for (let k = 0; k < 2; k++) {
+      const open = k < R.bagPages(ch);
+      const n = Math.max(0, Math.min(BAG_SIZE, ch.bag.length - k * BAG_SIZE));
+      h += '<button class="btab pg' + (p === k ? ' on' : '') + (open ? '' : ' lockd') + '" data-act="bagpg" data-k="' + k + '" aria-pressed="' + (p === k) + '">' + (open ? '' : '🔒 ') + 'Página ' + (k + 1) + ' <span>' + (open ? n + '/' + BAG_SIZE : 'bloqueada') + '</span></button>';
+    }
+    if (!ch.bagExp) h += '<span class="pgnote">' + (p === 1 ? 'Libere a página 2 com o Mestre Orvan, na cidade, por ' + fmt(R.RATES.bagExpandGold) + ' de Ouro.' : '+' + BAG_SIZE + ' espaços com o Mestre Orvan') + '</span>';
+    return h;
   },
 };
 
@@ -20062,6 +20118,7 @@ const InventoryUI = {
       '<section class="inv-bag" aria-label="Mochila">' +
       '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> de Ouro</span><span class="ups" id="bagUps"></span></div>' +
       '<div class="btabs" id="bagFilters" role="group" aria-label="Filtrar mochila"></div>' +
+      '<div class="btabs bagpages" id="bagPages" role="group" aria-label="Páginas da mochila"></div>' +
       '<div class="bag" id="bagGrid"></div>' +
       '<div class="row invtools" id="invTools"></div>' +
       '<p class="note tip">' + (touchUI() ? 'Toque seleciona · toque duplo equipa ou usa · toque longo abre o menu · arraste para equipar ou guardar.' : 'Clique seleciona · duplo clique equipa ou usa · botão direito abre o menu · arraste para equipar ou guardar.') + '</p>' +
@@ -20094,13 +20151,16 @@ const InventoryUI = {
     ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
     let ups = 0;
     cpMap.forEach((v) => { if (v > base) ups++; });
-    this.set('bagCount', ch.bag.length + ' / ' + BAG_SIZE);
+    this.set('bagCount', ch.bag.length + ' / ' + bagCap(ch));
     this.set('invGold', fmt(ch.gold));
     this.set('bagUps', ups ? ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲' : '');
     this.set('bagFilters', InventoryFilter.html(cnt, f));
     const ctx = { base, cp: cpMap }, list = [];
     const cell = (i) => InventoryItem(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', ctx);
-    if (f === 'all') for (let i = 0; i < BAG_SIZE; i++) list.push(cell(i));
+    const pg = InventoryPages.current();
+    this.set('bagPages', f === 'all' ? InventoryPages.html(ch, pg) : '');
+    if (f === 'all' && pg >= R.bagPages(ch)) for (let i = 0; i < BAG_SIZE; i++) list.push('<div class="cell empty lockd"></div>');
+    else if (f === 'all') for (let i = pg * BAG_SIZE; i < (pg + 1) * BAG_SIZE; i++) list.push(cell(i));
     else {
       const idx = [];
       ch.bag.forEach((it, i) => { if (InventoryFilter.cat(it) === f) idx.push(i); });
@@ -20126,7 +20186,7 @@ const InventoryUI = {
     if (want) want.classList.add('sel');
   },
 };
-return { EquipmentSlot, InventoryFilter, InventoryItem, InventoryUI };
+return { EquipmentSlot, InventoryFilter, InventoryItem, InventoryPages, InventoryUI };
 })();
 
 // ---- ui/drawer.js ----
@@ -21294,7 +21354,7 @@ function spacePickup() {
 function autoPickup(p) {
   const C = CONFIG.loot, all = !!(G.ch && (G.ch.autoLoot || G.auto)); // a Auto-Limpeza recolhe tudo
   const r = all ? C.autoLootRadius : C.autoPickupRadius, r2 = r * r;
-  const bagFull = G.ch.bag.length >= BAG_SIZE;
+  const bagFull = G.ch.bag.length >= bagCap();
   for (let i = G.loot.length - 1; i >= 0; i--) {
     const l = G.loot[i];
     if (l.type === 'item' && (!all || bagFull)) continue;
@@ -21696,11 +21756,13 @@ return { buildCharacterModel, buildPlayerModel, cancelChannel, fillVitals, newPl
 })();
 
 // ---- game/inventory.js ----
-const { BAG_SIZE, addToBag, autoEquip, autoEquipOn, bagCat, classOk, cpOf, cpWith, equipFromBag, fmtCP, potionCount, reqOk, unequipSlot, usePotion } = (() => {
+const { BAG_SIZE, addToBag, autoEquip, autoEquipOn, bagCap, bagCat, classOk, cpOf, cpWith, equipFromBag, fmtCP, potionCount, reqOk, unequipSlot, usePotion } = (() => {
 // ---------- mochila, poções, Pontos de Combate (CP) e auto-equipar ----------
 
-/** Capacidade da mochila (células). */
-const BAG_SIZE = CONFIG.bag.size;
+/** Células de uma página da mochila (a página 2 é comprada com o Mestre Orvan). */
+const BAG_SIZE = R.RATES.bagPage;
+/** Capacidade total da mochila do herói (todas as páginas liberadas). */
+const bagCap = (ch = G.ch) => R.bagSize(ch);
 
 // ---------- CP (Pontos de Combate) e auto-equipar ----------
 /** CP do personagem sem buffs temporários (valor estável para comparar equipamentos). */
@@ -21745,7 +21807,7 @@ function equipFromBag(idx, quiet) {
 function unequipSlot(slot) {
   const ch = G.ch;
   if (!ch.equip[slot]) return false;
-  if (ch.bag.length >= BAG_SIZE) { log('Mochila cheia.', 'warn'); return false; }
+  if (ch.bag.length >= bagCap(ch)) { log('Mochila cheia.', 'warn'); return false; }
   ch.bag.push(ch.equip[slot]);
   delete ch.equip[slot];
   recalc(); buildPlayerModel();
@@ -21792,7 +21854,7 @@ function addToBag(it) {
     const ex = bag.find((b) => b.kind === it.kind && b.id === it.id);
     if (ex) { ex.qty += it.qty || 1; return true; }
   }
-  if (bag.length >= BAG_SIZE) { log('Inventário cheio. Envie o pet para vender (P).', 'warn'); return false; }
+  if (bag.length >= bagCap()) { log('Inventário cheio. Envie o pet para vender (P).', 'warn'); return false; }
   bag.push(it);
   return true;
 }
@@ -21833,7 +21895,7 @@ function usePotion(id) {
   if (p.qty <= 0) G.ch.bag.splice(G.ch.bag.indexOf(p), 1);
   questEvent('potion', id);
 }
-return { BAG_SIZE, addToBag, autoEquip, autoEquipOn, bagCat, classOk, cpOf, cpWith, equipFromBag, fmtCP, potionCount, reqOk, unequipSlot, usePotion };
+return { BAG_SIZE, addToBag, autoEquip, autoEquipOn, bagCap, bagCat, classOk, cpOf, cpWith, equipFromBag, fmtCP, potionCount, reqOk, unequipSlot, usePotion };
 })();
 
 // ---- game/combat.js ----
@@ -23165,6 +23227,7 @@ function paneAction(e) {
       break;
     }
     case 'bagf': UI.bagFilter = b.dataset.k; UI.sel = null; break;
+    case 'bagpg': UI.bagPage = +b.dataset.k || 0; UI.sel = null; break;
     case 'aeqtoggle': S.settings.autoEquip = !autoEquipOn(); if (autoEquipOn()) autoEquip(true); persist(); break;
     case 'aeqnow': autoEquip(true); break;
     case 'equip': { const i = selBagIdx(); if (it && it.slot && i >= 0) equipFromBag(i); break; }

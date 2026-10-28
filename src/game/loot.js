@@ -8,7 +8,7 @@ import { fmt, R, rand } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { overlay } from '../engine/overlay.js';
 import { world } from '../engine/renderer.js';
-import { addToBag, autoEquipOn, BAG_SIZE, classOk } from './inventory.js';
+import { addToBag, autoEquipOn, bagCap, classOk } from './inventory.js';
 import { pathTo } from './movement.js';
 import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
@@ -120,7 +120,7 @@ export function spacePickup() {
 export function autoPickup(p) {
   const C = CONFIG.loot, all = !!(G.ch && (G.ch.autoLoot || G.auto)); // a Auto-Limpeza recolhe tudo
   const r = all ? C.autoLootRadius : C.autoPickupRadius, r2 = r * r;
-  const bagFull = G.ch.bag.length >= BAG_SIZE;
+  const bagFull = G.ch.bag.length >= bagCap();
   for (let i = G.loot.length - 1; i >= 0; i--) {
     const l = G.loot[i];
     if (l.type === 'item' && (!all || bagFull)) continue;
