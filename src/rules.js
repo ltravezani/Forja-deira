@@ -456,7 +456,8 @@
   /** Requisito de atributo para equipar (sobe com o +nível). */
   function itemReq(it) {
     if (!it.slot || it.slot === 'ring' || it.slot === 'pendant') return null;
-    if (it.slot === 'wings') return { stat: 'level', value: 150 + it.tier * 60 };
+    // asas: nível 220 em qualquer tier; Ascendida pede nível 300
+    if (it.slot === 'wings') return { stat: 'level', value: it.stage ? 300 : 220 };
     const stat = it.cls === 'dw' ? 'ene' : it.cls === 'elf' ? 'agi' : 'str';
     const k = it.slot === 'weapon' ? 1 : 0.7;
     return { stat, value: Math.floor((15 + it.tier * 38 + it.plus * 4) * k) };
