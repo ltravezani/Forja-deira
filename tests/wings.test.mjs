@@ -38,3 +38,10 @@ test('asa Ascendida: nome, bônus maiores e refino continua até +15', () => {
   assert.ok(R.upgradeChance(u, 'chaos') > 0, 'refino Chaos segue liberado na Ascendida');
   assert.equal(R.upgradeChance(wing(15, 1), 'chaos'), 0, 'teto continua +15');
 });
+
+test('nível das asas: 220 em qualquer tier, Ascendida pede 300', () => {
+  for (const tier of [0, 1, 2, 3, 4]) {
+    assert.deepEqual(R.itemReq({ ...wing(0), tier }), { stat: 'level', value: 220 });
+    assert.deepEqual(R.itemReq({ ...wing(15, 1), tier }), { stat: 'level', value: 300 });
+  }
+});
