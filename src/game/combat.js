@@ -219,7 +219,7 @@ function dropTowerLoot(m, src, seed) {
   if (gold) dropLoot(m.x, m.z, { type: 'gold', amount: gold });
   for (const j of drop.jewels) dropLoot(m.x, m.z, { type: 'jewel', id: j });
   if (src !== 'boss') return;
-  if (drop.jewels.length) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
+  if (drop.gold) { log('Tesouro do chefe! ' + fmt(gold) + ' de Ouro e ' + drop.jewels.length + (drop.jewels.length > 1 ? ' Joias.' : ' Joia.'), 'loot'); Sfx.loot(3); }
   else log('O chefe não deixou tesouro desta vez (20% de chance).', 'sys');
 }
 /** Guardião do andar: libera o próximo andar e abre o portal de descida. */

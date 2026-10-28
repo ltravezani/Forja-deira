@@ -51,6 +51,8 @@ export const InventoryPages = {
 /** Brilho discreto para Excelente ou melhor, joias e talismãs. */
 const isRare = (it) => (it.rarity ? R.RARITY[it.rarity].order >= 2 : it.kind === 'jewel' || it.kind === 'talisman' || it.kind === 'ticket');
 /** Cadeado dos itens trancados (nunca vendidos nem descartados). */
+/** Encantamentos (Joia da Escuridão): uma estrela por linha, na cor do maior grau. */
+const enchMark = (it) => (it.ench && it.ench.length ? '<span class="en" title="' + it.ench.length + (it.ench.length > 1 ? ' encantamentos' : ' encantamento') + '" style="color:' + R.ENCH_GRADES[Math.max(...it.ench.map((e) => e.g))].color + '">' + '✦'.repeat(it.ench.length) + '</span>' : '');
 const LOCK_SVG = '<span class="lk" title="Trancado" style="position:absolute;right:2px;bottom:13px;width:10px;height:11px;line-height:0;filter:drop-shadow(0 1px 1px #000)"><svg viewBox="0 0 10 11" width="10" height="11" aria-hidden="true"><path d="M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#e8d9a8" stroke-width="1.4"/><rect x="1" y="5" width="8" height="6" rx="1" fill="#e8d9a8"/></svg></span>';
 /** Célula de item (mochila ou slot equipado). A seleção é uma classe aplicada à parte, fora deste HTML. */
 export function InventoryItem(it, attrs, ctx) {
@@ -73,7 +75,7 @@ export function InventoryItem(it, attrs, ctx) {
   const pl = it.plus || 0, rf = pl >= 10 ? '#' + refineColor(pl).toString(16).padStart(6, '0') : '';
   return '<button class="cell' + (isRare(it) ? ' rare' : '') + (bad ? ' bad' : '') + (rf ? ' rf' + (pl >= 15 ? ' rf15' : '') : '') + '"' + attrs + ' style="border-color:' + g.c + 'aa;--rc:' + g.c + (rf ? ';--rf:' + rf : '') + '" title="' + esc(R.itemName(it)) + (it.slot ? ' · ' + fmt(R.itemCP(it)) + ' CP' : '') + '">' +
     iconHtml(g) +
-    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + (it.locked ? LOCK_SVG : '') + '</button>';
+    (it.plus ? '<span class="p">+' + it.plus + '</span>' : '') + (it.qty > 1 ? '<span class="q">' + fmt(it.qty) + '</span>' : '') + cp + up + enchMark(it) + (it.locked ? LOCK_SVG : '') + '</button>';
 }
 export function EquipmentSlot(s, it, cls) {
   if (it) return InventoryItem(it, ' data-act="seleq" data-slot="' + s + '"').replace('class="cell', 'class="cell eq');

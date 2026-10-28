@@ -6,7 +6,8 @@ import { R, load } from './helpers.mjs';
 const equip = (slot, cls, tier, rarity, extra) => Object.assign({ uid: 'x', slot, cls, tier, rarity, plus: 0, luck: false, skill: false, addOpt: 0, exc: [], anc: null, legend: null, seed: '0' }, extra);
 
 test('joias com nome em português (ids internos iguais)', () => {
-  assert.deepEqual(Object.keys(R.JEWELS), ['bless', 'soul', 'chaos', 'life']);
+  assert.deepEqual(Object.keys(R.JEWELS), ['bless', 'soul', 'chaos', 'life', 'dark']);
+  assert.equal(R.itemName({ kind: 'jewel', id: 'dark' }), 'Joia da Escuridão');
   assert.equal(R.itemName({ kind: 'jewel', id: 'bless' }), 'Joia da Bênção');
   assert.equal(R.itemName({ kind: 'jewel', id: 'soul' }), 'Joia da Alma');
   assert.equal(R.itemName({ kind: 'jewel', id: 'chaos' }), 'Joia do Caos');

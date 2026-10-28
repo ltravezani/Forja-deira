@@ -592,7 +592,7 @@ function buildProps(L, B, rnd) {
     const pp = L.portal;
     placeKit('arch', [pp], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 }));
     torches.push({ x: pp.x * T, y: 3, z: pp.z * T, cold: true });
-    // moldura viva do Portal do Éden, no fundo da rua entre a Kora e o Varek
+    // moldura viva do Portal do Éden, no fundo da rua entre a Morgana e o Varek
     if (L.eden) { placeKit('edenArch', [L.eden], (p) => ({ x: p.x * T, z: p.z * T, ry: Math.PI / 4 })); torches.push({ x: L.eden.x * T, y: 2.4, z: L.eden.z * T, green: true }); }
     // luz fria na porta da Torre Infinita (a porta olha para a praça)
     if (L.tower) { const tx = L.tower.x * T, tz = L.tower.z * T, a = Math.atan2(23 * T - tz, 23 * T - tx); torches.push({ x: tx + Math.cos(a) * 2.4, y: 1.8, z: tz + Math.sin(a) * 2.4, cold: true }); }

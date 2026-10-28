@@ -127,7 +127,7 @@ test('poções de reforço: Velocidade acelera o ataque, Força soma 50', () => 
   assert.equal(R.itemName({ kind: 'talisman', id: 'luck' }), 'Talismã da Sorte');
 });
 
-test('cidade: Portal do Éden no fundo, entre a Kora e o Varek, em chão livre', async () => {
+test('cidade: Portal do Éden no fundo, entre a Morgana e o Varek, em chão livre', async () => {
   const { genTown } = await load('world/levelgen.js');
   const L = genTown();
   assert.ok(L.eden);

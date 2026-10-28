@@ -288,7 +288,7 @@ export function genTown() {
   const tower = { x: cx + 11, z: cz + 11 };
   block(tower.x - 1, tower.z - 1, tower.x + 1, tower.z + 1);
   for (let i = props.length - 1; i >= 0; i--) if (Math.hypot(props[i].x - tower.x, props[i].z - tower.z) < 3.5) props.splice(i, 1);
-  // Portal do Éden: no fim da rua de baixo, entre a Kora (arena) e o Varek (torre)
+  // Portal do Éden: no fim da rua de baixo, entre a Morgana (encantadora) e o Varek (torre)
   const eden = { x: cx + 1, z: cz + 14 };
   for (let i = props.length - 1; i >= 0; i--) {
     const p = props[i];
@@ -302,7 +302,7 @@ export function genTown() {
     { id: 'merchant', x: cx + 6, z: cz - 7 },
     { id: 'portal', x: cx + 1, z: cz - 9 },
     { id: 'master', x: cx - 9, z: cz + 3 },
-    { id: 'duel', x: cx - 5, z: cz + 9 },
+    { id: 'enchant', x: cx - 5, z: cz + 9 },
     { id: 'chest', x: cx + 9, z: cz + 4 },
   ];
   // Baú da conta ao lado da Dalva (sólido; a tampa fica fechada)

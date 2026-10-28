@@ -23,7 +23,7 @@ const WEAPON = {
   knight: { sword: 'sword_1handed', club: 'sword_1handed', staff: 'sword_2handed', rod: 'staff' },
   mage: { staff: 'staff', sword: 'wand', rod: 'staff' },
   rogue: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
-  rogueFem: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed' },
+  rogueFem: { bow: 'crossbow_2handed', sword: 'dagger', blade: 'sword_1handed', staff: 'staff' },
   barbarian: { club: 'axe_1handed', sword: 'axe_1handed' },
   skeleton: { sword: 'Skeleton_Blade', club: 'Skeleton_Blade' },
   skeletonRogue: { bow: 'Skeleton_Crossbow' },
