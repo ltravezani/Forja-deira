@@ -7007,6 +7007,8 @@ const CONFIG = {
   audio: {
     maxVoicesPerFrame: 6,   // sons iniciados por quadro (evita estouro em AoE)
   },
+  // Baú da conta (NPC Dalva): espaços compartilhados por todos os personagens do save
+  chest: { size: 40 },
   // Save na nuvem (Supabase). Só a chave PÚBLICA (anon/publishable) pode ficar aqui:
   // quem protege os dados é o Row Level Security da tabela `saves`
   // (supabase/migrations/). Chave vazia = nuvem desligada, o jogo segue só local.
@@ -8437,6 +8439,7 @@ const NPCS = {
   merchant: { name: 'Lira', role: 'Mercadora · vende poções e tickets de Auto-Limpeza; compra joias, poções e equipamentos Comuns e Mágicos', look: { skin: 0xf0c8a0, cloth: 0x2a6a5a, armor: 0x2a6a5a, head: 'hair', hair: 0x8a3a2a }, say: 'Poções fresquinhas e tickets para a Guardiã Nyx! E se o seu pet estiver ocupado, eu compro suas joias, poções e os equipamentos Comuns e Mágicos.' },
   portal: { name: 'Guardiã Nyx', role: 'Portais das masmorras', look: { gltf: 'mage', skin: 0xd0b8f0, cloth: 0x3a2a6a, armor: 0x3a2a6a, head: 'hood', weapon: 'staff', robe: true, weaponGlow: 0xb08aff }, say: 'Cada portal abre um labirinto diferente — a semente muda a cada visita. Derrote o guardião do andar para descer.' },
   master: { name: 'Mestre Orvan', role: 'Evolução de classe · Reset · Árvore · Mochila', look: { gltf: 'mage', skin: 0xd8b890, cloth: 0x7a1a1a, armor: 0x7a1a1a, head: 'hood', robe: true, weapon: 'staff', weaponGlow: 0xffcc66 }, say: 'Força sem propósito é só barulho. Prove seu valor contra os guardiões e eu revelarei sua próxima forma.' },
+  chest: { name: 'Dalva', role: 'Guardiã do Baú · itens compartilhados entre os seus personagens', look: { gltf: 'rogueFem', skin: 0xe8c0a0, cloth: 0x6a4a2a, armor: 0x8a6a3a, trim: 0xd8b060, head: 'hair', hair: 0x4a2a1a }, say: 'O que entra neste baú fica guardado para a sua conta inteira. Guarde com um herói e retire com outro: aqui nada se perde, só o espaço é que acaba.' },
   tower: { name: 'Guardião Varek', role: 'Guardião da Torre · Torre Infinita', look: { gltf: 'knight', skin: 0xb8c8e0, cloth: 0x1a2a4a, armor: 0x5a6a8a, trim: 0x6ad8ff, trimGlow: true, head: 'helm', weapon: 'staff', weaponGlow: 0x6ad8ff, robe: true, eye: 0x6ad8ff }, say: 'A torre não tem topo. Cada andar é mais cruel que o anterior, e lá dentro só se encontra Ouro e Joias. Derrote o guardião de cada andar e suba o quanto aguentar.' },
   // não é um NPC na praça: cabeçalho da janela do portal (entre Kora e Varek)
   eden: { name: 'Portal do Éden', role: 'Uma entrada a cada 3 horas', look: {}, say: 'Além deste portal há uma terra que nunca conheceu o inverno. Três caminhos levam ao Coração do Éden, onde o Guardião vela a Árvore-Mãe. O portal adormece por três horas depois que alguém o atravessa.' },
@@ -8685,7 +8688,7 @@ return { DAILY, DAILY_BONUS, DAILY_COUNT, ONBOARD, ONBOARD_SKIP_LEVEL, applyQues
 })();
 
 // ---- core/state.js ----
-const { G, S, SAVE_KEY, SaveGuard, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter, saveBlocked } = (() => {
+const { G, S, SAVE_KEY, SaveGuard, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter, sanitizeChest, saveBlocked } = (() => {
 // ---------- estado do jogo e do save ----------
 // G: estado da sessão (zona, entidades, vitais). S: save persistido (personagens
 // e opções). UI: estado da interface. São objetos mutados no lugar, nunca
@@ -8706,7 +8709,8 @@ const S = defaultSave();
 const SAVE_KEY = 'forjadeira.save.v1';
 function defaultSave() {
   // quality null = ainda não escolhida: o main.js escolhe pelo aparelho (autoQuality) no primeiro acesso
-  return { chars: [], active: -1, settings: { quality: null, sound: true, labels: true } };
+  // chest: Baú da conta (NPC Dalva na cidade), compartilhado por todos os personagens deste save
+  return { chars: [], active: -1, chest: [], settings: { quality: null, sound: true, labels: true } };
 }
 function readSave(obj) {
   try {
@@ -8722,6 +8726,7 @@ function loadSave(obj) {
   data.chars = data.chars.filter((c) => c && typeof c === 'object' && typeof c.name === 'string');
   if (!data.settings || typeof data.settings !== 'object') data.settings = defaultSave().settings;
   if (!Number.isInteger(data.active) || data.active >= data.chars.length) data.active = data.chars.length ? 0 : -1;
+  data.chest = sanitizeChest(data.chest);
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, data);
   return S;
@@ -8799,7 +8804,7 @@ function sanitizeCharacter(ch) {
   ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
-  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]) || (it.kind === 'ticket' && R.TICKETS[it.id]));
+  ch.bag = ch.bag.filter((it) => knownKind(it, R));
   // evolução: inteiro dentro das formas da classe
   ch.tier = Math.min(R.CLASSES[ch.cls].tiers.length - 1, Math.floor(ch.tier));
   sanitizeTree(ch, R);
@@ -8808,6 +8813,20 @@ function sanitizeCharacter(ch) {
   for (const k of Object.keys(ch.equip)) { if (k !== ch.equip[k].slot || !R.SLOTS.includes(k)) { ch.bag.push(ch.equip[k]); delete ch.equip[k]; } else sanitizeItem(ch.equip[k], R); }
   sanitizeQuests(ch); // missões (iniciais e diárias); saves antigos ganham o campo aqui
   return ch;
+}
+/** Item que o jogo conhece: equipamento ou joia/poção/talismã/ticket que existe nesta versão. */
+const knownKind = (it, R) => !!it.slot || (it.kind === 'jewel' && !!R.JEWELS[it.id]) || (it.kind === 'potion' && !!R.POTIONS[it.id]) || (it.kind === 'talisman' && !!R.TALISMANS[it.id]) || (it.kind === 'ticket' && !!R.TICKETS[it.id]);
+/**
+ * Baú da conta: lista de itens (mesmo formato da mochila). Descarta lixo e
+ * itens desconhecidos e corrige números, como na mochila; nunca corta itens
+ * por falta de espaço (o limite só vale para guardar novos).
+ */
+function sanitizeChest(list) {
+  const R = ForjaRules;
+  if (!Array.isArray(list)) return [];
+  const out = list.filter((it) => it && typeof it === 'object' && (it.slot || it.kind) && knownKind(it, R) && (!it.slot || R.SLOTS.includes(it.slot)));
+  out.forEach((it) => sanitizeItem(it, R));
+  return out;
 }
 const int = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
 /** Árvore: só nós da classe, ranks inteiros 0..5 e soma dentro dos pontos disponíveis. */
@@ -8832,7 +8851,7 @@ function sanitizeItem(it, R) {
   } else it.qty = int(it.qty, 1, 1e9, 1);
   if (it.locked !== true) delete it.locked;
 }
-return { G, S, SAVE_KEY, SaveGuard, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter, saveBlocked };
+return { G, S, SAVE_KEY, SaveGuard, SaveHooks, UI, allPortals, loadSave, persist, sanitizeCharacter, sanitizeChest, saveBlocked };
 })();
 
 // ---- core/cloud.js ----
@@ -13155,6 +13174,51 @@ function animateCritter(m, s) {
 return { animateCritter, buildCritter, buildVillager, mergeModelParts };
 })();
 
+// ---- game/chest.js ----
+const { CHEST_SIZE, deposit, moveItem, withdraw } = (() => {
+// ---------- Baú da conta (NPC Dalva) ----------
+// Itens guardados aqui ficam no save da conta (S.chest), fora de qualquer
+// personagem: todos os heróis do mesmo save (e da mesma conta na nuvem) veem e
+// retiram os mesmos itens. Joias, poções, talismãs e tickets empilham num espaço
+// só; equipamentos ocupam um espaço cada.
+
+/** Espaços do baú. */
+const CHEST_SIZE = CONFIG.chest.size;
+
+/** Mesma pilha: itens empilháveis (sem slot) do mesmo tipo e id. */
+const sameStack = (a, b) => !a.slot && !b.slot && a.kind === b.kind && a.id === b.id;
+
+/**
+ * Move `n` unidades (ou o item inteiro, se não empilhável) de `from` para `to`.
+ * `cap` é o limite de espaços de `to` (uma pilha já existente não ocupa espaço novo).
+ * Devolve { ok, why } — why: 'gone' (item não está mais em `from`) | 'full'.
+ */
+function moveItem(from, to, it, n, cap) {
+  const i = from.indexOf(it);
+  if (i < 0) return { ok: false, why: 'gone' };
+  if (it.slot) {
+    if (to.length >= cap) return { ok: false, why: 'full' };
+    from.splice(i, 1);
+    to.push(it);
+    return { ok: true, n: 1 };
+  }
+  const q = it.qty || 1;
+  n = Math.max(1, Math.min(Math.floor(n) || 1, q));
+  const ex = to.find((b) => sameStack(b, it));
+  if (!ex && to.length >= cap) return { ok: false, why: 'full' };
+  if (ex) ex.qty = (ex.qty || 1) + n;
+  else to.push(n >= q ? it : Object.assign({}, it, { qty: n }));
+  if (n >= q) from.splice(i, 1); else it.qty = q - n;
+  return { ok: true, n };
+}
+
+/** Guarda do personagem no baú da conta. Equipamentos em uso não entram (tire antes). */
+function deposit(ch, chest, it, n) { return moveItem(ch.bag, chest, it, n, CHEST_SIZE); }
+/** Retira do baú da conta para a mochila do personagem (limite: espaços da mochila). */
+function withdraw(ch, chest, it, n, bagSize) { return moveItem(chest, ch.bag, it, n, bagSize); }
+return { CHEST_SIZE, deposit, moveItem, withdraw };
+})();
+
 // ---- input/inputState.js ----
 const { KEYS, mouse } = (() => {
 // ---------- estado bruto da entrada (compartilhado entre entrada e simulação) ----------
@@ -15396,7 +15460,41 @@ const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' |
 /** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
 const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
 /** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
-let merchItems = [], smithItems = [];
+let merchItems = [], smithItems = [], chestRows = [], chestBagRows = [];
+const CHEST_CATS = { all: 'Todos', equip: 'Equipamentos', mat: 'Joias e poções' };
+const chestCat = (it) => (it.slot ? 'equip' : 'mat');
+/** Uma linha do Baú: ícone, nome na cor, detalhes e os botões (×1 / Tudo para pilhas). */
+function chestRow(it, i, act, verb) {
+  const g = glyph(it), q = it.qty || 1;
+  const sub = it.slot
+    ? R.SLOT_LABEL[it.slot] + ' · ' + R.RARITY[it.rarity].name + ' · Tier ' + (it.tier + 1) + (classOk(it) ? '' : ' · <span style="color:#c9a0ff">' + esc(R.itemUsers(it).join(', ')) + '</span>') + (it.locked ? ' · Trancado' : '')
+    : (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · ' + fmt(q);
+  const btn = (n, t) => '<button class="btn sm" data-npc="' + act + '" data-i="' + i + '" data-n="' + n + '">' + t + '</button>';
+  const a = q > 1 ? btn(1, verb + ' 1') + btn(q, 'Tudo') : btn(1, verb);
+  return '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" title="' + esc(R.itemName(it)) + '" style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + fmt(q) : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + '</span></div>';
+}
+/** Lista de um lado do Baú (baú da conta ou mochila do herói), com o filtro de categoria. */
+function chestList(items, act, verb, empty) {
+  const f = CHEST_CATS[UI.chestFilter] ? UI.chestFilter : 'all';
+  const rows = items.filter((it) => f === 'all' || chestCat(it) === f);
+  if (!rows.length) return { rows, h: '<p class="note">' + empty + '</p>' };
+  return { rows, h: '<div class="list selllist">' + rows.map((it, i) => chestRow(it, i, act, verb)).join('') + '</div>' };
+}
+/** Baú da conta: o que está guardado (todos os personagens veem) e a mochila do herói atual. */
+function chestSection(ch) {
+  const chest = S.chest, f = CHEST_CATS[UI.chestFilter] ? UI.chestFilter : 'all';
+  const head = (t, n, cap) => '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">' + t + ' <span style="color:' + (n >= cap ? '#ff6b6b' : 'var(--gold)') + '">' + n + ' / ' + cap + '</span></h4>';
+  const cnt = (list) => { const c = { all: list.length, equip: 0, mat: 0 }; list.forEach((it) => c[chestCat(it)]++); return c; };
+  const cc = cnt(chest), bc = cnt(ch.bag);
+  let h = '<div class="btabs">' + Object.keys(CHEST_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="chestf" data-k="' + k + '">' + CHEST_CATS[k] + ' <span>' + (cc[k] + bc[k]) + '</span></button>').join('') + '</div>';
+  const top = chestList(chest, 'chestout', 'Retirar', chest.length ? 'Nada desta categoria no baú.' : 'O baú está vazio. Guarde itens da mochila abaixo.');
+  chestRows = top.rows;
+  h += head('Baú da conta', chest.length, CHEST_SIZE) + top.h;
+  const bot = chestList(ch.bag, 'chestin', 'Guardar', 'Nada ' + (f === 'all' ? '' : 'desta categoria ') + 'na mochila.');
+  chestBagRows = bot.rows;
+  h += head('Mochila de ' + esc(ch.name), ch.bag.length, bagCap(ch)) + bot.h;
+  return h + '<p class="note" style="margin-top:10px">O baú é da conta: todos os seus personagens guardam e retiram os mesmos itens, e ele vai junto no save da nuvem. Joias, poções, talismãs e tickets do mesmo tipo empilham num espaço só. Itens equipados não aparecem aqui: tire-os no inventário (I) antes de guardar.</p>';
+}
 function sellSection(ch) {
   merchItems = ch.bag.slice();
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
@@ -15640,6 +15738,8 @@ function openNpc(id) {
         (UI.npcConfirm === 'bagexp' && bx.ok
           ? '<div class="row"><button class="btn sm gold" data-npc="bagexp" data-ok="1">Confirmar expansão · ' + fmt(bx.cost) + ' de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
           : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
+  } else if (id === 'chest') {
+    h += chestSection(ch);
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -15734,6 +15834,17 @@ function npcAction(e) {
       log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(cost) + ' de Ouro. Use ' + (k === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot');
       break;
     }
+    case 'chestf': UI.chestFilter = b.dataset.k; break;
+    case 'chestin': case 'chestout': {
+      const out = a === 'chestout', it = (out ? chestRows : chestBagRows)[+b.dataset.i];
+      if (!it) break;
+      const r = out ? withdraw(ch, S.chest, it, +b.dataset.n, bagCap(ch)) : deposit(ch, S.chest, it, +b.dataset.n);
+      if (!r.ok) { if (r.why === 'full') log(out ? 'Mochila cheia: libere espaço para retirar do baú.' : 'O baú está cheio (' + CHEST_SIZE + ' espaços).', 'warn'); break; }
+      if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
+      log((out ? 'Retirou do baú: ' : 'Guardou no baú: ') + R.itemName(it) + (r.n > 1 ? ' ×' + fmt(r.n) : '') + '.', 'loot');
+      Sfx.loot(1);
+      break;
+    }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
     case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
     case 'sellno': UI.merchConfirm = null; break;
@@ -15792,12 +15903,11 @@ function npcAction(e) {
     }
   }
   persist();
-  const dlg = $('#dialog'), list = dlg.querySelector('.selllist'), sl = dlg.querySelector('.smithlist');
-  const top = dlg.scrollTop, listTop = list ? list.scrollTop : 0, smithTop = sl ? sl.scrollTop : 0;
+  const dlg = $('#dialog'), sl = dlg.querySelector('.smithlist');
+  const top = dlg.scrollTop, listTops = [...dlg.querySelectorAll('.selllist')].map((x) => x.scrollTop), smithTop = sl ? sl.scrollTop : 0;
   openNpc(G.openNpcId);
   dlg.scrollTop = top;
-  const list2 = dlg.querySelector('.selllist');
-  if (list2) list2.scrollTop = listTop;
+  dlg.querySelectorAll('.selllist').forEach((x, i) => { if (listTops[i] != null) x.scrollTop = listTops[i]; });
   const sl2 = dlg.querySelector('.smithlist');
   if (sl2) sl2.scrollTop = smithTop;
   hudTick();
@@ -18163,6 +18273,9 @@ function buildProps(L, B, rnd) {
     simple('coop', (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.PI / 2 }));
     simple('haystack', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
     simple('trough', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.5 }));
+    // Baú da conta (Dalva): corpo e tampa fechada (articulada 0.36 atrás do centro)
+    placeKit('chest', P('vault'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.ry, s: 1.25 }));
+    placeKit('chestLid', P('vault'), (p) => ({ x: p.x * T - Math.sin(p.ry) * 0.45, y: 0.775, z: p.z * T - Math.cos(p.ry) * 0.45, ry: p.ry, s: 1.25 }));
     simple('notice', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.3 }));
     simple('signpost', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.4 }));
     for (const k of ['sacks', 'pots', 'produce']) simple(k, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
@@ -20677,7 +20790,13 @@ function genTown() {
     { id: 'portal', x: cx + 1, z: cz - 9 },
     { id: 'master', x: cx - 9, z: cz + 3 },
     { id: 'duel', x: cx - 5, z: cz + 9 },
+    { id: 'chest', x: cx + 9, z: cz + 4 },
   ];
+  // Baú da conta ao lado da Dalva (sólido; a tampa fica fechada)
+  const vault = { x: cx + 10, z: cz + 5 };
+  for (let i = props.length - 1; i >= 0; i--) if (Math.abs(props[i].x - vault.x) <= 1 && Math.abs(props[i].z - vault.z) <= 1 && props[i].kind === 'decal') props.splice(i, 1);
+  props.push({ x: vault.x, z: vault.z, kind: 'vault', ry: Math.atan2(cx - vault.x, cz - vault.z) });
+  grid[vault.z * W + vault.x] = 2;
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }, eden])) grid[n.z * W + n.x] = 1;
   return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, notice, isPath, spots, pen, bunting, town: { cx, cz } };

@@ -562,6 +562,9 @@ function buildProps(L, B, rnd) {
     simple('coop', (p) => ({ x: p.x * T, z: p.z * T, ry: -Math.PI / 2 }));
     simple('haystack', (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));
     simple('trough', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.5 }));
+    // Baú da conta (Dalva): corpo e tampa fechada (articulada 0.36 atrás do centro)
+    placeKit('chest', P('vault'), (p) => ({ x: p.x * T, z: p.z * T, ry: p.ry, s: 1.25 }));
+    placeKit('chestLid', P('vault'), (p) => ({ x: p.x * T - Math.sin(p.ry) * 0.45, y: 0.775, z: p.z * T - Math.cos(p.ry) * 0.45, ry: p.ry, s: 1.25 }));
     simple('notice', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.3 }));
     simple('signpost', (p) => ({ x: p.x * T, z: p.z * T, ry: 0.4 }));
     for (const k of ['sacks', 'pots', 'produce']) simple(k, (p) => ({ x: p.x * T, z: p.z * T, ry: p.v * 6 }));

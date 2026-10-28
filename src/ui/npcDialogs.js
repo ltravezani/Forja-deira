@@ -1,12 +1,13 @@
 // ---------- diálogos dos NPCs (portais, ferreiro, mercadora, mestre) e tela de queda ----------
 import { CONFIG } from '../core/config.js';
-import { G, persist, UI } from '../core/state.js';
+import { G, persist, S, UI } from '../core/state.js';
 import { $, dec, esc, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
 import { emit } from '../engine/effects.js';
 import { respawn, revive, unlockSkills } from '../game/combat.js';
 import { NPCS } from '../game/data.js';
-import { addToBag, classOk, fmtCP, potionCount } from '../game/inventory.js';
+import { addToBag, bagCap, classOk, fmtCP, potionCount } from '../game/inventory.js';
+import { CHEST_SIZE, deposit, withdraw } from '../game/chest.js';
 import { buildPlayerModel, recalc } from '../game/player.js';
 import { enterDungeon, enterEden, enterTower } from '../game/zones.js';
 import { buyTicket, startAutoClear, ticketCount } from '../game/autoClear.js';
@@ -29,7 +30,41 @@ const sellNeedsConfirm = (it) => it.kind === 'jewel' || it.kind === 'talisman' |
 /** Venda em lote ("Comuns/Mágicos"): nunca leva asas nem itens trancados. */
 const junkSellable = (x) => x.slot && x.slot !== 'wings' && !x.locked && R.RARITY[x.rarity].order <= 1;
 /** Itens listados na última renderização (os botões guardam a posição nesta lista, não na mochila). */
-let merchItems = [], smithItems = [];
+let merchItems = [], smithItems = [], chestRows = [], chestBagRows = [];
+const CHEST_CATS = { all: 'Todos', equip: 'Equipamentos', mat: 'Joias e poções' };
+const chestCat = (it) => (it.slot ? 'equip' : 'mat');
+/** Uma linha do Baú: ícone, nome na cor, detalhes e os botões (×1 / Tudo para pilhas). */
+function chestRow(it, i, act, verb) {
+  const g = glyph(it), q = it.qty || 1;
+  const sub = it.slot
+    ? R.SLOT_LABEL[it.slot] + ' · ' + R.RARITY[it.rarity].name + ' · Tier ' + (it.tier + 1) + (classOk(it) ? '' : ' · <span style="color:#c9a0ff">' + esc(R.itemUsers(it).join(', ')) + '</span>') + (it.locked ? ' · Trancado' : '')
+    : (it.kind === 'jewel' ? 'Joia' : it.kind === 'talisman' ? 'Talismã' : it.kind === 'ticket' ? 'Ticket' : 'Poção') + ' · ' + fmt(q);
+  const btn = (n, t) => '<button class="btn sm" data-npc="' + act + '" data-i="' + i + '" data-n="' + n + '">' + t + '</button>';
+  const a = q > 1 ? btn(1, verb + ' 1') + btn(q, 'Tudo') : btn(1, verb);
+  return '<div class="li"><span class="nm"><span class="ic">' + iconHtml(g) + '</span><span class="t" title="' + esc(R.itemName(it)) + '" style="color:' + g.c + '">' + esc(R.itemName(it)) + (q > 1 ? ' ×' + fmt(q) : '') + '</span></span><span class="a row">' + a + '</span><span class="s">' + sub + '</span></div>';
+}
+/** Lista de um lado do Baú (baú da conta ou mochila do herói), com o filtro de categoria. */
+function chestList(items, act, verb, empty) {
+  const f = CHEST_CATS[UI.chestFilter] ? UI.chestFilter : 'all';
+  const rows = items.filter((it) => f === 'all' || chestCat(it) === f);
+  if (!rows.length) return { rows, h: '<p class="note">' + empty + '</p>' };
+  return { rows, h: '<div class="list selllist">' + rows.map((it, i) => chestRow(it, i, act, verb)).join('') + '</div>' };
+}
+/** Baú da conta: o que está guardado (todos os personagens veem) e a mochila do herói atual. */
+function chestSection(ch) {
+  const chest = S.chest, f = CHEST_CATS[UI.chestFilter] ? UI.chestFilter : 'all';
+  const head = (t, n, cap) => '<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">' + t + ' <span style="color:' + (n >= cap ? '#ff6b6b' : 'var(--gold)') + '">' + n + ' / ' + cap + '</span></h4>';
+  const cnt = (list) => { const c = { all: list.length, equip: 0, mat: 0 }; list.forEach((it) => c[chestCat(it)]++); return c; };
+  const cc = cnt(chest), bc = cnt(ch.bag);
+  let h = '<div class="btabs">' + Object.keys(CHEST_CATS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-npc="chestf" data-k="' + k + '">' + CHEST_CATS[k] + ' <span>' + (cc[k] + bc[k]) + '</span></button>').join('') + '</div>';
+  const top = chestList(chest, 'chestout', 'Retirar', chest.length ? 'Nada desta categoria no baú.' : 'O baú está vazio. Guarde itens da mochila abaixo.');
+  chestRows = top.rows;
+  h += head('Baú da conta', chest.length, CHEST_SIZE) + top.h;
+  const bot = chestList(ch.bag, 'chestin', 'Guardar', 'Nada ' + (f === 'all' ? '' : 'desta categoria ') + 'na mochila.');
+  chestBagRows = bot.rows;
+  h += head('Mochila de ' + esc(ch.name), ch.bag.length, bagCap(ch)) + bot.h;
+  return h + '<p class="note" style="margin-top:10px">O baú é da conta: todos os seus personagens guardam e retiram os mesmos itens, e ele vai junto no save da nuvem. Joias, poções, talismãs e tickets do mesmo tipo empilham num espaço só. Itens equipados não aparecem aqui: tire-os no inventário (I) antes de guardar.</p>';
+}
 function sellSection(ch) {
   merchItems = ch.bag.slice();
   const f = SELL_CATS[UI.merchFilter] ? UI.merchFilter : 'all';
@@ -273,6 +308,8 @@ export function openNpc(id) {
         (UI.npcConfirm === 'bagexp' && bx.ok
           ? '<div class="row"><button class="btn sm gold" data-npc="bagexp" data-ok="1">Confirmar expansão · ' + fmt(bx.cost) + ' de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
           : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
+  } else if (id === 'chest') {
+    h += chestSection(ch);
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -367,6 +404,17 @@ function npcAction(e) {
       log('Comprou ' + R.TICKETS[k].name + ' ×' + n + ' por ' + fmt(cost) + ' de Ouro. Use ' + (k === 'tower' ? 'no portal da Torre Infinita' : 'na Guardiã Nyx') + ' (Auto-Limpeza).', 'loot');
       break;
     }
+    case 'chestf': UI.chestFilter = b.dataset.k; break;
+    case 'chestin': case 'chestout': {
+      const out = a === 'chestout', it = (out ? chestRows : chestBagRows)[+b.dataset.i];
+      if (!it) break;
+      const r = out ? withdraw(ch, S.chest, it, +b.dataset.n, bagCap(ch)) : deposit(ch, S.chest, it, +b.dataset.n);
+      if (!r.ok) { if (r.why === 'full') log(out ? 'Mochila cheia: libere espaço para retirar do baú.' : 'O baú está cheio (' + CHEST_SIZE + ' espaços).', 'warn'); break; }
+      if (UI.sel && UI.sel.where === 'bag' && UI.sel.it && !ch.bag.includes(UI.sel.it)) UI.sel = null;
+      log((out ? 'Retirou do baú: ' : 'Guardou no baú: ') + R.itemName(it) + (r.n > 1 ? ' ×' + fmt(r.n) : '') + '.', 'loot');
+      Sfx.loot(1);
+      break;
+    }
     case 'sellf': UI.merchFilter = b.dataset.k; UI.merchConfirm = null; break;
     case 'sell': sellFromBag(ch, +b.dataset.i, +b.dataset.n, b.dataset.ok === '1'); break;
     case 'sellno': UI.merchConfirm = null; break;
@@ -425,12 +473,11 @@ function npcAction(e) {
     }
   }
   persist();
-  const dlg = $('#dialog'), list = dlg.querySelector('.selllist'), sl = dlg.querySelector('.smithlist');
-  const top = dlg.scrollTop, listTop = list ? list.scrollTop : 0, smithTop = sl ? sl.scrollTop : 0;
+  const dlg = $('#dialog'), sl = dlg.querySelector('.smithlist');
+  const top = dlg.scrollTop, listTops = [...dlg.querySelectorAll('.selllist')].map((x) => x.scrollTop), smithTop = sl ? sl.scrollTop : 0;
   openNpc(G.openNpcId);
   dlg.scrollTop = top;
-  const list2 = dlg.querySelector('.selllist');
-  if (list2) list2.scrollTop = listTop;
+  dlg.querySelectorAll('.selllist').forEach((x, i) => { if (listTops[i] != null) x.scrollTop = listTops[i]; });
   const sl2 = dlg.querySelector('.smithlist');
   if (sl2) sl2.scrollTop = smithTop;
   hudTick();

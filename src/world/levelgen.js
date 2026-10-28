@@ -303,7 +303,13 @@ export function genTown() {
     { id: 'portal', x: cx + 1, z: cz - 9 },
     { id: 'master', x: cx - 9, z: cz + 3 },
     { id: 'duel', x: cx - 5, z: cz + 9 },
+    { id: 'chest', x: cx + 9, z: cz + 4 },
   ];
+  // Baú da conta ao lado da Dalva (sólido; a tampa fica fechada)
+  const vault = { x: cx + 10, z: cz + 5 };
+  for (let i = props.length - 1; i >= 0; i--) if (Math.abs(props[i].x - vault.x) <= 1 && Math.abs(props[i].z - vault.z) <= 1 && props[i].kind === 'decal') props.splice(i, 1);
+  props.push({ x: vault.x, z: vault.z, kind: 'vault', ry: Math.atan2(cx - vault.x, cz - vault.z) });
+  grid[vault.z * W + vault.x] = 2;
   // garante que NPCs e portal estejam livres
   for (const n of npcs.concat([{ x: cx + 1, z: cz - 12 }, { x: cx + 1, z: cz + 4 }, eden])) grid[n.z * W + n.x] = 1;
   return { W, H, grid, biome: 'town', floor: 0, seed: 1, start: { x: cx + 1, z: cz + 4 }, boss: null, props, spawns: [], breakables: [], npcs, portal: { x: cx + 1, z: cz - 12 }, eden, tower, notice, isPath, spots, pen, bunting, town: { cx, cz } };
