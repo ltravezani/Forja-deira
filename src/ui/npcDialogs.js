@@ -266,6 +266,13 @@ export function openNpc(id) {
     h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Árvore de maestria</h4>' + (UI.npcConfirm === 'treereset' && spent && ch.gold >= 100000
       ? '<div class="row"><button class="btn sm gold" data-npc="treereset" data-ok="1">Confirmar: redistribuir ' + spent + ' pontos · 100.000 de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
       : '<button class="btn sm" data-npc="treereset"' + (spent && ch.gold >= 100000 ? '' : ' disabled') + '>Redistribuir ' + spent + ' pontos · 100.000 de Ouro</button>');
+    const bx = R.canExpandBag(ch);
+    h += '<h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Expansão da mochila</h4>' + (ch.bagExp
+      ? '<p class="note">Mochila expandida: páginas 1 e 2 liberadas (' + R.bagSize(ch) + ' espaços).</p>'
+      : '<p class="note">Libera a página 2 do inventário (I): +' + R.RATES.bagPage + ' espaços, ' + R.bagSize(ch) + ' → ' + R.RATES.bagPage * 2 + '. Vale só para este personagem.</p>' +
+        (UI.npcConfirm === 'bagexp' && bx.ok
+          ? '<div class="row"><button class="btn sm gold" data-npc="bagexp" data-ok="1">Confirmar expansão · ' + fmt(bx.cost) + ' de Ouro</button><button class="btn sm" data-npc="npcno">Cancelar</button></div>'
+          : '<button class="btn sm gold" data-npc="bagexp"' + (bx.ok ? '' : ' disabled') + '>Expandir mochila · ' + fmt(bx.cost) + ' de Ouro</button>' + (bx.ok ? '' : '<p class="note">Falta: ' + esc(bx.reasons.join(', ')) + '</p>')));
   } else if (NPCS[id] && NPCS[id].soon) {
     h += '<p class="note"><b class="soon">Em breve</b> · Esta função ainda não está disponível.</p>';
   }
@@ -404,6 +411,16 @@ function npcAction(e) {
       if (!confirmed) { UI.npcConfirm = a; break; }
       ch.gold -= 100000; ch.tree = {}; recalc();
       log('Árvore de maestria redistribuída: ' + R.treePoints(ch) + ' pontos livres.', 'sys');
+      break;
+    }
+    case 'bagexp': {
+      const c = R.canExpandBag(ch);
+      if (!c.ok) { log('Expansão da mochila: ' + c.reasons.join(', ') + '.', 'warn'); break; }
+      if (!confirmed) { UI.npcConfirm = a; break; }
+      if (!R.applyExpandBag(ch).ok) break;
+      UI.bagPage = 1;
+      Sfx.level(); toast('Mochila expandida', 'Página 2 liberada · ' + R.bagSize(ch) + ' espaços');
+      log('Mestre Orvan expandiu sua mochila: página 2 liberada (' + R.bagSize(ch) + ' espaços, I).', 'sys');
       break;
     }
   }

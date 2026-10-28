@@ -1,5 +1,4 @@
 // ---------- mochila, poções, Pontos de Combate (CP) e auto-equipar ----------
-import { CONFIG } from '../core/config.js';
 import { G, S, UI } from '../core/state.js';
 import { dec, fmt, R } from '../core/util.js';
 import { Sfx } from '../engine/audio.js';
@@ -10,8 +9,10 @@ import { questEvent } from './quests.js';
 import { refreshPaneSoon } from '../ui/drawer.js';
 import { log } from '../ui/log.js';
 
-/** Capacidade da mochila (células). */
-export const BAG_SIZE = CONFIG.bag.size;
+/** Células de uma página da mochila (a página 2 é comprada com o Mestre Orvan). */
+export const BAG_SIZE = R.RATES.bagPage;
+/** Capacidade total da mochila do herói (todas as páginas liberadas). */
+export const bagCap = (ch = G.ch) => R.bagSize(ch);
 
 // ---------- CP (Pontos de Combate) e auto-equipar ----------
 /** CP do personagem sem buffs temporários (valor estável para comparar equipamentos). */
@@ -56,7 +57,7 @@ export function equipFromBag(idx, quiet) {
 export function unequipSlot(slot) {
   const ch = G.ch;
   if (!ch.equip[slot]) return false;
-  if (ch.bag.length >= BAG_SIZE) { log('Mochila cheia.', 'warn'); return false; }
+  if (ch.bag.length >= bagCap(ch)) { log('Mochila cheia.', 'warn'); return false; }
   ch.bag.push(ch.equip[slot]);
   delete ch.equip[slot];
   recalc(); buildPlayerModel();
@@ -103,7 +104,7 @@ export function addToBag(it) {
     const ex = bag.find((b) => b.kind === it.kind && b.id === it.id);
     if (ex) { ex.qty += it.qty || 1; return true; }
   }
-  if (bag.length >= BAG_SIZE) { log('Inventário cheio. Envie o pet para vender (P).', 'warn'); return false; }
+  if (bag.length >= bagCap()) { log('Inventário cheio. Envie o pet para vender (P).', 'warn'); return false; }
   bag.push(it);
   return true;
 }

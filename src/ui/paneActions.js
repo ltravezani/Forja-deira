@@ -63,6 +63,7 @@ function paneAction(e) {
       break;
     }
     case 'bagf': UI.bagFilter = b.dataset.k; UI.sel = null; break;
+    case 'bagpg': UI.bagPage = +b.dataset.k || 0; UI.sel = null; break;
     case 'aeqtoggle': S.settings.autoEquip = !autoEquipOn(); if (autoEquipOn()) autoEquip(true); persist(); break;
     case 'aeqnow': autoEquip(true); break;
     case 'equip': { const i = selBagIdx(); if (it && it.slot && i >= 0) equipFromBag(i); break; }

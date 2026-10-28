@@ -5,7 +5,7 @@
 import { refineColor } from '../art/items.js';
 import { G, UI } from '../core/state.js';
 import { esc, fmt, R, touchUI } from '../core/util.js';
-import { autoEquipOn, BAG_SIZE, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
+import { autoEquipOn, BAG_SIZE, bagCap, classOk, cpOf, cpWith, fmtCP, reqOk } from '../game/inventory.js';
 import { petSellable } from '../game/allies.js';
 import { CharPreview } from './charPreview.js';
 import { glyph, iconHtml, iconURI } from './icons.js';
@@ -28,6 +28,22 @@ export const InventoryFilter = {
   current() { return this.LABELS[UI.bagFilter] ? UI.bagFilter : 'all'; },
   html(cnt, f) {
     return Object.keys(this.LABELS).map((k) => '<button class="btab' + (f === k ? ' on' : '') + '" data-act="bagf" data-k="' + k + '" aria-pressed="' + (f === k) + '">' + this.LABELS[k] + ' <span>' + cnt[k] + '</span></button>').join('');
+  },
+};
+
+// ---------- InventoryPages ----------
+/** Páginas da mochila no filtro "Todos": a página 2 é liberada com o Mestre Orvan. */
+export const InventoryPages = {
+  current() { return UI.bagPage === 1 ? 1 : 0; },
+  html(ch, p) {
+    let h = '';
+    for (let k = 0; k < 2; k++) {
+      const open = k < R.bagPages(ch);
+      const n = Math.max(0, Math.min(BAG_SIZE, ch.bag.length - k * BAG_SIZE));
+      h += '<button class="btab pg' + (p === k ? ' on' : '') + (open ? '' : ' lockd') + '" data-act="bagpg" data-k="' + k + '" aria-pressed="' + (p === k) + '">' + (open ? '' : '🔒 ') + 'Página ' + (k + 1) + ' <span>' + (open ? n + '/' + BAG_SIZE : 'bloqueada') + '</span></button>';
+    }
+    if (!ch.bagExp) h += '<span class="pgnote">' + (p === 1 ? 'Libere a página 2 com o Mestre Orvan, na cidade, por ' + fmt(R.RATES.bagExpandGold) + ' de Ouro.' : '+' + BAG_SIZE + ' espaços com o Mestre Orvan') + '</span>';
+    return h;
   },
 };
 
@@ -132,6 +148,7 @@ export const InventoryUI = {
       '<section class="inv-bag" aria-label="Mochila">' +
       '<div class="baghead"><b>Mochila</b><span class="num" id="bagCount"></span><span class="gold"><span class="num" id="invGold"></span> de Ouro</span><span class="ups" id="bagUps"></span></div>' +
       '<div class="btabs" id="bagFilters" role="group" aria-label="Filtrar mochila"></div>' +
+      '<div class="btabs bagpages" id="bagPages" role="group" aria-label="Páginas da mochila"></div>' +
       '<div class="bag" id="bagGrid"></div>' +
       '<div class="row invtools" id="invTools"></div>' +
       '<p class="note tip">' + (touchUI() ? 'Toque seleciona · toque duplo equipa ou usa · toque longo abre o menu · arraste para equipar ou guardar.' : 'Clique seleciona · duplo clique equipa ou usa · botão direito abre o menu · arraste para equipar ou guardar.') + '</p>' +
@@ -164,13 +181,16 @@ export const InventoryUI = {
     ch.bag.forEach((it) => { if (it.slot && classOk(it) && reqOk(it)) cpMap.set(it, cpWith(it)); });
     let ups = 0;
     cpMap.forEach((v) => { if (v > base) ups++; });
-    this.set('bagCount', ch.bag.length + ' / ' + BAG_SIZE);
+    this.set('bagCount', ch.bag.length + ' / ' + bagCap(ch));
     this.set('invGold', fmt(ch.gold));
     this.set('bagUps', ups ? ups + ' melhoria' + (ups > 1 ? 's' : '') + ' ▲' : '');
     this.set('bagFilters', InventoryFilter.html(cnt, f));
     const ctx = { base, cp: cpMap }, list = [];
     const cell = (i) => InventoryItem(ch.bag[i], ' data-act="selbag" data-i="' + i + '"', ctx);
-    if (f === 'all') for (let i = 0; i < BAG_SIZE; i++) list.push(cell(i));
+    const pg = InventoryPages.current();
+    this.set('bagPages', f === 'all' ? InventoryPages.html(ch, pg) : '');
+    if (f === 'all' && pg >= R.bagPages(ch)) for (let i = 0; i < BAG_SIZE; i++) list.push('<div class="cell empty lockd"></div>');
+    else if (f === 'all') for (let i = pg * BAG_SIZE; i < (pg + 1) * BAG_SIZE; i++) list.push(cell(i));
     else {
       const idx = [];
       ch.bag.forEach((it, i) => { if (InventoryFilter.cat(it) === f) idx.push(i); });

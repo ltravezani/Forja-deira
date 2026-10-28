@@ -4,7 +4,7 @@ import { G, persist } from '../core/state.js';
 import { $, esc, R } from '../core/util.js';
 import { KEYS, mouse } from '../input/inputState.js';
 import { revive } from './combat.js';
-import { addToBag, BAG_SIZE, potionCount, usePotion } from './inventory.js';
+import { addToBag, bagCap, potionCount, usePotion } from './inventory.js';
 import { pathTo } from './movement.js';
 import { towerState } from './tower.js';
 import { enterDungeon, enterTower } from './zones.js';
@@ -83,7 +83,7 @@ function validTarget(t) {
   return false;
 }
 /** Drops que valem a viagem: itens só com espaço na mochila. */
-const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < BAG_SIZE;
+const lootOk2 = (l) => l.type !== 'item' || G.ch.bag.length < bagCap();
 const lootOk = (l) => G.time - l.born > 0.6 && lootOk2(l);
 function nearest(list, ok, maxD) {
   const p = G.player;
@@ -136,7 +136,7 @@ function watchStuck(a, p) {
   }
 }
 /** Mochila cheia com drops de equipamento no chão: o pet está fora vendendo e vai abrir espaço? */
-const petFreesBag = () => G.ch.bag.length >= BAG_SIZE && G.pet && G.pet.away > G.time && G.loot.some((l) => l.type === 'item');
+const petFreesBag = () => G.ch.bag.length >= bagCap() && G.pet && G.pet.away > G.time && G.loot.some((l) => l.type === 'item');
 function drinkPotions() {
   const C = CONFIG.autoClear, st = G.st;
   if (G.hp < st.maxHp * C.hpPotionBelow && potionCount('hp')) usePotion('hp');
