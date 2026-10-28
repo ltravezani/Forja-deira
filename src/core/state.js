@@ -19,7 +19,8 @@ export const S = defaultSave();
 export const SAVE_KEY = 'forjadeira.save.v1';
 function defaultSave() {
   // quality null = ainda não escolhida: o main.js escolhe pelo aparelho (autoQuality) no primeiro acesso
-  return { chars: [], active: -1, settings: { quality: null, sound: true, labels: true } };
+  // chest: Baú da conta (NPC Dalva na cidade), compartilhado por todos os personagens deste save
+  return { chars: [], active: -1, chest: [], settings: { quality: null, sound: true, labels: true } };
 }
 function readSave(obj) {
   try {
@@ -35,6 +36,7 @@ export function loadSave(obj) {
   data.chars = data.chars.filter((c) => c && typeof c === 'object' && typeof c.name === 'string');
   if (!data.settings || typeof data.settings !== 'object') data.settings = defaultSave().settings;
   if (!Number.isInteger(data.active) || data.active >= data.chars.length) data.active = data.chars.length ? 0 : -1;
+  data.chest = sanitizeChest(data.chest);
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, data);
   return S;
@@ -111,7 +113,7 @@ export function sanitizeCharacter(ch) {
   ch.autoPetSell = ch.autoPetSell === true;
   ch.edenClears = Math.max(0, Math.floor(num(ch.edenClears, 0))); // última entrada no Éden (ms); limite de uma a cada 3h
   // só itens conhecidos: jewels, poções e talismãs de versões futuras/antigas não quebram a mochila
-  ch.bag = ch.bag.filter((it) => it.slot || (it.kind === 'jewel' && R.JEWELS[it.id]) || (it.kind === 'potion' && R.POTIONS[it.id]) || (it.kind === 'talisman' && R.TALISMANS[it.id]) || (it.kind === 'ticket' && R.TICKETS[it.id]));
+  ch.bag = ch.bag.filter((it) => knownKind(it, R));
   // evolução: inteiro dentro das formas da classe
   ch.tier = Math.min(R.CLASSES[ch.cls].tiers.length - 1, Math.floor(ch.tier));
   sanitizeTree(ch, R);
@@ -120,6 +122,20 @@ export function sanitizeCharacter(ch) {
   for (const k of Object.keys(ch.equip)) { if (k !== ch.equip[k].slot || !R.SLOTS.includes(k)) { ch.bag.push(ch.equip[k]); delete ch.equip[k]; } else sanitizeItem(ch.equip[k], R); }
   sanitizeQuests(ch); // missões (iniciais e diárias); saves antigos ganham o campo aqui
   return ch;
+}
+/** Item que o jogo conhece: equipamento ou joia/poção/talismã/ticket que existe nesta versão. */
+const knownKind = (it, R) => !!it.slot || (it.kind === 'jewel' && !!R.JEWELS[it.id]) || (it.kind === 'potion' && !!R.POTIONS[it.id]) || (it.kind === 'talisman' && !!R.TALISMANS[it.id]) || (it.kind === 'ticket' && !!R.TICKETS[it.id]);
+/**
+ * Baú da conta: lista de itens (mesmo formato da mochila). Descarta lixo e
+ * itens desconhecidos e corrige números, como na mochila; nunca corta itens
+ * por falta de espaço (o limite só vale para guardar novos).
+ */
+export function sanitizeChest(list) {
+  const R = ForjaRules;
+  if (!Array.isArray(list)) return [];
+  const out = list.filter((it) => it && typeof it === 'object' && (it.slot || it.kind) && knownKind(it, R) && (!it.slot || R.SLOTS.includes(it.slot)));
+  out.forEach((it) => sanitizeItem(it, R));
+  return out;
 }
 const int = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : d);
 /** Árvore: só nós da classe, ranks inteiros 0..5 e soma dentro dos pontos disponíveis. */
